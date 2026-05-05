@@ -1,0 +1,251 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector")]
+}
+
+// ─────────────────────────────────────────────
+// Tenant
+// ─────────────────────────────────────────────
+model Tenant {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  name         String?
+  primaryColor String?  @default("#0d9488")
+  logoUrl      String?
+  quizTitle    String?  @default("Trouve ton parfum idéal")
+  ctaText      String?  @default("Commencer le quiz")
+  embedDomain  String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  magicTokens  MagicToken[]
+  products     Product[]
+  questions    Question[]
+  sessions     QuizSession[]
+  metrics      Metric[]
+}
+
+// ─────────────────────────────────────────────
+// Auth
+// ─────────────────────────────────────────────
+model MagicToken {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tokenHash String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tokenHash])
+}
+
+// ─────────────────────────────────────────────
+// Product (catalogue)
+// ─────────────────────────────────────────────
+model Product {
+  id            String    @id @default(cuid())
+  tenantId      String
+  // Identity
+  name          String
+  brand         String?
+  description   String?
+  price         Float?
+  priceTier     PriceTier?
+  imageUrl      String?
+  purchaseUrl   String?
+  concentration Concentration?
+  active        Boolean   @default(true)
+  featured      Boolean   @default(false)
+  // Olfactory pyramid
+  topNotes      String[]
+  heartNotes    String[]
+  baseNotes     String[]
+  // Classification
+  olfactoryFamily String?
+  subFamily       String?
+  genderTarget    GenderTarget?
+  tags            String[]
+  // Numeric axes [0–1]
+  freshness     Float?
+  intensity     Float?
+  sweetness     Float?
+  // Usage context
+  seasons       Season[]
+  occasions     Occasion[]
+  timeOfDay     TimeOfDay[]
+  // AI embedding stored as JSON array (pgvector via raw SQL for queries)
+  embedding     Json?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessions      QuizSession[]
+
+  @@index([tenantId])
+  @@index([tenantId, active])
+}
+
+// ─────────────────────────────────────────────
+// Quiz — Questions & Answers
+// ─────────────────────────────────────────────
+model Question {
+  id                String       @id @default(cuid())
+  tenantId          String
+  text              String
+  helpText          String?      // hint affiché sous la question
+  type              QuestionType @default(single)
+  imageUrl          String?      // illustration optionnelle
+  order             Int          @default(0)
+  active            Boolean      @default(true)
+  // Conditional display: show only if a specific answer was selected
+  conditionAnswerId String?      // null = always shown
+  // A/B testing: assign question to a named variant ("A", "B", null = all)
+  abVariant         String?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  answers           Answer[]     @relation("QuestionAnswers")
+  conditionAnswer   Answer?      @relation("QuestionCondition", fields: [conditionAnswerId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, order])
+  @@index([conditionAnswerId])
+}
+
+model Answer {
+  id         String     @id @default(cuid())
+  questionId String
+  text       String
+  emoji      String?    // emoji ou icône courte
+  imageUrl   String?    // image illustrant la réponse
+  order      Int        @default(0)
+  active     Boolean    @default(true)
+  // Olfactory axis impacts (stored as JSON: { freshness, intensity, sweetness })
+  impacts    Json       @default("{\"freshness\":0,\"intensity\":0,\"sweetness\":0}")
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  question            Question   @relation("QuestionAnswers", fields: [questionId], references: [id], onDelete: Cascade)
+  conditionalQuestion Question[] @relation("QuestionCondition")
+
+  @@index([questionId])
+}
+
+// ─────────────────────────────────────────────
+// Quiz Session
+// ─────────────────────────────────────────────
+model QuizSession {
+  id              String    @id @default(cuid())
+  tenantId        String
+  gender          GenderTarget?
+  mood            String?
+  // Stored as JSON: [{ questionId, answerId }]
+  answers         Json      @default("[]")
+  resultProductId String?
+  feedback        FeedbackType?
+  feedbackReasons String[]
+  decisionTime    Int?      // seconds
+  abVariant       String?   // A/B variant assigned to this session
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  resultProduct   Product?  @relation(fields: [resultProductId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
+}
+
+// ─────────────────────────────────────────────
+// Metrics (append-only event log)
+// ─────────────────────────────────────────────
+model Metric {
+  id        String     @id @default(cuid())
+  tenantId  String
+  type      MetricType
+  payload   Json       @default("{}")
+  createdAt DateTime   @default(now())
+
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, type])
+  @@index([tenantId, createdAt])
+}
+
+// ─────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────
+enum GenderTarget {
+  male
+  female
+  unisex
+}
+
+enum PriceTier {
+  entry
+  mid
+  luxury
+  niche
+}
+
+enum Concentration {
+  EDT
+  EDP
+  Parfum
+  EDC
+  other
+}
+
+enum Season {
+  spring
+  summer
+  autumn
+  winter
+}
+
+enum Occasion {
+  daily
+  evening
+  office
+  sport
+  special
+}
+
+enum TimeOfDay {
+  morning
+  afternoon
+  evening
+  night
+}
+
+enum QuestionType {
+  single
+  multi
+  scale
+}
+
+enum FeedbackType {
+  positive
+  negative
+}
+
+enum MetricType {
+  quiz_start
+  quiz_complete
+  quiz_abandon
+  step_view
+  step_answer
+  buy_click
+  feedback
+  decision_time
+}

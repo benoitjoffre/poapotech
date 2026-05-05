@@ -1,0 +1,190 @@
+[
+  {
+    "id": "q1",
+    "question": "Quel moment de la journée préfères-tu pour te parfumer ?",
+    "answers": [
+      {
+        "text": "Le matin, quelque chose de léger",
+        "impact": { "freshness": 0.3, "intensity": -0.2 }
+      },
+      {
+        "text": "L'après-midi, un parfum présent mais discret",
+        "impact": { "intensity": 0.1 }
+      },
+      {
+        "text": "Le soir, j'aime que ça se remarque",
+        "impact": { "intensity": 0.3, "sweetness": 0.2 }
+      }
+    ]
+  },
+  {
+    "id": "q2",
+    "question": "Quelle ambiance te ressemble le plus ?",
+    "answers": [
+      {
+        "text": "Propre et net",
+        "impact": { "freshness": 0.3 }
+      },
+      {
+        "text": "Chaleureux et enveloppant",
+        "impact": { "sweetness": 0.3, "freshness": -0.1 }
+      },
+      {
+        "text": "Sombre et intense",
+        "impact": { "intensity": 0.3 }
+      }
+    ]
+  },
+  {
+    "id": "q3",
+    "question": "Quel type de boisson te tente le plus ?",
+    "answers": [
+      {
+        "text": "Eau pétillante au citron",
+        "impact": { "freshness": 0.3 }
+      },
+      {
+        "text": "Thé noir légèrement sucré",
+        "impact": { "sweetness": 0.2, "intensity": 0.1 }
+      },
+      {
+        "text": "Espresso corsé",
+        "impact": { "intensity": 0.3 }
+      },
+      {
+        "text": "Chocolat chaud",
+        "impact": { "sweetness": 0.3, "freshness": -0.1 }
+      }
+    ]
+  },
+  {
+    "id": "q4",
+    "question": "Comment veux-tu que ton parfum soit perçu ?",
+    "answers": [
+      {
+        "text": "Discret, proche de la peau",
+        "impact": { "intensity": -0.3 }
+      },
+      {
+        "text": "Équilibré et polyvalent",
+        "impact": { "intensity": 0.1 }
+      },
+      {
+        "text": "Marquant et assumé",
+        "impact": { "intensity": 0.3 }
+      }
+    ]
+  },
+  {
+    "id": "q5",
+    "question": "Quelle saison préfères-tu ?",
+    "answers": [
+      {
+        "text": "Printemps",
+        "impact": { "freshness": 0.2 }
+      },
+      {
+        "text": "Été",
+        "impact": { "freshness": 0.3, "sweetness": -0.1 }
+      },
+      {
+        "text": "Automne",
+        "impact": { "sweetness": 0.2, "intensity": 0.1 }
+      },
+      {
+        "text": "Hiver",
+        "impact": { "sweetness": 0.3, "intensity": 0.2 }
+      }
+    ]
+  },
+  {
+    "id": "q6",
+    "question": "Quel style vestimentaire te correspond ?",
+    "answers": [
+      {
+        "text": "Minimaliste",
+        "impact": { "freshness": 0.2, "intensity": -0.1 }
+      },
+      {
+        "text": "Classique",
+        "impact": { "intensity": 0.1 }
+      },
+      {
+        "text": "Audacieux",
+        "impact": { "intensity": 0.3 }
+      }
+    ]
+  },
+  {
+    "id": "q7",
+    "question": "Quel type de dessert préfères-tu ?",
+    "answers": [
+      {
+        "text": "Salade de fruits",
+        "impact": { "freshness": 0.2, "sweetness": 0.1 }
+      },
+      {
+        "text": "Tarte citron meringuée",
+        "impact": { "sweetness": 0.2, "freshness": 0.1 }
+      },
+      {
+        "text": "Crème brûlée",
+        "impact": { "sweetness": 0.3 }
+      }
+    ]
+  },
+  {
+    "id": "q8",
+    "question": "Quelle sensation recherches-tu ?",
+    "answers": [
+      {
+        "text": "Léger et aérien",
+        "impact": { "freshness": 0.3, "intensity": -0.1 }
+      },
+      {
+        "text": "Chaleureux et doux",
+        "impact": { "sweetness": 0.3 }
+      },
+      {
+        "text": "Puissant et profond",
+        "impact": { "intensity": 0.3 }
+      }
+    ]
+  },
+  {
+    "id": "q9",
+    "question": "Quelle couleur te parle le plus ?",
+    "answers": [
+      {
+        "text": "Bleu clair",
+        "impact": { "freshness": 0.2 }
+      },
+      {
+        "text": "Or",
+        "impact": { "sweetness": 0.2 }
+      },
+      {
+        "text": "Noir",
+        "impact": { "intensity": 0.2 }
+      }
+    ]
+  },
+  {
+    "id": "q10",
+    "question": "Quel rythme de vie te ressemble ?",
+    "answers": [
+      {
+        "text": "Calme et posé",
+        "impact": { "intensity": -0.2 }
+      },
+      {
+        "text": "Actif et dynamique",
+        "impact": { "freshness": 0.2, "intensity": 0.1 }
+      },
+      {
+        "text": "Nocturne et festif",
+        "impact": { "intensity": 0.3, "sweetness": 0.2 }
+      }
+    ]
+  }
+]

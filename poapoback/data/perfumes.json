@@ -1,0 +1,272 @@
+[
+  {
+    "name": "Dior Sauvage",
+    "freshness": 0.75,
+    "intensity": 0.7,
+    "sweetness": 0.2,
+    "families": ["aromatic", "woody"],
+    "vibe_tags": ["clean", "modern", "masculine", "daily"],
+    "gender": "male"
+  },
+  {
+    "name": "Bleu de Chanel",
+    "freshness": 0.7,
+    "intensity": 0.6,
+    "sweetness": 0.25,
+    "families": ["woody", "aromatic"],
+    "vibe_tags": ["elegant", "versatile", "clean"],
+    "gender": "male"
+  },
+  {
+    "name": "Acqua di Gio (Giorgio Armani)",
+    "freshness": 0.9,
+    "intensity": 0.45,
+    "sweetness": 0.15,
+    "families": ["marine", "citrus"],
+    "vibe_tags": ["fresh", "summer", "clean", "daytime"],
+    "gender": "male"
+  },
+  {
+    "name": "Dior Homme Intense",
+    "freshness": 0.35,
+    "intensity": 0.8,
+    "sweetness": 0.45,
+    "families": ["woody", "powdery"],
+    "vibe_tags": ["elegant", "dark", "evening"],
+    "gender": "male"
+  },
+  {
+    "name": "Y (Yves Saint Laurent)",
+    "freshness": 0.7,
+    "intensity": 0.6,
+    "sweetness": 0.3,
+    "families": ["aromatic", "fresh"],
+    "vibe_tags": ["modern", "office", "clean"],
+    "gender": "male"
+  },
+  {
+    "name": "La Vie Est Belle (Lancôme)",
+    "freshness": 0.35,
+    "intensity": 0.7,
+    "sweetness": 0.8,
+    "families": ["gourmand", "floral"],
+    "vibe_tags": ["sweet", "feminine", "cozy", "evening"],
+    "gender": "female"
+  },
+  {
+    "name": "Coco Mademoiselle (Chanel)",
+    "freshness": 0.6,
+    "intensity": 0.65,
+    "sweetness": 0.55,
+    "families": ["oriental", "floral"],
+    "vibe_tags": ["elegant", "chic", "evening"],
+    "gender": "female"
+  },
+  {
+    "name": "J'adore (Dior)",
+    "freshness": 0.65,
+    "intensity": 0.55,
+    "sweetness": 0.5,
+    "families": ["floral", "fruity"],
+    "vibe_tags": ["classic", "feminine", "bright"],
+    "gender": "female"
+  },
+  {
+    "name": "Black Opium (Yves Saint Laurent)",
+    "freshness": 0.25,
+    "intensity": 0.75,
+    "sweetness": 0.8,
+    "families": ["gourmand", "oriental"],
+    "vibe_tags": ["night", "seductive", "sweet", "bold"],
+    "gender": "female"
+  },
+  {
+    "name": "Sì (Giorgio Armani)",
+    "freshness": 0.45,
+    "intensity": 0.6,
+    "sweetness": 0.7,
+    "families": ["chypre", "fruity"],
+    "vibe_tags": ["elegant", "feminine", "warm"],
+    "gender": "female"
+  },
+  {
+    "name": "Terre d'Hermès",
+    "freshness": 0.55,
+    "intensity": 0.7,
+    "sweetness": 0.2,
+    "families": ["woody", "earthy"],
+    "vibe_tags": ["mature", "refined", "dry"],
+    "gender": "male"
+  },
+  {
+    "name": "Guilty (Gucci)",
+    "freshness": 0.6,
+    "intensity": 0.6,
+    "sweetness": 0.4,
+    "families": ["aromatic", "woody"],
+    "vibe_tags": ["modern", "evening", "bold"],
+    "gender": "male"
+  },
+  {
+    "name": "Light Blue (Dolce & Gabbana)",
+    "freshness": 0.9,
+    "intensity": 0.4,
+    "sweetness": 0.3,
+    "families": ["citrus", "fresh"],
+    "vibe_tags": ["summer", "bright", "clean"],
+    "gender": "female"
+  },
+  {
+    "name": "1 Million (Paco Rabanne)",
+    "freshness": 0.4,
+    "intensity": 0.8,
+    "sweetness": 0.7,
+    "families": ["spicy", "amber"],
+    "vibe_tags": ["bold", "party", "sweet"],
+    "gender": "male"
+  },
+  {
+    "name": "Dylan Blue (Versace)",
+    "freshness": 0.7,
+    "intensity": 0.65,
+    "sweetness": 0.3,
+    "families": ["aromatic", "woody"],
+    "vibe_tags": ["fresh", "modern", "daily"],
+    "gender": "male"
+  },
+  {
+    "name": "L'Homme (Yves Saint Laurent)",
+    "freshness": 0.65,
+    "intensity": 0.5,
+    "sweetness": 0.35,
+    "families": ["woody", "fresh"],
+    "vibe_tags": ["clean", "office", "soft"],
+    "gender": "male"
+  },
+  {
+    "name": "CK One (Calvin Klein)",
+    "freshness": 0.85,
+    "intensity": 0.35,
+    "sweetness": 0.25,
+    "families": ["citrus", "fresh"],
+    "vibe_tags": ["clean", "casual", "daytime"],
+    "gender": "unisex"
+  },
+  {
+    "name": "N°5 (Chanel)",
+    "freshness": 0.45,
+    "intensity": 0.7,
+    "sweetness": 0.45,
+    "families": ["floral", "aldehydic"],
+    "vibe_tags": ["classic", "elegant", "vintage"],
+    "gender": "female"
+  },
+  {
+    "name": "Alien (Mugler)",
+    "freshness": 0.3,
+    "intensity": 0.85,
+    "sweetness": 0.6,
+    "families": ["amber", "floral"],
+    "vibe_tags": ["bold", "mystical", "night"],
+    "gender": "female"
+  },
+  {
+    "name": "Flowerbomb (Viktor & Rolf)",
+    "freshness": 0.4,
+    "intensity": 0.7,
+    "sweetness": 0.75,
+    "families": ["floral", "gourmand"],
+    "vibe_tags": ["sweet", "romantic", "evening"],
+    "gender": "female"
+  },
+  {
+    "name": "Aventus (Creed)",
+    "freshness": 0.6,
+    "intensity": 0.75,
+    "sweetness": 0.35,
+    "families": ["fruity", "woody"],
+    "vibe_tags": ["luxury", "confident", "daytime", "versatile"],
+    "gender": "male"
+  },
+  {
+    "name": "Baccarat Rouge 540 (Maison Francis Kurkdjian)",
+    "freshness": 0.35,
+    "intensity": 0.8,
+    "sweetness": 0.7,
+    "families": ["amber", "woody"],
+    "vibe_tags": ["luxury", "signature", "bold", "evening"],
+    "gender": "unisex"
+  },
+  {
+    "name": "Libre (Yves Saint Laurent)",
+    "freshness": 0.55,
+    "intensity": 0.65,
+    "sweetness": 0.55,
+    "families": ["floral", "aromatic"],
+    "vibe_tags": ["modern", "feminine", "confident", "daily"],
+    "gender": "female"
+  },
+  {
+    "name": "Prada L'Homme",
+    "freshness": 0.65,
+    "intensity": 0.55,
+    "sweetness": 0.3,
+    "families": ["powdery", "woody"],
+    "vibe_tags": ["clean", "office", "elegant", "soft"],
+    "gender": "male"
+  },
+  {
+    "name": "Mon Guerlain",
+    "freshness": 0.4,
+    "intensity": 0.65,
+    "sweetness": 0.7,
+    "families": ["oriental", "floral"],
+    "vibe_tags": ["warm", "feminine", "cozy", "evening"],
+    "gender": "female"
+  },
+  {
+    "name": "Hacivat (Nishane)",
+    "freshness": 0.7,
+    "intensity": 0.75,
+    "sweetness": 0.3,
+    "families": ["citrus", "woody"],
+    "vibe_tags": ["niche", "refined", "bright", "longlasting"],
+    "gender": "unisex"
+  },
+  {
+    "name": "Good Girl (Carolina Herrera)",
+    "freshness": 0.3,
+    "intensity": 0.75,
+    "sweetness": 0.78,
+    "families": ["gourmand", "floral"],
+    "vibe_tags": ["night", "seductive", "bold", "sweet"],
+    "gender": "female"
+  },
+  {
+    "name": "Le Male Le Parfum (Jean Paul Gaultier)",
+    "freshness": 0.35,
+    "intensity": 0.8,
+    "sweetness": 0.65,
+    "families": ["amber", "spicy"],
+    "vibe_tags": ["evening", "warm", "masculine", "party"],
+    "gender": "male"
+  },
+  {
+    "name": "Another 13 (Le Labo)",
+    "freshness": 0.55,
+    "intensity": 0.6,
+    "sweetness": 0.25,
+    "families": ["musky", "woody"],
+    "vibe_tags": ["minimal", "skin-scent", "modern", "unisex"],
+    "gender": "unisex"
+  },
+  {
+    "name": "Delina (Parfums de Marly)",
+    "freshness": 0.6,
+    "intensity": 0.7,
+    "sweetness": 0.68,
+    "families": ["floral", "fruity"],
+    "vibe_tags": ["romantic", "luxury", "feminine", "signature"],
+    "gender": "female"
+  }
+]
