@@ -1,0 +1,23 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: poapo_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: poapo
+      POSTGRES_PASSWORD: poapo_secret
+      POSTGRES_DB: poapo
+    ports:
+      - "5432:5432"
+    volumes:
+      - poapo_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U poapo -d poapo"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  poapo_pgdata:

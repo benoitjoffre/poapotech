@@ -1,0 +1,17 @@
+{
+  "name": "poapo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "poapo-types",
+    "poapoback",
+    "poapofront",
+    "poapoadmin"
+  ],
+  "scripts": {
+    "back": "npm run dev --workspace=poapoback",
+    "front": "npm run dev --workspace=poapofront",
+    "admin": "npm run dev --workspace=poapoadmin",
+    "ai": "cd poapoai && uvicorn main:app --reload --port 8000"
+  }
+}

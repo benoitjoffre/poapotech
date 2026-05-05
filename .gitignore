@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+build/
+**/.next/
+
+# Environment
+.env
+**/.env
+!**/.env.example
+
+# Prisma
+**/prisma/migrations/**/*.sql
+!**/prisma/migrations/
+
+# Python
+poapoai/__pycache__/
+poapoai/*.pyc
+poapoai/.venv/
+poapoai/venv/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
