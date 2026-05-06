@@ -7,14 +7,19 @@ import { prisma } from "../lib/prisma";
 const MAGIC_LINK_EXPIRES_MIN = Number(process.env.MAGIC_LINK_EXPIRES_MIN ?? 15);
 
 // ─── Mailer ───────────────────────────────────────────────────────────────────
+const smtpPort = Number(process.env.SMTP_PORT ?? 587);
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT ?? 465),
-  secure: false,
+  port: smtpPort,
+  // 465 = TLS implicite, 587 = STARTTLS
+  secure: smtpPort === 465,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 10000,
 });
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
