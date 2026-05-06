@@ -47,7 +47,9 @@ export default function LoginPage() {
 
         {sent ? (
           <div style={{ textAlign: "center", color: "#4b5563", marginTop: "1rem" }}>
-            <p>Lien de connexion envoyé à <strong>{email}</strong>.</p>
+            <p>
+              Lien de connexion envoyé à <strong>{email}</strong>.
+            </p>
             <p style={{ fontSize: "0.85rem", marginTop: "0.5rem" }}>Vérifiez vos emails (et vos spams).</p>
           </div>
         ) : (
