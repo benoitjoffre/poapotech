@@ -50,7 +50,9 @@ function parseBool(raw: unknown, fallback = true): boolean {
 }
 
 function parseQuestionType(raw: unknown): "single" | "multi" | "scale" {
-  const type = String(raw ?? "").trim().toLowerCase();
+  const type = String(raw ?? "")
+    .trim()
+    .toLowerCase();
   if (type === "multi" || type === "scale") return type;
   return "single";
 }

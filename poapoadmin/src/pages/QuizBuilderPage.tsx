@@ -702,12 +702,7 @@ export default function QuizBuilderPage() {
         </div>
         <div className="form-row">
           <label className="form-label">Fichier CSV</label>
-          <input
-            className="input"
-            type="file"
-            accept=".csv,text/csv"
-            onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
-          />
+          <input className="input" type="file" accept=".csv,text/csv" onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
         </div>
         <p className="page-subtitle" style={{ marginTop: "0.25rem" }}>
           Colonnes requises: question, answer. Optionnelles: helpText, type, questionActive, abVariant, emoji, freshness, intensity, sweetness,
