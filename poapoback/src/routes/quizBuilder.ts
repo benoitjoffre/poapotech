@@ -1,8 +1,24 @@
 import { Router, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { verifyToken, AuthRequest } from "../middleware/auth";
+import multer from "multer";
+import csvParser from "csv-parser";
+import { Readable } from "stream";
 
 const router = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const isCSV =
+      file.mimetype === "text/csv" ||
+      file.mimetype === "application/vnd.ms-excel" ||
+      file.mimetype === "text/plain" ||
+      file.originalname.toLowerCase().endsWith(".csv");
+    if (isCSV) cb(null, true);
+    else cb(new Error("Seuls les fichiers CSV sont acceptes") as unknown as null, false);
+  },
+});
 
 // Toutes les routes sont protégées
 router.use(verifyToken);
@@ -25,6 +41,164 @@ function clamp(v: number, min = -1, max = 1): number {
   if (isNaN(v)) return 0;
   return Math.max(min, Math.min(max, v));
 }
+
+function parseBool(raw: unknown, fallback = true): boolean {
+  if (raw === undefined || raw === null) return fallback;
+  const normalized = String(raw).trim().toLowerCase();
+  if (!normalized) return fallback;
+  return ["true", "1", "yes", "oui", "y"].includes(normalized);
+}
+
+function parseQuestionType(raw: unknown): "single" | "multi" | "scale" {
+  const type = String(raw ?? "").trim().toLowerCase();
+  if (type === "multi" || type === "scale") return type;
+  return "single";
+}
+
+function parseCSVBuffer(buffer: Buffer): Promise<Record<string, string>[]> {
+  return new Promise((resolve, reject) => {
+    const rows: Record<string, string>[] = [];
+    Readable.from([buffer])
+      .pipe(csvParser())
+      .on("data", (row: Record<string, string>) => rows.push(row))
+      .on("end", () => resolve(rows))
+      .on("error", reject);
+  });
+}
+
+async function resolveTenantId(req: AuthRequest, preferredTenantEmail?: string): Promise<string> {
+  const tokenTenantId = req.tenant!.tenantId;
+  const tenantFromToken = await prisma.tenant.findUnique({ where: { id: tokenTenantId }, select: { id: true } });
+  if (tenantFromToken) return tenantFromToken.id;
+
+  const email = (preferredTenantEmail ?? req.tenant!.email).toLowerCase().trim();
+  const tenantByEmail = await prisma.tenant.findUnique({ where: { email }, select: { id: true } });
+  if (!tenantByEmail) {
+    throw new Error(`Aucun tenant trouve pour ${email}`);
+  }
+  return tenantByEmail.id;
+}
+
+// POST /api/quiz/builder/questions/import-csv
+// Colonnes attendues: question, answer
+// Colonnes optionnelles: helpText, type, questionActive, abVariant, emoji, freshness, intensity, sweetness, answerActive
+router.post("/questions/import-csv", upload.single("file"), async (req: AuthRequest, res: Response) => {
+  if (!req.file) {
+    res.status(400).json({ error: "Fichier CSV requis" });
+    return;
+  }
+
+  try {
+    const tenantEmail = typeof req.body?.tenantEmail === "string" ? req.body.tenantEmail : undefined;
+    const tenantId = await resolveTenantId(req, tenantEmail);
+    const rows = await parseCSVBuffer(req.file.buffer);
+
+    if (rows.length === 0) {
+      res.status(400).json({ error: "CSV vide" });
+      return;
+    }
+
+    type Group = {
+      question: string;
+      helpText: string | null;
+      type: "single" | "multi" | "scale";
+      active: boolean;
+      abVariant: string | null;
+      answers: Record<string, string>[];
+    };
+
+    const groups = new Map<string, Group>();
+    let skippedRows = 0;
+
+    for (const row of rows) {
+      const question = String(row.question ?? "").trim();
+      const answer = String(row.answer ?? "").trim();
+      if (!question || !answer) {
+        skippedRows++;
+        continue;
+      }
+
+      const helpText = String(row.helpText ?? "").trim();
+      const type = parseQuestionType(row.type);
+      const active = parseBool(row.questionActive, true);
+      const abVariant = String(row.abVariant ?? "").trim();
+      const key = `${question}||${type}||${helpText}||${abVariant}`;
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          question,
+          helpText: helpText || null,
+          type,
+          active,
+          abVariant: abVariant || null,
+          answers: [],
+        });
+      }
+      groups.get(key)!.answers.push(row);
+    }
+
+    if (groups.size === 0) {
+      res.status(400).json({ error: "Aucune ligne valide (colonnes requises: question, answer)" });
+      return;
+    }
+
+    const maxOrder = await prisma.question.aggregate({ where: { tenantId }, _max: { order: true } });
+    let nextOrder = (maxOrder._max.order ?? -1) + 1;
+
+    let createdQuestions = 0;
+    let createdAnswers = 0;
+
+    await prisma.$transaction(async (tx) => {
+      for (const group of groups.values()) {
+        const createdQuestion = await tx.question.create({
+          data: {
+            tenantId,
+            text: group.question,
+            helpText: group.helpText,
+            type: group.type,
+            active: group.active,
+            abVariant: group.abVariant,
+            order: nextOrder++,
+          },
+        });
+        createdQuestions++;
+
+        let answerOrder = 0;
+        for (const answerRow of group.answers) {
+          const text = String(answerRow.answer ?? "").trim();
+          if (!text) continue;
+
+          await tx.answer.create({
+            data: {
+              questionId: createdQuestion.id,
+              text,
+              emoji: String(answerRow.emoji ?? "").trim() || null,
+              active: parseBool(answerRow.answerActive, true),
+              order: answerOrder++,
+              impacts: {
+                freshness: clamp(Number(String(answerRow.freshness ?? "0").replace(",", "."))),
+                intensity: clamp(Number(String(answerRow.intensity ?? "0").replace(",", "."))),
+                sweetness: clamp(Number(String(answerRow.sweetness ?? "0").replace(",", "."))),
+              },
+            },
+          });
+          createdAnswers++;
+        }
+      }
+    });
+
+    res.json({
+      createdQuestions,
+      createdAnswers,
+      skippedRows,
+      tenantId,
+      totalRows: rows.length,
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Erreur import CSV";
+    res.status(400).json({ error: message });
+  }
+});
 
 // ─── Questions ──────────────────────────────────────────────────────────────
 

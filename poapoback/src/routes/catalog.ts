@@ -6,9 +6,28 @@ import type { ProductCreateInput, ProductUpdateInput } from "@poapo/types";
 const router = Router();
 router.use(verifyToken);
 
+async function resolveTenantId(req: AuthRequest): Promise<string> {
+  const tokenTenantId = req.tenant!.tenantId;
+  const tokenEmail = req.tenant!.email.toLowerCase().trim();
+
+  const tenantFromToken = await prisma.tenant.findUnique({
+    where: { id: tokenTenantId },
+    select: { id: true },
+  });
+  if (tenantFromToken) return tenantFromToken.id;
+
+  const tenantByEmail = await prisma.tenant.findUnique({
+    where: { email: tokenEmail },
+    select: { id: true },
+  });
+  if (tenantByEmail) return tenantByEmail.id;
+
+  throw new Error("Aucun tenant valide associe a ce compte");
+}
+
 // GET /api/catalog/products?page=1&pageSize=20&search=&active=
 router.get("/products", async (req: AuthRequest, res: Response) => {
-  const tenantId = req.tenant!.tenantId;
+  const tenantId = await resolveTenantId(req);
   const page = Math.max(1, Number(req.query.page ?? 1));
   const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize ?? 20)));
   const search = req.query.search as string | undefined;
@@ -55,9 +74,10 @@ router.get("/products", async (req: AuthRequest, res: Response) => {
 
 // GET /api/catalog/products/:id
 router.get("/products/:id", async (req: AuthRequest, res: Response) => {
+  const tenantId = await resolveTenantId(req);
   const productId = String(req.params.id);
   const product = await prisma.product.findFirst({
-    where: { id: productId, tenantId: req.tenant!.tenantId },
+    where: { id: productId, tenantId },
   });
   if (!product) {
     res.status(404).json({ error: "Produit introuvable" });
@@ -68,6 +88,7 @@ router.get("/products/:id", async (req: AuthRequest, res: Response) => {
 
 // POST /api/catalog/products
 router.post("/products", async (req: AuthRequest, res: Response) => {
+  const tenantId = await resolveTenantId(req);
   const body = req.body as ProductCreateInput;
   if (!body.name?.trim()) {
     res.status(400).json({ error: "Le champ 'name' est obligatoire" });
@@ -76,7 +97,7 @@ router.post("/products", async (req: AuthRequest, res: Response) => {
 
   const product = await prisma.product.create({
     data: {
-      tenantId: req.tenant!.tenantId,
+      tenantId,
       name: body.name.trim(),
       brand: body.brand ?? null,
       description: body.description ?? null,
@@ -104,16 +125,17 @@ router.post("/products", async (req: AuthRequest, res: Response) => {
   });
 
   // Déclencher l'embedding en arrière-plan (non bloquant)
-  triggerEmbedding(product.id, req.tenant!.tenantId).catch(console.error);
+  triggerEmbedding(product.id, tenantId).catch(console.error);
 
   res.status(201).json(product);
 });
 
 // PUT /api/catalog/products/:id
 router.put("/products/:id", async (req: AuthRequest, res: Response) => {
+  const tenantId = await resolveTenantId(req);
   const productId = String(req.params.id);
   const existing = await prisma.product.findFirst({
-    where: { id: productId, tenantId: req.tenant!.tenantId },
+    where: { id: productId, tenantId },
   });
   if (!existing) {
     res.status(404).json({ error: "Produit introuvable" });
@@ -167,7 +189,7 @@ router.put("/products/:id", async (req: AuthRequest, res: Response) => {
   ].some((k) => k in body);
 
   if (olfactoryChanged) {
-    triggerEmbedding(updated.id, req.tenant!.tenantId).catch(console.error);
+    triggerEmbedding(updated.id, tenantId).catch(console.error);
   }
 
   res.json(updated);
@@ -175,9 +197,10 @@ router.put("/products/:id", async (req: AuthRequest, res: Response) => {
 
 // DELETE /api/catalog/products/:id
 router.delete("/products/:id", async (req: AuthRequest, res: Response) => {
+  const tenantId = await resolveTenantId(req);
   const productId = String(req.params.id);
   const existing = await prisma.product.findFirst({
-    where: { id: productId, tenantId: req.tenant!.tenantId },
+    where: { id: productId, tenantId },
   });
   if (!existing) {
     res.status(404).json({ error: "Produit introuvable" });

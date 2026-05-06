@@ -9,7 +9,7 @@ import type {
   QuestionUpdateInput,
   ReorderPayload,
 } from "@poapo/types";
-import { apiFetch } from "../lib/api";
+import { apiFetch, getToken } from "../lib/api";
 
 // ─── Types locaux ─────────────────────────────────────────────────────────────
 
@@ -452,6 +452,10 @@ export default function QuizBuilderPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importTenantEmail, setImportTenantEmail] = useState("demo@poapo-tech.com");
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<string>("");
 
   // New question form
   const [showNewForm, setShowNewForm] = useState(false);
@@ -487,6 +491,45 @@ export default function QuizBuilderPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const handleImportCsv = async () => {
+    if (!importFile) return;
+    setImporting(true);
+    setImportResult("");
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+      if (importTenantEmail.trim()) formData.append("tenantEmail", importTenantEmail.trim());
+
+      const token = getToken();
+      const res = await fetch("/api/quiz/builder/questions/import-csv", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        body: formData,
+      });
+
+      let body: { createdQuestions?: number; createdAnswers?: number; skippedRows?: number; totalRows?: number; error?: string } = {};
+      try {
+        body = (await res.json()) as typeof body;
+      } catch {
+        // ignore parse error and fallback to generic message
+      }
+
+      if (!res.ok) {
+        throw new Error(body.error ?? `Erreur ${res.status}`);
+      }
+
+      setImportResult(
+        `Import termine: ${body.createdQuestions ?? 0} question(s), ${body.createdAnswers ?? 0} reponse(s), ${body.skippedRows ?? 0} ligne(s) ignoree(s) sur ${body.totalRows ?? 0}.`,
+      );
+      setImportFile(null);
+      await load();
+    } catch (err) {
+      setImportResult(`Erreur import: ${(err as Error).message}`);
+    } finally {
+      setImporting(false);
+    }
+  };
 
   // Flatten all answers for condition picker
   const allQuestionsAnswers = questions.map((q) => ({
@@ -644,6 +687,39 @@ export default function QuizBuilderPage() {
           ))}
         </div>
       )}
+
+      {/* CSV Import */}
+      <div className="new-question-form" style={{ marginBottom: "1rem" }}>
+        <h3 className="form-section-title">Import CSV Questions/Reponses</h3>
+        <div className="form-row">
+          <label className="form-label">Tenant email (utile en super-admin)</label>
+          <input
+            className="input"
+            placeholder="demo@poapo-tech.com"
+            value={importTenantEmail}
+            onChange={(e) => setImportTenantEmail(e.target.value)}
+          />
+        </div>
+        <div className="form-row">
+          <label className="form-label">Fichier CSV</label>
+          <input
+            className="input"
+            type="file"
+            accept=".csv,text/csv"
+            onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+          />
+        </div>
+        <p className="page-subtitle" style={{ marginTop: "0.25rem" }}>
+          Colonnes requises: question, answer. Optionnelles: helpText, type, questionActive, abVariant, emoji, freshness, intensity, sweetness,
+          answerActive.
+        </p>
+        <div className="new-question-actions">
+          <button type="button" className="btn-primary" onClick={() => void handleImportCsv()} disabled={!importFile || importing}>
+            {importing ? "Import en cours..." : "Importer le CSV"}
+          </button>
+        </div>
+        {importResult && <p className={importResult.startsWith("Erreur") ? "error-msg" : "text-muted"}>{importResult}</p>}
+      </div>
 
       {loading && <p className="text-muted">Chargement…</p>}
       {error && <p className="error-msg">{error}</p>}
