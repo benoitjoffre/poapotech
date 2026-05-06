@@ -132,7 +132,25 @@ router.post("/execute", verifyToken, async (req: AuthRequest, res: Response) => 
     return;
   }
 
-  const tenantId = req.tenant!.tenantId;
+  let tenantId = req.tenant!.tenantId;
+
+  // Un super-admin peut avoir un tenantId logique ("super-admin") qui n'existe pas en DB.
+  // Pour l'import catalogue, on resolve alors le tenant par email.
+  if (tenantId === "super-admin") {
+    const tenantByEmail = await prisma.tenant.findUnique({
+      where: { email: req.tenant!.email.toLowerCase().trim() },
+      select: { id: true },
+    });
+
+    if (!tenantByEmail) {
+      res.status(400).json({
+        error: "Aucun tenant associe a ce compte super-admin. Creez d'abord un tenant (onglet Tenants) puis reconnectez-vous avec ce tenant.",
+      });
+      return;
+    }
+
+    tenantId = tenantByEmail.id;
+  }
   let created = 0;
   let skipped = 0;
   const errors: string[] = [];
