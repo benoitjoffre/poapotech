@@ -1,0 +1,33 @@
+question,answer,helpText,type,questionActive,abVariant,emoji,freshness,intensity,sweetness,answerActive
+Quel moment de la journée préfères-tu pour te parfumer ?,"Le matin, quelque chose de léger",,single,true,,,0.3,-0.2,0,true
+Quel moment de la journée préfères-tu pour te parfumer ?,"L'après-midi, un parfum présent mais discret",,single,true,,,0,0.1,0,true
+Quel moment de la journée préfères-tu pour te parfumer ?,"Le soir, j'aime que ça se remarque",,single,true,,,0,0.3,0.2,true
+Quelle ambiance te ressemble le plus ?,Propre et net,,single,true,,,0.3,0,0,true
+Quelle ambiance te ressemble le plus ?,Chaleureux et enveloppant,,single,true,,,-0.1,0,0.3,true
+Quelle ambiance te ressemble le plus ?,Sombre et intense,,single,true,,,0,0.3,0,true
+Quel type de boisson te tente le plus ?,Eau pétillante au citron,,single,true,,,0.3,0,0,true
+Quel type de boisson te tente le plus ?,Thé noir légèrement sucré,,single,true,,,0,0.1,0.2,true
+Quel type de boisson te tente le plus ?,Espresso corsé,,single,true,,,0,0.3,0,true
+Quel type de boisson te tente le plus ?,Chocolat chaud,,single,true,,,-0.1,0,0.3,true
+Comment veux-tu que ton parfum soit perçu ?,"Discret, proche de la peau",,single,true,,,0,-0.3,0,true
+Comment veux-tu que ton parfum soit perçu ?,Équilibré et polyvalent,,single,true,,,0,0.1,0,true
+Comment veux-tu que ton parfum soit perçu ?,Marquant et assumé,,single,true,,,0,0.3,0,true
+Quelle saison préfères-tu ?,Printemps,,single,true,,,0.2,0,0,true
+Quelle saison préfères-tu ?,Été,,single,true,,,0.3,0,-0.1,true
+Quelle saison préfères-tu ?,Automne,,single,true,,,0,0.1,0.2,true
+Quelle saison préfères-tu ?,Hiver,,single,true,,,0,0.2,0.3,true
+Quel style vestimentaire te correspond ?,Minimaliste,,single,true,,,0.2,-0.1,0,true
+Quel style vestimentaire te correspond ?,Classique,,single,true,,,0,0.1,0,true
+Quel style vestimentaire te correspond ?,Audacieux,,single,true,,,0,0.3,0,true
+Quel type de dessert préfères-tu ?,Salade de fruits,,single,true,,,0.2,0,0.1,true
+Quel type de dessert préfères-tu ?,Tarte citron meringuée,,single,true,,,0.1,0,0.2,true
+Quel type de dessert préfères-tu ?,Crème brûlée,,single,true,,,0,0,0.3,true
+Quelle sensation recherches-tu ?,Léger et aérien,,single,true,,,0.3,-0.1,0,true
+Quelle sensation recherches-tu ?,Chaleureux et doux,,single,true,,,0,0,0.3,true
+Quelle sensation recherches-tu ?,Puissant et profond,,single,true,,,0,0.3,0,true
+Quelle couleur te parle le plus ?,Bleu clair,,single,true,,,0.2,0,0,true
+Quelle couleur te parle le plus ?,Or,,single,true,,,0,0,0.2,true
+Quelle couleur te parle le plus ?,Noir,,single,true,,,0,0.2,0,true
+Quel rythme de vie te ressemble ?,Calme et posé,,single,true,,,0,-0.2,0,true
+Quel rythme de vie te ressemble ?,Actif et dynamique,,single,true,,,0.2,0.1,0,true
+Quel rythme de vie te ressemble ?,Nocturne et festif,,single,true,,,0,0.3,0.2,true

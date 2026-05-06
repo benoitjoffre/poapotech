@@ -23,7 +23,8 @@ const EMPTY: BrandingForm = {
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const widgetBaseUrl = String(import.meta.env.VITE_WIDGET_BASE_URL ?? "http://localhost:5173").replace(/\/$/, "");
+  const defaultWidgetBaseUrl = import.meta.env.PROD ? "https://app.poapo-tech.com" : "http://localhost:5173";
+  const widgetBaseUrl = String(import.meta.env.VITE_WIDGET_BASE_URL ?? defaultWidgetBaseUrl).replace(/\/$/, "");
   const [form, setForm] = useState<BrandingForm>(EMPTY);
   const [tenantId, setTenantId] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -116,9 +117,9 @@ export default function SettingsPage() {
 
   const clientId = tenantId || user?.tenantId || "";
   const embedSnippet = `<script
-  src="${widgetBaseUrl}/poapo-widget.js"
+  src="https://app.poapo-tech.com/poapo-widget.js"
   data-client-id="${clientId}"
-  data-url="${widgetBaseUrl}"
+  data-url="https://app.poapo-tech.com"
   data-label="Trouve ton parfum"
   data-color="${form.primaryColor || "#6c47ff"}"
   async
