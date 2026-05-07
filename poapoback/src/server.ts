@@ -11,6 +11,7 @@ import quizBuilderRouter from "./routes/quizBuilder";
 import catalogRouter from "./routes/catalog";
 import importRouter from "./routes/import";
 import adminTenantsRouter from "./routes/adminTenants";
+import metricsRouter from "./routes/metrics";
 
 const app = express();
 
@@ -68,6 +69,7 @@ app.use("/api/quiz/builder", quizBuilderRouter);
 app.use("/api/catalog", catalogRouter);
 app.use("/api/catalog/import", importRouter);
 app.use("/api/admin/tenants", adminTenantsRouter);
+app.use("/api/metrics", metricsRouter);
 
 // Health check
 app.get("/health", (_req, res) => {
