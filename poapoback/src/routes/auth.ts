@@ -3,8 +3,10 @@ import { sendMagicLink, verifyMagicToken, loginWithPassword, setPassword } from 
 import { verifyToken, AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import type { TenantBranding } from "@poapo/types";
+import { ensureDefaultQuiz, asyncRoute } from "../services/quizzes";
 
 const router = Router();
+const PRODUCT_INDUSTRIES = ["perfume", "coffee", "fashion", "food", "custom"] as const;
 
 // POST /api/auth/magic-link
 router.post("/magic-link", async (req: Request, res: Response) => {
@@ -40,7 +42,7 @@ router.get("/verify", async (req: Request, res: Response) => {
 });
 
 // GET /api/auth/me
-router.get("/me", verifyToken, async (req: AuthRequest, res: Response) => {
+router.get("/me", verifyToken, asyncRoute(async (req: AuthRequest, res: Response) => {
   const superAdminEmail = process.env.SUPER_ADMIN_EMAIL?.toLowerCase().trim();
   const isSuperAdmin = !!req.tenant?.isSuperAdmin || (!!superAdminEmail && req.tenant?.email?.toLowerCase().trim() === superAdminEmail);
 
@@ -48,7 +50,7 @@ router.get("/me", verifyToken, async (req: AuthRequest, res: Response) => {
     res.json({
       tenantId: "super-admin",
       id: "super-admin",
-      email: req.tenant.email,
+      email: req.tenant!.email,
       name: "Super Admin",
       active: true,
       isSuperAdmin: true,
@@ -62,6 +64,7 @@ router.get("/me", verifyToken, async (req: AuthRequest, res: Response) => {
       id: true,
       email: true,
       name: true,
+      industry: true,
       primaryColor: true,
       logoUrl: true,
       quizTitle: true,
@@ -76,24 +79,33 @@ router.get("/me", verifyToken, async (req: AuthRequest, res: Response) => {
     return;
   }
   // Expose tenantId alias so AuthToken shape is satisfied client-side
-  res.json({ ...tenant, tenantId: tenant.id });
-});
+  const quiz = await ensureDefaultQuiz(tenant.id);
+  res.json({ ...tenant, industry: quiz.industry, quizTitle: quiz.quizTitle, ctaText: quiz.ctaText, tenantId: tenant.id });
+}));
 
 // PUT /api/auth/me/branding
-router.put("/me/branding", verifyToken, async (req: AuthRequest, res: Response) => {
-  const allowed: (keyof TenantBranding)[] = ["name", "primaryColor", "logoUrl", "quizTitle", "ctaText", "embedDomain"];
+router.put("/me/branding", verifyToken, asyncRoute(async (req: AuthRequest, res: Response) => {
+  const allowed: (keyof TenantBranding)[] = ["name", "industry", "primaryColor", "logoUrl", "quizTitle", "ctaText", "embedDomain"];
   const data: Partial<TenantBranding> = {};
   for (const key of allowed) {
     const val = (req.body as Record<string, unknown>)[key];
     if (val !== undefined) (data as Record<string, unknown>)[key] = val;
   }
+  if (data.industry !== undefined && !PRODUCT_INDUSTRIES.includes(data.industry)) {
+    res.status(400).json({ error: "Secteur d’activité invalide" });
+    return;
+  }
 
-  const updated = await prisma.tenant.update({
-    where: { id: req.tenant!.tenantId },
-    data,
-  });
-  res.json(updated);
-});
+  const quiz = await ensureDefaultQuiz(req.tenant!.tenantId);
+  await prisma.$transaction([
+    prisma.tenant.update({ where: { id: req.tenant!.tenantId }, data }),
+    prisma.quiz.update({
+      where: { id: quiz.id },
+      data: { industry: data.industry, quizTitle: data.quizTitle, ctaText: data.ctaText },
+    }),
+  ]);
+  res.json({ ok: true });
+}));
 
 // POST /api/auth/login — email + mot de passe
 router.post("/login", async (req: Request, res: Response) => {

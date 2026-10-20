@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import { prisma } from "../lib/prisma";
 import { verifySuperAdmin, AuthRequest } from "../middleware/auth";
 import type { TenantAdminCreateInput, TenantAdminUpdateInput } from "@poapo/types";
+import { ensureDefaultQuiz, asyncRoute } from "../services/quizzes";
 
 const router = Router();
 
@@ -93,8 +94,8 @@ router.post("/", async (req: AuthRequest, res: Response) => {
 });
 
 // PUT /api/admin/tenants/:id
-router.put("/:id", async (req: AuthRequest, res: Response) => {
-  const { id } = req.params;
+router.put("/:id", asyncRoute(async (req: AuthRequest, res: Response) => {
+  const id = String(req.params.id);
   const body = req.body as TenantAdminUpdateInput;
 
   const existing = await prisma.tenant.findUnique({ where: { id }, select: { id: true } });
@@ -103,7 +104,8 @@ router.put("/:id", async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const updated = await prisma.tenant.update({
+  const quiz = await ensureDefaultQuiz(id);
+  const [updated] = await prisma.$transaction([prisma.tenant.update({
     where: { id },
     data: {
       ...(body.name !== undefined ? { name: body.name?.trim() || null } : {}),
@@ -124,14 +126,20 @@ router.put("/:id", async (req: AuthRequest, res: Response) => {
       ctaText: true,
       primaryColor: true,
     },
-  });
+  }), prisma.quiz.update({
+    where: { id: quiz.id },
+    data: {
+      ...(body.quizTitle !== undefined && { quizTitle: body.quizTitle?.trim() || "Trouve ton produit idéal" }),
+      ...(body.ctaText !== undefined && { ctaText: body.ctaText?.trim() || "Découvrir ma sélection" }),
+    },
+  })]);
 
   res.json(updated);
-});
+}));
 
 // PUT /api/admin/tenants/:id/password
 router.put("/:id/password", async (req: AuthRequest, res: Response) => {
-  const { id } = req.params;
+  const id = String(req.params.id);
   const { password } = req.body as { password?: string };
 
   if (!password || password.length < 8) {

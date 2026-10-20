@@ -17,6 +17,7 @@ export interface Tenant {
 
 export interface TenantBranding {
   name?: string;
+  industry?: ProductIndustry;
   primaryColor?: string;
   logoUrl?: string;
   quizTitle?: string;
@@ -26,11 +27,38 @@ export interface TenantBranding {
 
 export interface EmbedConfig {
   tenantId: string;
+  quizId: string;
+  industry: ProductIndustry;
   primaryColor: string;
   logoUrl: string | null;
   quizTitle: string;
   ctaText: string;
   active: boolean;
+}
+
+export interface Quiz {
+  id: string;
+  tenantId: string;
+  name: string;
+  industry: ProductIndustry;
+  quizTitle: string;
+  ctaText: string;
+  active: boolean;
+  isDefault: boolean;
+  useAllProducts: boolean;
+  products: { productId: string }[];
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface QuizInput {
+  name?: string;
+  industry?: ProductIndustry;
+  quizTitle?: string;
+  ctaText?: string;
+  active?: boolean;
+  useAllProducts?: boolean;
+  productIds?: string[];
 }
 
 // ─────────────────────────────────────────────
@@ -85,6 +113,9 @@ export type Concentration = "EDT" | "EDP" | "Parfum" | "EDC" | "other";
 export type Season = "spring" | "summer" | "autumn" | "winter";
 export type Occasion = "daily" | "evening" | "office" | "sport" | "special";
 export type TimeOfDay = "morning" | "afternoon" | "evening" | "night";
+export type ProductIndustry = "perfume" | "coffee" | "fashion" | "food" | "custom";
+export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+export type ProductAttributes = { [key: string]: JsonValue };
 
 export interface Product {
   id: string;
@@ -117,13 +148,16 @@ export interface Product {
   seasons: Season[];
   occasions: Occasion[];
   timeOfDay: TimeOfDay[];
+  attributes: ProductAttributes;
   // AI
   embedding: number[] | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-export type ProductCreateInput = Omit<Product, "id" | "tenantId" | "embedding" | "createdAt" | "updatedAt">;
+export type ProductCreateInput = Omit<Product, "id" | "tenantId" | "embedding" | "createdAt" | "updatedAt" | "attributes"> & {
+  attributes?: ProductAttributes;
+};
 export type ProductUpdateInput = Partial<ProductCreateInput>;
 
 // ─────────────────────────────────────────────
@@ -131,11 +165,7 @@ export type ProductUpdateInput = Partial<ProductCreateInput>;
 // ─────────────────────────────────────────────
 export type QuestionType = "single" | "multi" | "scale";
 
-export interface AnswerImpact {
-  freshness: number;
-  intensity: number;
-  sweetness: number;
-}
+export type AnswerImpact = Record<string, number>;
 
 export interface Answer {
   id: string;
@@ -151,6 +181,7 @@ export interface Answer {
 export interface Question {
   id: string;
   tenantId: string;
+  quizId: string;
   text: string;
   helpText: string | null;
   type: QuestionType;
@@ -204,6 +235,7 @@ export interface SessionAnswer {
 export interface QuizSession {
   id: string;
   tenantId: string;
+  quizId: string;
   gender: GenderTarget | null;
   mood: string | null;
   answers: SessionAnswer[];
@@ -217,6 +249,8 @@ export interface QuizSession {
 
 export interface QuizSubmitPayload {
   clientId: string;
+  quizId?: string;
+  abVariant?: string;
   gender: GenderTarget | null;
   mood: string | null;
   answers: SessionAnswer[];
@@ -224,6 +258,8 @@ export interface QuizSubmitPayload {
 }
 
 export interface QuizResult {
+  quizId: string;
+  industry: ProductIndustry;
   product: Pick<
     Product,
     | "id"
@@ -244,7 +280,7 @@ export interface QuizResult {
     | "concentration"
     | "description"
     | "genderTarget"
-  >;
+  > & Pick<Product, "attributes">;
   explanation: string[];
   profileSummary: ProfileSummary;
 }
@@ -274,6 +310,7 @@ export type MetricType = "quiz_start" | "quiz_complete" | "quiz_abandon" | "step
 export interface Metric {
   id: string;
   tenantId: string;
+  quizId: string;
   type: MetricType;
   payload: Record<string, unknown>;
   createdAt: Date;
@@ -298,6 +335,15 @@ export interface MetricsStep {
   dropOffRate: number;
 }
 
+export interface MetricsVariant {
+  variant: string;
+  started: number;
+  completed: number;
+  clicks: number;
+  completionRate: number;
+  clickThroughRate: number;
+}
+
 export interface MetricsTopProduct {
   product: { id: string | null; name: string; brand?: string | null };
   count: number;
@@ -311,6 +357,7 @@ export interface QuizMetricsResponse {
   topProducts: MetricsTopProduct[];
   genders: { gender: string; count: number }[];
   steps: MetricsStep[];
+  variants: MetricsVariant[];
 }
 
 export interface MetricsAIInsight {

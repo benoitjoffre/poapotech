@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import type { Product, ProductCreateInput, GenderTarget, PriceTier, Concentration, Season, Occasion, TimeOfDay } from "@poapo/types";
+import type { Product, ProductAttributes, ProductCreateInput, GenderTarget, PriceTier, Concentration, Season, Occasion, TimeOfDay, ProductIndustry } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -46,6 +46,7 @@ type FormState = {
   timeOfDay: TimeOfDay[];
   active: boolean;
   featured: boolean;
+  attributes: string;
 };
 
 const EMPTY_FORM: FormState = {
@@ -72,6 +73,15 @@ const EMPTY_FORM: FormState = {
   timeOfDay: [],
   active: true,
   featured: false,
+  attributes: "{}",
+};
+
+const EMPTY_COFFEE_ATTRIBUTES = {
+  roastLevel: "0.5",
+  acidity: "0.5",
+  body: "0.5",
+  sweetness: "0.5",
+  origin: "",
 };
 
 function productToForm(p: Product): FormState {
@@ -99,6 +109,7 @@ function productToForm(p: Product): FormState {
     timeOfDay: p.timeOfDay,
     active: p.active,
     featured: p.featured,
+    attributes: JSON.stringify(p.attributes ?? {}, null, 2),
   };
 }
 
@@ -127,6 +138,7 @@ function formToPayload(f: FormState): ProductCreateInput {
     timeOfDay: f.timeOfDay,
     active: f.active,
     featured: f.featured,
+    attributes: JSON.parse(f.attributes || "{}") as ProductAttributes,
   };
 }
 
@@ -178,12 +190,31 @@ export default function ProductFormPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [industry, setIndustry] = useState<ProductIndustry>("perfume");
+  const [coffeeAttributes, setCoffeeAttributes] = useState(EMPTY_COFFEE_ATTRIBUTES);
+
+  useEffect(() => {
+    apiFetch<{ industry?: ProductIndustry }>("/api/auth/me")
+      .then((tenant) => setIndustry((current) => current === "perfume" ? tenant.industry ?? "perfume" : current))
+      .catch((err: Error) => setError(err.message));
+  }, []);
 
   // Chargement du produit existant
   useEffect(() => {
     if (!id) return;
     apiFetch<Product>(`/api/catalog/products/${id}`)
-      .then((p) => setForm(productToForm(p)))
+      .then((p) => {
+        setForm(productToForm(p));
+        const attributes = p.attributes ?? {};
+        if (["roastLevel", "acidity", "body"].some((key) => key in attributes)) setIndustry("coffee");
+        setCoffeeAttributes({
+          roastLevel: String(attributes.roastLevel ?? "0.5"),
+          acidity: String(attributes.acidity ?? "0.5"),
+          body: String(attributes.body ?? "0.5"),
+          sweetness: String(attributes.sweetness ?? "0.5"),
+          origin: typeof attributes.origin === "string" ? attributes.origin : "",
+        });
+      })
       .catch((err: Error) => setError(err.message))
       .finally(() => setIsLoading(false));
   }, [id]);
@@ -203,6 +234,19 @@ export default function ProductFormPage() {
     setSuccess("");
     try {
       const payload = formToPayload(form);
+      if (industry === "coffee") {
+        const otherAttributes = Object.fromEntries(
+          Object.entries(payload.attributes ?? {}).filter(([key]) => !["roastLevel", "acidity", "body", "sweetness", "origin"].includes(key)),
+        );
+        payload.attributes = {
+          ...otherAttributes,
+          roastLevel: Number(coffeeAttributes.roastLevel),
+          acidity: Number(coffeeAttributes.acidity),
+          body: Number(coffeeAttributes.body),
+          sweetness: Number(coffeeAttributes.sweetness),
+          ...(coffeeAttributes.origin.trim() ? { origin: coffeeAttributes.origin.trim() } : {}),
+        };
+      }
       if (isEditing) {
         await apiFetch(`/api/catalog/products/${id}`, {
           method: "PUT",
@@ -230,7 +274,9 @@ export default function ProductFormPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">{isEditing ? "Éditer un produit" : "Nouveau produit"}</h1>
-          <p className="page-subtitle">{isEditing ? `ID : ${id}` : "Remplissez les informations du parfum"}</p>
+          <p className="page-subtitle">
+            {isEditing ? `ID : ${id}` : `Remplissez les informations ${industry === "coffee" ? "du café" : "du produit"}`}
+          </p>
         </div>
         <button type="button" className="btn-ghost" onClick={() => navigate("/catalog")}>
           ← Retour
@@ -238,6 +284,17 @@ export default function ProductFormPage() {
       </div>
 
       <form className="product-form" onSubmit={handleSubmit}>
+        <div className="field-group">
+          <label className="field-label" htmlFor="product-editor-industry">Profil de saisie</label>
+          <select id="product-editor-industry" className="field-select" value={industry} onChange={(e) => setIndustry(e.target.value as ProductIndustry)}>
+            <option value="perfume">Parfum</option>
+            <option value="coffee">Café</option>
+            <option value="fashion">Mode</option>
+            <option value="food">Alimentaire</option>
+            <option value="custom">Autre</option>
+          </select>
+          <p className="field-hint">Le catalogue est partagé entre vos quiz. Ce choix adapte uniquement le formulaire.</p>
+        </div>
         {/* ── Identité ── */}
         <section className="form-section">
           <h2 className="section-title">Identité</h2>
@@ -254,7 +311,7 @@ export default function ProductFormPage() {
               </label>
               <input id="brand" className="field-input" value={form.brand} onChange={(e) => set("brand", e.target.value)} />
             </div>
-            <div className="field-group">
+            {industry === "perfume" && <div className="field-group">
               <label className="field-label" htmlFor="concentration">
                 Concentration
               </label>
@@ -271,7 +328,7 @@ export default function ProductFormPage() {
                   </option>
                 ))}
               </select>
-            </div>
+            </div>}
             <div className="field-group">
               <label className="field-label" htmlFor="price">
                 Prix (€)
@@ -286,7 +343,7 @@ export default function ProductFormPage() {
                 onChange={(e) => set("price", e.target.value)}
               />
             </div>
-            <div className="field-group">
+            {industry === "perfume" && <div className="field-group">
               <label className="field-label" htmlFor="priceTier">
                 Gamme de prix
               </label>
@@ -303,7 +360,7 @@ export default function ProductFormPage() {
                   </option>
                 ))}
               </select>
-            </div>
+            </div>}
             <div className="field-group field-span2">
               <label className="field-label" htmlFor="description">
                 Description
@@ -347,8 +404,63 @@ export default function ProductFormPage() {
           </div>
         </section>
 
+        {industry === "coffee" ? (
+          <section className="form-section">
+            <h2 className="section-title">Profil du café</h2>
+            <p className="section-hint">Utilisez une échelle de 0 à 1 ; les curseurs du quiz doivent suivre les mêmes axes.</p>
+            <div className="form-grid">
+              {([
+                ["roastLevel", "Torréfaction", "Claire", "Foncée"],
+                ["acidity", "Acidité", "Faible", "Vive"],
+                ["body", "Corps", "Léger", "Rond"],
+                ["sweetness", "Douceur", "Sèche", "Douce"],
+              ] as const).map(([key, label, low, high]) => (
+                <div className="field-group" key={key}>
+                  <label className="field-label" htmlFor={key}>{label}</label>
+                  <div className="form-grid">
+                    <span className="field-hint">{low}</span>
+                    <input
+                      id={key}
+                      className="field-input"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={coffeeAttributes[key]}
+                      onChange={(e) => setCoffeeAttributes((current) => ({ ...current, [key]: e.target.value }))}
+                    />
+                    <span className="field-hint">{high}</span>
+                  </div>
+                </div>
+              ))}
+              <div className="field-group">
+                <label className="field-label" htmlFor="origin">Origine</label>
+                <input
+                  id="origin"
+                  className="field-input"
+                  value={coffeeAttributes.origin}
+                  onChange={(e) => setCoffeeAttributes((current) => ({ ...current, origin: e.target.value }))}
+                  placeholder="ex. Éthiopie"
+                />
+              </div>
+            </div>
+          </section>
+        ) : (
+          <section className="form-section">
+            <h2 className="section-title">Attributs du produit</h2>
+            <p className="section-hint">Ajoutez les caractéristiques propres à votre secteur au format objet JSON.</p>
+            <textarea
+              className="field-textarea"
+              rows={5}
+              value={form.attributes}
+              onChange={(e) => set("attributes", e.target.value)}
+              placeholder={'{"roastLevel":0.5,"acidity":0.6,"body":0.7,"sweetness":0.3,"origin":"Éthiopie"}'}
+            />
+          </section>
+        )}
+
         {/* ── Classification ── */}
-        <section className="form-section">
+        {industry === "perfume" && <section className="form-section">
           <h2 className="section-title">Classification olfactive</h2>
           <div className="form-grid">
             <div className="field-group">
@@ -398,10 +510,10 @@ export default function ProductFormPage() {
               />
             </div>
           </div>
-        </section>
+        </section>}
 
         {/* ── Pyramide olfactive ── */}
-        <section className="form-section">
+        {industry === "perfume" && <section className="form-section">
           <h2 className="section-title">Pyramide olfactive</h2>
           <div className="form-grid">
             <div className="field-group">
@@ -441,10 +553,10 @@ export default function ProductFormPage() {
               />
             </div>
           </div>
-        </section>
+        </section>}
 
         {/* ── Axes numériques ── */}
-        <section className="form-section">
+        {industry === "perfume" && <section className="form-section">
           <h2 className="section-title">Axes numériques (0 – 1)</h2>
           <div className="form-grid">
             <div className="field-group">
@@ -496,10 +608,10 @@ export default function ProductFormPage() {
               />
             </div>
           </div>
-        </section>
+        </section>}
 
         {/* ── Contexte d'usage ── */}
-        <section className="form-section">
+        {industry === "perfume" && <section className="form-section">
           <h2 className="section-title">Contexte d'usage</h2>
           <MultiSelect
             label="Saisons"
@@ -519,7 +631,7 @@ export default function ProductFormPage() {
             value={form.timeOfDay}
             onChange={(v) => set("timeOfDay", v)}
           />
-        </section>
+        </section>}
 
         {/* ── Actions ── */}
         {error && <div className="form-error">{error}</div>}

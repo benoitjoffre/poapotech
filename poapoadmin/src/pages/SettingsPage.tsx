@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import type { TenantBranding } from "@poapo/types";
+import type { ProductIndustry, TenantBranding } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 
 interface BrandingForm {
   name: string;
+  industry: ProductIndustry;
   primaryColor: string;
   logoUrl: string;
   quizTitle: string;
@@ -12,8 +13,24 @@ interface BrandingForm {
   embedDomain: string;
 }
 
+function industryCopy(industry: ProductIndustry) {
+  switch (industry) {
+    case "coffee":
+      return { quizTitle: "Trouve ton café idéal", ctaText: "Découvrir ma sélection", widgetLabel: "Trouve ton café" };
+    case "fashion":
+      return { quizTitle: "Trouve ton article de mode idéal", ctaText: "Découvrir ma sélection", widgetLabel: "Trouve ton style" };
+    case "food":
+      return { quizTitle: "Trouve ton produit alimentaire idéal", ctaText: "Découvrir ma sélection", widgetLabel: "Trouve ton produit" };
+    case "custom":
+      return { quizTitle: "Trouve ton produit idéal", ctaText: "Découvrir ma sélection", widgetLabel: "Trouve ton produit" };
+    default:
+      return { quizTitle: "Trouve ton parfum idéal", ctaText: "Voir ce parfum", widgetLabel: "Trouve ton parfum" };
+  }
+}
+
 const EMPTY: BrandingForm = {
   name: "",
+  industry: "perfume",
   primaryColor: "#6c47ff",
   logoUrl: "",
   quizTitle: "Trouve ton parfum idéal",
@@ -43,12 +60,18 @@ export default function SettingsPage() {
     apiFetch<BrandingForm & { id: string; tenantId: string }>("/api/auth/me")
       .then((data) => {
         setTenantId(data.tenantId ?? data.id ?? "");
+        const defaults = industryCopy(data.industry ?? "perfume");
         setForm({
           name: data.name ?? "",
+          industry: data.industry ?? "perfume",
           primaryColor: data.primaryColor ?? "#6c47ff",
           logoUrl: data.logoUrl ?? "",
-          quizTitle: data.quizTitle ?? "Trouve ton parfum idéal",
-          ctaText: data.ctaText ?? "Voir ce parfum",
+          quizTitle:
+            !data.quizTitle || data.quizTitle === "Trouve ton parfum idéal" ? defaults.quizTitle : data.quizTitle,
+          ctaText:
+            !data.ctaText || data.ctaText === "Voir ce parfum" || data.ctaText === "Commencer le quiz"
+              ? defaults.ctaText
+              : data.ctaText,
           embedDomain: data.embedDomain ?? "",
         });
       })
@@ -69,6 +92,7 @@ export default function SettingsPage() {
     try {
       const payload: TenantBranding = {
         name: form.name || undefined,
+        industry: form.industry,
         primaryColor: form.primaryColor || undefined,
         logoUrl: form.logoUrl || undefined,
         quizTitle: form.quizTitle || undefined,
@@ -116,11 +140,12 @@ export default function SettingsPage() {
   };
 
   const clientId = tenantId || user?.tenantId || "";
+  const copy = industryCopy(form.industry);
   const embedSnippet = `<script
-  src="https://app.poapo-tech.com/poapo-widget.js"
+  src="${widgetBaseUrl}/poapo-widget.js"
   data-client-id="${clientId}"
-  data-url="https://app.poapo-tech.com"
-  data-label="Trouve ton parfum"
+  data-url="${widgetBaseUrl}"
+  data-label="${copy.widgetLabel}"
   data-color="${form.primaryColor || "#6c47ff"}"
   async
 ></script>`;
@@ -132,7 +157,7 @@ export default function SettingsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Paramètres</h1>
-          <p className="page-subtitle">Personnalisation du widget et de votre espace</p>
+          <p className="page-subtitle">Identité de votre espace et réglages du quiz par défaut. Gérez les autres quiz dans « Mes quiz ».</p>
         </div>
       </div>
 
@@ -147,6 +172,34 @@ export default function SettingsPage() {
               <input id="name" className="field-input" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Ma Parfumerie" />
             </div>
             <div className="field-group">
+              <label className="field-label" htmlFor="industry">
+                Secteur d’activité
+              </label>
+              <select
+                id="industry"
+                className="field-select"
+                value={form.industry}
+                onChange={(e) => {
+                  const nextIndustry = e.target.value as ProductIndustry;
+                  const nextCopy = industryCopy(nextIndustry);
+                  set("industry", nextIndustry);
+                  const previousCopy = industryCopy(form.industry);
+                  if (form.quizTitle === previousCopy.quizTitle) {
+                    set("quizTitle", nextCopy.quizTitle);
+                  }
+                  if (form.ctaText === previousCopy.ctaText) {
+                    set("ctaText", nextCopy.ctaText);
+                  }
+                }}
+              >
+                <option value="perfume">Parfum</option>
+                <option value="coffee">Café</option>
+                <option value="fashion">Mode</option>
+                <option value="food">Alimentaire</option>
+                <option value="custom">Autre secteur</option>
+              </select>
+            </div>
+            <div className="field-group">
               <label className="field-label" htmlFor="embedDomain">
                 Domaine autorisé pour le widget
               </label>
@@ -155,7 +208,7 @@ export default function SettingsPage() {
                 className="field-input"
                 value={form.embedDomain}
                 onChange={(e) => set("embedDomain", e.target.value)}
-                placeholder="https://maparfumerie.com"
+                placeholder="https://ma-marque.com"
               />
             </div>
           </div>
@@ -272,7 +325,7 @@ export default function SettingsPage() {
       </form>
 
       <section className="form-section embed-section">
-        <h2 className="section-title">Code d'intégration</h2>{" "}
+        <h2 className="section-title">Code d'intégration du quiz par défaut</h2>{" "}
         <p className="section-hint">Copiez ce script dans la page de votre site où vous souhaitez afficher le widget.</p>
         {clientId ? (
           <div className="snippet-block">

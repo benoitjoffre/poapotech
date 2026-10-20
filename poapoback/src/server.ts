@@ -12,6 +12,8 @@ import catalogRouter from "./routes/catalog";
 import importRouter from "./routes/import";
 import adminTenantsRouter from "./routes/adminTenants";
 import metricsRouter from "./routes/metrics";
+import quizzesRouter from "./routes/quizzes";
+import { quizErrorHandler } from "./services/quizzes";
 
 const app = express();
 
@@ -66,6 +68,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/embed", embedRouter);
 app.use("/api/quiz", quizRouter);
 app.use("/api/quiz/builder", quizBuilderRouter);
+app.use("/api/quizzes", quizzesRouter);
 app.use("/api/catalog", catalogRouter);
 app.use("/api/catalog/import", importRouter);
 app.use("/api/admin/tenants", adminTenantsRouter);
@@ -75,6 +78,8 @@ app.use("/api/metrics", metricsRouter);
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", ts: new Date().toISOString() });
 });
+
+app.use(quizErrorHandler);
 
 // 404 handler
 app.use((_req, res) => {

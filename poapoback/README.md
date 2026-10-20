@@ -1,65 +1,47 @@
-# POAPO Back - API Quiz Parfum
+# Poapo API
 
-API Express minimaliste pour soumettre un quiz et obtenir un parfum recommande.
+The active API is an Express application written in TypeScript. Its entry point
+is `src/server.ts`; the `dev`, `build` and `start` scripts in this workspace
+operate on that application.
 
-## Prerequis
+## Run locally
 
-- Node.js installe (version 18+ conseillee)
-- Le port 5000 doit etre libre, ou utiliser `PORT`
-
-## Lancer l'API
-
-```bash
-node server.js
-```
-
-Par defaut l'API ecoute sur `http://localhost:5000`.
-
-Pour changer le port :
+From the repository root:
 
 ```bash
-PORT=5050 node server.js
+npm run back
 ```
 
-## Endpoint
+Or, from this directory:
 
-### POST /api/quiz/submit
-
-Body JSON :
-
-```json
-{
-  "answers": {
-    "q1": 0,
-    "q2": 1,
-    "q3": 2,
-    "q4": 0,
-    "q5": 3,
-    "q6": 1,
-    "q7": 2,
-    "q8": 0,
-    "q9": 1,
-    "q10": 2
-  }
-}
+```bash
+npm run dev
 ```
 
-Reponse JSON :
+The API listens on port `5050` by default. Configure local settings in `.env`
+using `.env.example` as a reference. Start PostgreSQL before using database-backed
+routes.
 
-```json
-{
-  "perfume": { "name": "...", "freshness": 0.8, "intensity": 0.5, "sweetness": 0.3 },
-  "profile": { "freshness": 0.7, "intensity": 0.4, "sweetness": 0.6 },
-  "explanation": "Profil plutot frais et sucre; ... est le plus proche."
-}
+## Database
+
+```bash
+npm run db:generate
+npm run db:migrate
 ```
 
-## Donnees
+Use `db:push` only for a new or disposable development database. For an existing
+database, follow the migration and backup instructions in the repository's
+[setup guide](../SETUP.md).
 
-- Questions : `data/questions.json`
-- Parfums : `data/perfumes.json`
+## Code layout
 
-## Notes
+- `src/server.ts` configures middleware, mounts routers and starts the server.
+- `src/routes/` contains HTTP handlers grouped by feature.
+- `src/services/` contains backend logic shared by routes.
+- `src/middleware/` contains request middleware such as authentication.
+- `src/lib/` contains shared infrastructure such as the Prisma client.
+- `prisma/` contains the database schema and versioned migrations.
+- `tests/` contains API-level tests that use a simulated persistence layer.
 
-- Le moteur de recommandation est dans `sevices/recommender/`.
-- La route est dans `routes/quiz.js`.
+Run the API tests from the repository root with `npm run test:back`, or from this
+directory with `npm test`.

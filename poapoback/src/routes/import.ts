@@ -47,9 +47,12 @@ function parseCSVBuffer(buffer: Buffer): Promise<{ headers: string[]; rows: Reco
 const ARRAY_FIELDS = new Set(["topNotes", "heartNotes", "baseNotes", "tags", "seasons", "occasions", "timeOfDay"]);
 const NUMBER_FIELDS = new Set(["price", "freshness", "intensity", "sweetness"]);
 const BOOL_FIELDS = new Set(["active", "featured"]);
+const SCORING_ATTRIBUTE_FIELDS = new Set(["roastLevel", "acidity", "body", "sweetness"]);
 
 function applyMapping(row: Record<string, string>, mapping: FieldMapping[]): Record<string, unknown> {
   const result: Record<string, unknown> = {};
+  const attributes: Record<string, unknown> = {};
+  let hasAttributes = false;
   for (const { sourceColumn, targetField } of mapping) {
     if (!targetField) continue;
     const raw = (row[sourceColumn] ?? "").trim();
@@ -65,10 +68,36 @@ function applyMapping(row: Record<string, string>, mapping: FieldMapping[]): Rec
       if (!isNaN(n)) result[targetField] = n;
     } else if (BOOL_FIELDS.has(targetField)) {
       result[targetField] = ["true", "1", "oui", "yes"].includes(raw.toLowerCase());
+    } else if (targetField === "attributes") {
+      const parsed: unknown = JSON.parse(raw);
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        throw new Error("Le champ attributes doit contenir un objet JSON");
+      }
+      Object.assign(attributes, parsed);
+      hasAttributes = true;
+    } else if (targetField.startsWith("attribute.")) {
+      const key = targetField.slice("attribute.".length);
+      if (key === "origin") {
+        attributes[key] = raw;
+        hasAttributes = true;
+      } else if (SCORING_ATTRIBUTE_FIELDS.has(key)) {
+        const value = Number(raw.replace(",", "."));
+        if (!Number.isFinite(value) || value < 0 || value > 1) {
+          throw new Error(`L’attribut '${key}' doit être un nombre entre 0 et 1`);
+        }
+        attributes[key] = value;
+        hasAttributes = true;
+      }
     } else {
       result[targetField] = raw;
     }
   }
+  for (const [key, value] of Object.entries(attributes)) {
+    if (SCORING_ATTRIBUTE_FIELDS.has(key) && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)) {
+      throw new Error(`L’attribut '${key}' doit être un nombre entre 0 et 1`);
+    }
+  }
+  if (hasAttributes) result.attributes = attributes;
   return result;
 }
 
@@ -162,14 +191,14 @@ router.post("/execute", verifyToken, async (req: AuthRequest, res: Response) => 
   const errors: string[] = [];
 
   for (const row of rows) {
-    const data = applyMapping(row, mapping);
-    const name = typeof data.name === "string" ? data.name.trim() : "";
-    if (!name) {
-      skipped++;
-      continue;
-    }
-
     try {
+      const data = applyMapping(row, mapping);
+      const name = typeof data.name === "string" ? data.name.trim() : "";
+      if (!name) {
+        skipped++;
+        continue;
+      }
+
       await prisma.product.create({
         data: {
           tenantId,
@@ -200,6 +229,10 @@ router.post("/execute", verifyToken, async (req: AuthRequest, res: Response) => 
           occasions: Array.isArray(data.occasions) ? (data.occasions as any[]) : [],
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           timeOfDay: Array.isArray(data.timeOfDay) ? (data.timeOfDay as any[]) : [],
+          attributes:
+            typeof data.attributes === "object" && data.attributes !== null && !Array.isArray(data.attributes)
+              ? (data.attributes as object)
+              : {},
           active: typeof data.active === "boolean" ? data.active : true,
           featured: typeof data.featured === "boolean" ? data.featured : false,
         },

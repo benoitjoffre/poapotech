@@ -71,9 +71,12 @@ Editer `.env` — valeurs obligatoires :
 # Générer le client Prisma
 npm run db:generate
 
-# Appliquer les migrations (crée toutes les tables)
-npm run db:migrate
-# → Donner un nom à la migration : "init"
+# Pour une NOUVELLE base vide de développement uniquement :
+# créer le schéma courant (aucune donnée historique à migrer)
+npm run db:push
+
+# Pour une base existante, voir « Migration multi-quiz » ci-dessous.
+# Ne pas utiliser db:push pour migrer les données historiques.
 
 # (Optionnel) Explorer la DB dans le navigateur
 npm run db:studio
@@ -128,7 +131,7 @@ cd poapotech/poapofront
 npm run dev
 ```
 
-### Terminal 4 — Back-office admin (port 5174) _(Phase 3 — à venir)_
+### Terminal 4 — Back-office admin (port 5174)
 
 ```bash
 cd poapotech/poapoadmin
@@ -154,6 +157,85 @@ open http://localhost:5173
 
 ---
 
+## Plusieurs quiz par tenant
+
+Dans **Mes quiz**, créez un quiz puis configurez :
+
+- son nom interne, son secteur, son titre public et son CTA ;
+- les produits recommandables : tout le catalogue, ou une sélection explicite ;
+- son état actif/désactivé. La désactivation conserve les questions et les statistiques.
+
+Le catalogue, le logo, la couleur et le domaine autorisé restent partagés au niveau
+du tenant. Le « profil de saisie » du formulaire produit permet de renseigner des
+produits de plusieurs secteurs dans le même catalogue. Pour éviter de recommander
+un produit d'un autre secteur, utilisez une sélection explicite dans chaque quiz.
+Une sélection vide ne retombe jamais sur tout le catalogue.
+
+Le Quiz Builder et Analytics disposent d'un sélecteur de quiz. Les questions,
+conditions, variantes A/B, sessions et métriques sont isolées par quiz. Une variante
+A/B reste une variante d'un quiz, pas un autre quiz.
+
+Chaque fiche quiz fournit son lien et son code d'intégration :
+
+```text
+https://app.poapo-tech.com/?clientId=TENANT_ID&quizId=QUIZ_ID
+```
+
+```html
+<script
+  src="https://app.poapo-tech.com/poapo-widget.js"
+  data-url="https://app.poapo-tech.com"
+  data-client-id="TENANT_ID"
+  data-quiz-id="QUIZ_ID"
+  async
+></script>
+```
+
+Les anciennes intégrations sans `quizId` ou `data-quiz-id` continuent d'utiliser le
+**quiz par défaut**. Son identité est conservée ; les réglages de quiz de la page
+Paramètres et des anciennes API de branding ciblent ce quiz uniquement. Un
+identifiant explicite inconnu, étranger au tenant ou désactivé est refusé, sans
+repli vers un autre quiz.
+
+### Migration multi-quiz d'une base existante
+
+1. Sauvegarder la base et vérifier la base cible ainsi que l'historique Prisma.
+2. Si la base a été créée par `db:push`, établir d'abord une baseline de son schéma
+   historique selon la procédure Prisma. Les migrations versionnées ici sont
+   **incrémentales**, elles ne constituent pas un schéma initial pour une base vide.
+3. Appliquer dans l'ordre les migrations non encore appliquées :
+   - `20261015110000_add_sector_product_attributes` ;
+   - `20261015150000_add_multiple_quizzes`.
+4. Régénérer le client Prisma, reconstruire et redéployer ensemble le backend,
+   le service IA, l'administration et le front.
+5. Vérifier l'ancien lien `clientId` seul, puis un nouveau lien avec `quizId`.
+
+La migration multi-quiz crée `default_<tenantId>` pour chaque tenant existant,
+copie sa configuration et rattache toutes ses questions, sessions et métriques à
+ce quiz. Aucun produit ou historique n'est supprimé. Les nouveaux tenants
+obtiennent leur quiz par défaut à leur premier accès aux quiz.
+
+Ne pas remplacer cette migration par `db:push` sur une base contenant des données :
+le rattachement des lignes historiques fait partie du SQL de migration. Si les
+colonnes secteur/attributs existent déjà via `db:push`, réconcilier cet état avec
+l'historique avant d'appliquer la première migration, qui ajoute ces colonnes.
+
+### Tests ciblés multi-quiz
+
+Depuis la racine, sans connexion à une base et sans appel à un modèle externe :
+
+```bash
+npm run test:back
+cd poapoai && .venv/bin/python -m unittest test_recommend -v
+```
+
+Les tests API exécutent les routes HTTP avec une persistance simulée. Les tests IA
+simulent la connexion PostgreSQL et le modèle d'embedding. Une validation de
+migration et de persistance doit également être réalisée sur une copie de base
+avant le déploiement.
+
+---
+
 ## Scripts disponibles
 
 ### Monorepo (racine)
@@ -163,6 +245,8 @@ npm run back    # Lance le backend en dev
 npm run front   # Lance le widget en dev
 npm run admin   # Lance l'admin en dev
 npm run ai      # Lance le service IA
+npm run build   # Vérifie les types et construit les workspaces JavaScript
+npm run test:back # Lance les tests API sans base de données
 ```
 
 ### Backend (`poapoback/`)
@@ -210,7 +294,7 @@ poapotech/
 │   └── src/index.ts
 │
 ├── poapoback/                  API Express + TypeScript
-│   ├── prisma/schema.prisma    Schéma DB (Tenant, Product, Question, QuizSession, Metric...)
+│   ├── prisma/schema.prisma    Schéma DB (Tenant, Quiz, QuizProduct, Product, Question, QuizSession, Metric...)
 │   ├── src/
 │   │   ├── server.ts
 │   │   ├── lib/prisma.ts
@@ -219,12 +303,13 @@ poapotech/
 │   │       ├── auth.ts         POST /api/auth/magic-link, GET /api/auth/verify
 │   │       ├── embed.ts        GET /api/embed/config (public, widget)
 │   │       ├── quiz.ts         GET /questions, POST /submit, /track, /feedback, GET /metrics
+│   │       ├── quizzes.ts      Gestion des quiz et sélections de produits
 │   │       └── catalog.ts      CRUD /api/catalog/products
 │   └── .env.example
 │
 ├── poapofront/                 Widget quiz React + TypeScript (iframe embeddable)
 │
-├── poapoadmin/                 Back-office React + TypeScript (à venir Phase 3)
+├── poapoadmin/                 Back-office React + TypeScript
 │
 └── poapoai/                    Service Python FastAPI + sentence-transformers
     ├── main.py
@@ -243,10 +328,10 @@ poapotech/
 ### Publics (widget)
 
 ```
-GET  /api/embed/config?clientId=     Config branding du tenant
-GET  /api/quiz/questions?clientId=   Questions du quiz
-POST /api/quiz/submit                Soumettre les réponses → recommandation
-POST /api/quiz/track                 Tracking événements
+GET  /api/embed/config?clientId=&quizId=   Branding tenant et configuration du quiz
+GET  /api/quiz/questions?clientId=&quizId= Questions du quiz
+POST /api/quiz/submit                     Réponses + clientId + quizId → recommandation
+POST /api/quiz/track                      Événement + clientId + quizId
 POST /api/quiz/feedback              Feedback après résultat
 ```
 
@@ -264,8 +349,20 @@ GET  /api/catalog/products/:id       Détail produit
 PUT  /api/catalog/products/:id       Modifier produit
 DELETE /api/catalog/products/:id     Supprimer produit
 
-GET  /api/quiz/metrics               Analytics dashboard
+GET  /api/quizzes                    Liste des quiz du tenant
+POST /api/quizzes                    Créer un quiz
+GET  /api/quizzes/:id                Configuration et produits sélectionnés
+PUT  /api/quizzes/:id                Modifier ou désactiver un quiz
+GET  /api/quiz/builder/questions?quizId=   Questions du quiz choisi
+GET  /api/quiz/metrics?quizId=             Analytics du quiz choisi
+GET  /api/quiz/metrics/ai-insights?quizId=  Insights du quiz choisi
 ```
+
+Le paramètre `quizId` est facultatif pour la rétrocompatibilité : son absence
+cible le quiz par défaut. Toutes les mutations du builder acceptent `?quizId=`,
+y compris l'import CSV. Le choix des produits utilise `useAllProducts` et
+`productIds` dans `POST/PUT /api/quizzes`. Les produits doivent appartenir au
+tenant authentifié.
 
 ---
 

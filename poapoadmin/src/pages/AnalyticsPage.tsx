@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import type { QuizMetricsAIResponse, QuizMetricsResponse } from "@poapo/types";
+import type { Quiz, QuizMetricsAIResponse, QuizMetricsResponse } from "@poapo/types";
 import { apiFetch } from "../lib/api";
+import { QuizSelector, useQuiz } from "../contexts/QuizContext";
 
 const RANGE_OPTIONS = [
   { value: 7, label: "7 jours" },
@@ -12,7 +13,7 @@ function formatPercent(value: number): string {
   return `${value}%`;
 }
 
-export default function AnalyticsPage() {
+function AnalyticsContent({ quiz }: { quiz: Quiz }) {
   const [days, setDays] = useState<7 | 30 | 90>(30);
   const [metrics, setMetrics] = useState<QuizMetricsResponse | null>(null);
   const [ai, setAi] = useState<QuizMetricsAIResponse | null>(null);
@@ -26,7 +27,7 @@ export default function AnalyticsPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await apiFetch<QuizMetricsResponse>(`/api/quiz/metrics?since=${encodeURIComponent(currentSince)}`);
+      const data = await apiFetch<QuizMetricsResponse>(`/api/quiz/metrics?quizId=${encodeURIComponent(quiz.id)}&since=${encodeURIComponent(currentSince)}`);
       setMetrics(data);
     } catch (err) {
       setError((err as Error).message);
@@ -43,7 +44,7 @@ export default function AnalyticsPage() {
   const loadAiInsights = async () => {
     setAiLoading(true);
     try {
-      const data = await apiFetch<QuizMetricsAIResponse>(`/api/quiz/metrics/ai-insights?since=${encodeURIComponent(currentSince)}`);
+      const data = await apiFetch<QuizMetricsAIResponse>(`/api/quiz/metrics/ai-insights?quizId=${encodeURIComponent(quiz.id)}&since=${encodeURIComponent(currentSince)}`);
       setAi(data);
     } catch {
       setAi(null);
@@ -69,8 +70,8 @@ export default function AnalyticsPage() {
     <div className="page">
       <div className="page-header analytics-header">
         <div>
-          <h1 className="page-title">Analytics & Metrics</h1>
-          <p className="page-subtitle">Funnel, complétion, clics CTA et top recommandations</p>
+          <h1 className="page-title">Analytics — {quiz.name}</h1>
+          <p className="page-subtitle">Funnel, clics CTA, recommandations et performance A/B</p>
         </div>
         <div className="analytics-range">
           {RANGE_OPTIONS.map((opt) => (
@@ -227,9 +228,56 @@ export default function AnalyticsPage() {
                 </div>
               </div>
             </article>
+
+            <article className="analytics-panel">
+              <h2 className="analytics-panel-title">Performance par variante A/B</h2>
+              {metrics.variants?.length ? (
+                <div className="step-table-wrap">
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Variante</th>
+                        <th>Démarrés</th>
+                        <th>Complétés</th>
+                        <th>Complétion</th>
+                        <th>Clics</th>
+                        <th>CTR</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {metrics.variants.map((variant) => (
+                        <tr key={variant.variant}>
+                          <td>{variant.variant}</td>
+                          <td>{variant.started}</td>
+                          <td>{variant.completed}</td>
+                          <td>{formatPercent(variant.completionRate)}</td>
+                          <td>{variant.clicks}</td>
+                          <td>{formatPercent(variant.clickThroughRate)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {metrics.variants.length === 1 && metrics.variants[0].variant === "standard" && (
+                    <p className="text-muted">Aucune variante A/B active sur cette période.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="text-muted">Pas encore de données de variantes pour cette période.</div>
+              )}
+            </article>
           </section>
         </>
       )}
     </div>
   );
+}
+
+export default function AnalyticsPage() {
+  const { quiz, loading, error } = useQuiz();
+  if (loading) return <div className="loading-block">Chargement des quiz...</div>;
+  return <>
+    <QuizSelector />
+    {error && <div className="form-error">{error}</div>}
+    {quiz && <AnalyticsContent key={quiz.id} quiz={quiz} />}
+  </>;
 }

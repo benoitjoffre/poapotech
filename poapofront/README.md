@@ -1,16 +1,33 @@
-# React + Vite
+# Poapo Quiz Widget
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The customer-facing quiz is a React and TypeScript application built with Vite.
+It can run as a standalone page during development or be embedded in a tenant's
+site. The embed configuration and quiz data are served by the Poapo API.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+From the repository root:
 
-## React Compiler
+```bash
+npm run front
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Or, from this directory:
 
-## Expanding the ESLint configuration
+```bash
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Vite serves the widget at `http://localhost:5173`. Configure its API URL in the
+local environment file as described in the repository's
+[setup guide](../SETUP.md).
+
+## Code layout
+
+- `src/pages/QuizPage.tsx` implements the quiz experience.
+- `src/contexts/TenantContext.tsx` loads and provides tenant and quiz settings.
+- `src/App.tsx` defines the application routes.
+- `public/poapo-widget.js` is the small script customers add to embed the quiz.
+
+Run `npm run build --workspace=poapofront` to type-check and build the
+production-ready static assets.

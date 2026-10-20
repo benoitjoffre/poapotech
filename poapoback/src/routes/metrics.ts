@@ -6,15 +6,15 @@ const router = Router();
 
 /**
  * DELETE /api/metrics/cleanup
- * 
+ *
  * Nettoie les métriques selon les critères fournis.
  * Nécessite authentification super-admin.
- * 
+ *
  * Body:
  * - daysOld?: number — Nettoyer les métriques de plus de X jours (ex: 30)
  * - tenantId?: string — Nettoyer les métriques d'un tenant spécifique
  * - all?: boolean — Nettoyer TOUTES les métriques (doit être true)
- * 
+ *
  * Réponse:
  * {
  *   "deleted": number,
@@ -87,7 +87,7 @@ router.post("/cleanup", verifyToken, async (req: AuthRequest, res: Response) => 
 
 /**
  * GET /api/metrics/count
- * 
+ *
  * Affiche le nombre total de métriques.
  * Nécessite authentification.
  */

@@ -23,14 +23,15 @@ const genderOptions: { value: GenderTarget; label: string }[] = [
 
 const AB_STORAGE_KEY = "poapo_ab_variant";
 
-function pickAbVariant(questions: Question[]): string | null {
+function pickAbVariant(questions: Question[], quizId: string): string | null {
   const variants = [...new Set(questions.map((q) => q.abVariant).filter(Boolean))] as string[];
   if (variants.length === 0) return null;
   // Assign deterministically per session (or randomly on first visit)
-  let stored = sessionStorage.getItem(AB_STORAGE_KEY);
+  const storageKey = `${AB_STORAGE_KEY}:${quizId}`;
+  let stored = sessionStorage.getItem(storageKey);
   if (!stored || !variants.includes(stored)) {
     stored = variants[Math.floor(Math.random() * variants.length)];
-    sessionStorage.setItem(AB_STORAGE_KEY, stored);
+    sessionStorage.setItem(storageKey, stored);
   }
   return stored;
 }
@@ -51,8 +52,21 @@ function filterVisibleQuestions(allQuestions: Question[], selectedAnswerIds: Set
   });
 }
 
-function QuizPage() {
-  const { clientId, config } = useTenant();
+function QuizContent() {
+  const { clientId, quizId, config } = useTenant();
+  const industry = config?.industry ?? "perfume";
+  const isPerfume = industry === "perfume";
+  const industryLabel = industry === "coffee" ? "café" : industry === "fashion" ? "mode" : industry === "food" ? "produit alimentaire" : "produit";
+  const defaultQuizTitle =
+    industry === "perfume"
+      ? "Trouve ton parfum idéal"
+      : industry === "coffee"
+        ? "Trouve ton café idéal"
+        : industry === "fashion"
+          ? "Trouve ton article de mode idéal"
+          : industry === "food"
+            ? "Trouve ton produit alimentaire idéal"
+            : "Trouve ton produit idéal";
 
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
   const [abVariant, setAbVariant] = useState<string | null>(null);
@@ -63,7 +77,7 @@ function QuizPage() {
   const [selectedMood, setSelectedMood] = useState<MoodValue | "">("");
 
   // answers is keyed by questionId for stable conditional logic
-  const [answersByQuestionId, setAnswersByQuestionId] = useState<Record<string, number>>({});
+  const [answersByQuestionId, setAnswersByQuestionId] = useState<Record<string, number | number[]>>({});
   const [result, setResult] = useState<(QuizResult & { sessionId?: string }) | null>(null);
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -83,12 +97,11 @@ function QuizPage() {
   const selectedAnswerIds = useMemo(
     () =>
       new Set<string>(
-        Object.entries(answersByQuestionId)
-          .map(([qId, idx]) => {
-            const q = questionById.get(qId);
-            return q?.answers[idx]?.id ?? "";
-          })
-          .filter(Boolean),
+        Object.entries(answersByQuestionId).flatMap(([qId, selection]) => {
+          const question = questionById.get(qId);
+          const selected = Array.isArray(selection) ? selection : [selection];
+          return question ? selected.map((idx) => question.answers[idx]?.id ?? "").filter(Boolean) : [];
+        }),
       ),
     [answersByQuestionId, questionById],
   );
@@ -102,18 +115,19 @@ function QuizPage() {
   const answers = useMemo(() => questions.map((q) => answersByQuestionId[q.id] ?? null), [questions, answersByQuestionId]);
 
   const questionsCount = questions.length;
-  const answeredCount = answers.filter((v) => v !== null).length;
-  const totalSteps = questionsCount + 1;
-  const completedSteps = (gender ? 1 : 0) + answeredCount;
+  const answeredCount = answers.filter((value) => (Array.isArray(value) ? value.length > 0 : value !== null)).length;
+  const requiresGender = isPerfume;
+  const totalSteps = questionsCount + (requiresGender ? 1 : 0);
+  const completedSteps = (requiresGender && gender ? 1 : 0) + answeredCount;
   const progressPercent = totalSteps === 0 ? 0 : Math.round((completedSteps / totalSteps) * 100);
-  const isGenderStep = stepIndex === 0;
-  const currentQuestionIndex = stepIndex - 1;
+  const isGenderStep = requiresGender && stepIndex === 0;
+  const currentQuestionIndex = stepIndex - (requiresGender ? 1 : 0);
   const isLastStep = stepIndex === totalSteps - 1;
   const currentQuestion = !isGenderStep ? questions[currentQuestionIndex] : null;
   const nextQuestion = !isGenderStep ? questions[currentQuestionIndex + 1] ?? null : questions[0] ?? null;
 
-  const quizTitle = config?.quizTitle ?? "Trouve ton parfum idéal";
-  const ctaText = config?.ctaText ?? "Voir ce parfum";
+  const quizTitle = config?.quizTitle ?? defaultQuizTitle;
+  const ctaText = config?.ctaText ?? (isPerfume ? "Voir ce parfum" : "Découvrir ma sélection");
 
   const trackEvent = async (type: MetricType, payload: Record<string, unknown> = {}, { timeoutMs = 6000 } = {}): Promise<{ ok: boolean }> => {
     if (!clientId) return { ok: false };
@@ -123,7 +137,7 @@ function QuizPage() {
       const res = await fetch(`${apiBaseUrl}/api/quiz/track`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clientId, type, payload }),
+        body: JSON.stringify({ clientId, quizId, type, payload }),
         signal: controller.signal,
       });
       return { ok: res.ok };
@@ -138,7 +152,7 @@ function QuizPage() {
   const trackEventNoBlock = (type: MetricType, payload: Record<string, unknown> = {}): void => {
     if (!clientId) return;
     const url = `${apiBaseUrl}/api/quiz/track`;
-    const body = JSON.stringify({ clientId, type, payload });
+    const body = JSON.stringify({ clientId, quizId, type, payload });
 
     try {
       if (typeof navigator !== "undefined" && "sendBeacon" in navigator) {
@@ -164,14 +178,15 @@ function QuizPage() {
       setIsLoadingQuestions(true);
       setError("");
       try {
-        const url = clientId ? `${apiBaseUrl}/api/quiz/questions?clientId=${encodeURIComponent(clientId)}` : `${apiBaseUrl}/api/quiz/questions`;
+        const params = new URLSearchParams({ clientId: clientId!, quizId: quizId! });
+        const url = `${apiBaseUrl}/api/quiz/questions?${params}`;
         const res = await fetch(url);
         if (!res.ok) throw new Error("Impossible de charger les questions.");
         const data = (await res.json()) as Question[];
         if (!Array.isArray(data)) throw new Error("Format de questions invalide.");
         if (isMounted) {
           setAllQuestions(data);
-          setAbVariant(pickAbVariant(data));
+          setAbVariant(pickAbVariant(data, quizId!));
           setAnswersByQuestionId({});
         }
       } catch (err) {
@@ -184,9 +199,10 @@ function QuizPage() {
     return () => {
       isMounted = false;
     };
-  }, [clientId]);
+  }, [clientId, quizId]);
 
   useEffect(() => {
+    if (isLoadingQuestions || !isPerfume) return;
     const moodParam = new URLSearchParams(window.location.search).get("mood") ?? "";
     const valid = moodOptions.find((o) => o.value === moodParam);
     if (valid) {
@@ -195,22 +211,31 @@ function QuizPage() {
       startTimeRef.current = Date.now();
       if (!hasTrackedStart) {
         setHasTrackedStart(true);
-        void trackEvent("quiz_start", { mood: valid.value });
+        void trackEvent("quiz_start", { mood: valid.value, abVariant: abVariant ?? "standard" });
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isLoadingQuestions]);
 
   const handleAnswer = (questionIndex: number, optionIndex: number) => {
     const question = questions[questionIndex];
     if (!question) return;
-    setAnswersByQuestionId((prev) => ({ ...prev, [question.id]: optionIndex }));
-    if (stepIndex < totalSteps - 1) {
+    if (question.type === "multi") {
+      setAnswersByQuestionId((prev) => {
+        const previous = prev[question.id];
+        const selected = Array.isArray(previous) ? previous : [];
+        const next = selected.includes(optionIndex) ? selected.filter((index) => index !== optionIndex) : [...selected, optionIndex];
+        return { ...prev, [question.id]: next };
+      });
+    } else {
+      setAnswersByQuestionId((prev) => ({ ...prev, [question.id]: optionIndex }));
+    }
+    if (question.type === "single" && stepIndex < totalSteps - 1) {
       setStepIndex((prev) => Math.min(prev + 1, totalSteps - 1));
     }
 
     const answer = question.answers[optionIndex];
-    if (answer) {
+    if (answer && question.type !== "multi") {
       trackEventNoBlock("step_answer", {
         step: question.id,
         questionId: question.id,
@@ -220,20 +245,20 @@ function QuizPage() {
   };
 
   const buildSessionAnswers = (): SessionAnswer[] =>
-    questions.reduce<SessionAnswer[]>((acc, question, idx) => {
-      const selectedIdx = answers[idx];
-      if (selectedIdx !== null && selectedIdx !== undefined) {
+    questions.flatMap((question, idx) => {
+      const selection = answers[idx];
+      const indices = Array.isArray(selection) ? selection : typeof selection === "number" ? [selection] : [];
+      return indices.flatMap((selectedIdx) => {
         const answer = question.answers[selectedIdx];
-        if (answer) acc.push({ questionId: question.id, answerId: answer.id });
-      }
-      return acc;
-    }, []);
+        return answer ? [{ questionId: question.id, answerId: answer.id }] : [];
+      });
+    });
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
     setResult(null);
-    if (!gender) {
+    if (requiresGender && !gender) {
       setError("Merci de selectionner un genre avant de valider.");
       return;
     }
@@ -252,7 +277,8 @@ function QuizPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId,
-          gender,
+          quizId,
+          gender: gender || null,
           mood: selectedMood || null,
           answers: buildSessionAnswers(),
           decisionTime: startTimeRef.current ? Date.now() - startTimeRef.current : undefined,
@@ -264,7 +290,7 @@ function QuizPage() {
       setResult(data);
       if (!hasTrackedComplete) {
         setHasTrackedComplete(true);
-        void trackEvent("quiz_complete");
+        void trackEvent("quiz_complete", { abVariant: abVariant ?? "standard" });
       }
       startTimeRef.current = null;
     } catch (err) {
@@ -281,6 +307,10 @@ function QuizPage() {
     setAnswersByQuestionId({});
     setStepIndex(0);
     setIsProfileOpen(false);
+    setHasStarted(false);
+    setHasTrackedStart(false);
+    setHasTrackedComplete(false);
+    lastTrackedStepRef.current = null;
     startTimeRef.current = null;
   };
 
@@ -289,12 +319,12 @@ function QuizPage() {
     if (!startTimeRef.current) startTimeRef.current = Date.now();
     if (!hasTrackedStart) {
       setHasTrackedStart(true);
-      void trackEvent("quiz_start", { mood: selectedMood || undefined });
+      void trackEvent("quiz_start", { mood: selectedMood || undefined, abVariant: abVariant ?? "standard" });
     }
   };
 
   const handleMoodContinue = () => {
-    if (!selectedMood) return;
+    if (!selectedMood || !requiresGender) return;
     const params = new URLSearchParams(window.location.search);
     params.set("mood", selectedMood);
     window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
@@ -356,9 +386,13 @@ function QuizPage() {
               <h1 className="title">
                 {quizTitle.split(" ").slice(0, -1).join(" ")} <span className="title-accent">{quizTitle.split(" ").slice(-1)[0]}</span>
               </h1>
-              <p>poapo recommande un parfum qui colle à ta peau, ton style de vie et tes émotions. Un quiz rapide, une reco ultra-personnalisée.</p>
+              <p>
+                {isPerfume
+                  ? "poapo recommande un parfum qui colle à ta peau, ton style de vie et tes émotions. Un quiz rapide, une reco ultra-personnalisée."
+                  : `Répondez à quelques questions et découvrez le ${industryLabel} adapté à vos préférences.`}
+              </p>
             </div>
-            {!hasStarted && (
+            {!hasStarted && isPerfume && (
               <div className="glass-card">
                 <div className="glass-title">Signature olfactive</div>
                 <div className="glass-subtitle">Un voyage sensoriel, en 11 questions.</div>
@@ -389,10 +423,10 @@ function QuizPage() {
           </div>
           {!hasStarted ? (
             <div className="hero-actions">
-              <button className="submit" type="button" onClick={handleStart}>
+              <button className="submit" type="button" onClick={handleStart} disabled={isLoadingQuestions || !!error || questionsCount === 0}>
                 Commencer le quiz
               </button>
-              <div className="hero-subtext">11 questions · 1 minute · Recommandation immediate</div>
+              <div className="hero-subtext">{questionsCount} questions · Recommandation immédiate</div>
             </div>
           ) : (
             <>
@@ -443,29 +477,47 @@ function QuizPage() {
           {!isLoadingQuestions && !isGenderStep && currentQuestion && (
             <div className="question-card animate" key={currentQuestion.id}>
               <div className="question-title">
-                {stepIndex}. {currentQuestion.text}
+                {currentQuestionIndex + 1}. {currentQuestion.text}
               </div>
               {currentQuestion.helpText && <div className="question-help-text">{currentQuestion.helpText}</div>}
-              <div className="options">
-                {currentQuestion.answers.map((answer, optionIndex) => {
-                  const checked = answers[currentQuestionIndex] === optionIndex;
-                  return (
-                    <label key={answer.id} className={`option ${checked ? "selected" : ""}`}>
-                      <input
-                        type="radio"
-                        name={currentQuestion.id}
-                        value={optionIndex}
-                        checked={checked}
-                        onChange={() => handleAnswer(currentQuestionIndex, optionIndex)}
-                      />
-                      <span>
-                        {answer.emoji ? `${answer.emoji} ` : ""}
-                        {answer.text}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
+              {currentQuestion.type === "scale" ? (
+                <div className="options">
+                  <input
+                    type="range"
+                    min={0}
+                    max={Math.max(0, currentQuestion.answers.length - 1)}
+                    step={1}
+                    value={typeof answers[currentQuestionIndex] === "number" ? answers[currentQuestionIndex] : 0}
+                    onChange={(event) => handleAnswer(currentQuestionIndex, Number(event.target.value))}
+                    aria-label={currentQuestion.text}
+                  />
+                  <div className="question-help-text">
+                    {currentQuestion.answers[typeof answers[currentQuestionIndex] === "number" ? answers[currentQuestionIndex] : 0]?.text}
+                  </div>
+                </div>
+              ) : (
+                <div className="options">
+                  {currentQuestion.answers.map((answer, optionIndex) => {
+                    const selection = answers[currentQuestionIndex];
+                    const checked = Array.isArray(selection) ? selection.includes(optionIndex) : selection === optionIndex;
+                    return (
+                      <label key={answer.id} className={`option ${checked ? "selected" : ""}`}>
+                        <input
+                          type={currentQuestion.type === "multi" ? "checkbox" : "radio"}
+                          name={currentQuestion.id}
+                          value={optionIndex}
+                          checked={checked}
+                          onChange={() => handleAnswer(currentQuestionIndex, optionIndex)}
+                        />
+                        <span>
+                          {answer.emoji ? `${answer.emoji} ` : ""}
+                          {answer.text}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -500,7 +552,15 @@ function QuizPage() {
               <button
                 className="submit"
                 type="button"
-                disabled={isLoadingQuestions || questionsCount === 0 || (isGenderStep ? !gender : answers[currentQuestionIndex] === null)}
+                disabled={
+                  isLoadingQuestions ||
+                  questionsCount === 0 ||
+                  (isGenderStep
+                    ? !gender
+                    : Array.isArray(answers[currentQuestionIndex])
+                      ? answers[currentQuestionIndex].length === 0
+                      : answers[currentQuestionIndex] === null)
+                }
                 onClick={() => setStepIndex((prev) => Math.min(prev + 1, totalSteps - 1))}
               >
                 Suivant
@@ -509,7 +569,7 @@ function QuizPage() {
               <button
                 className="submit"
                 type="submit"
-                disabled={isSubmitting || isLoadingQuestions || questionsCount === 0 || answeredCount !== questionsCount || !gender}
+                disabled={isSubmitting || isLoadingQuestions || questionsCount === 0 || answeredCount !== questionsCount || (requiresGender && !gender)}
               >
                 {isSubmitting ? "Envoi en cours..." : "Envoyer mes reponses"}
               </button>
@@ -530,17 +590,17 @@ function QuizPage() {
               </div>
             )}
             <div className="result-hero-overlay">
-              <div className="result-hero-badge">✦ Votre match parfum</div>
+              <div className="result-hero-badge">✦ Votre sélection {industryLabel}</div>
               {result.product?.brand && <div className="result-hero-brand">{result.product.brand}</div>}
               <h2 className="result-hero-name">{result.product?.name}</h2>
               <div className="result-hero-meta">
-                {result.product?.concentration && (
+                {isPerfume && result.product?.concentration && (
                   <span className="result-pill">{concentrationLabel[result.product.concentration] ?? result.product.concentration}</span>
                 )}
-                {result.product?.priceTier && (
+                {isPerfume && result.product?.priceTier && (
                   <span className="result-pill">{priceTierLabel[result.product.priceTier] ?? result.product.priceTier}</span>
                 )}
-                {result.product?.genderTarget && (
+                {isPerfume && result.product?.genderTarget && (
                   <span className="result-pill">{genderLabel[result.product.genderTarget] ?? result.product.genderTarget}</span>
                 )}
               </div>
@@ -559,7 +619,7 @@ function QuizPage() {
           {result.explanation.length > 0 && <p className="result-explanation">{result.explanation.join(" ")}</p>}
 
           {/* ── Notes olfactives ── */}
-          {((result.product?.topNotes?.length ?? 0) > 0 ||
+          {isPerfume && ((result.product?.topNotes?.length ?? 0) > 0 ||
             (result.product?.heartNotes?.length ?? 0) > 0 ||
             (result.product?.baseNotes?.length ?? 0) > 0) && (
             <div className="result-notes">
@@ -587,7 +647,7 @@ function QuizPage() {
           )}
 
           {/* ── Métriques ── */}
-          {result.product && (
+          {isPerfume && result.product && (
             <div className="result-metrics">
               <div className="metric">
                 <div className="metric-label-row">
@@ -620,25 +680,38 @@ function QuizPage() {
           )}
 
           {/* ── Famille + Tags ── */}
-          <div className="result-grid">
-            <div>
-              <div className="result-subtitle">Famille</div>
-              <div className="chip-row">{result.product?.olfactoryFamily && <span className="chip">{result.product.olfactoryFamily}</span>}</div>
-            </div>
-            <div>
-              <div className="result-subtitle">Tags</div>
-              <div className="chip-row">
-                {(result.product?.tags ?? []).map((tag, i) => (
-                  <span className={`chip ${i === 0 ? "chip-primary" : ""}`} key={tag}>
-                    {tag}
-                  </span>
-                ))}
+          {isPerfume ? (
+            <div className="result-grid">
+              <div>
+                <div className="result-subtitle">Famille</div>
+                <div className="chip-row">{result.product?.olfactoryFamily && <span className="chip">{result.product.olfactoryFamily}</span>}</div>
+              </div>
+              <div>
+                <div className="result-subtitle">Tags</div>
+                <div className="chip-row">
+                  {(result.product?.tags ?? []).map((tag, i) => (
+                    <span className={`chip ${i === 0 ? "chip-primary" : ""}`} key={tag}>
+                      {tag}
+                    </span>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
+          ) : Object.keys(result.product?.attributes ?? {}).length > 0 ? (
+            <div className="result-grid">
+              {Object.entries(result.product.attributes).map(([key, value]) => (
+                <div key={key}>
+                  <div className="result-subtitle">{key}</div>
+                  <div className="chip-row">
+                    <span className="chip">{String(value)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
 
           {/* ── Profil olfactif ── */}
-          {result.profileSummary && (
+          {isPerfume && result.profileSummary && (
             <div className="result-summary">
               <button type="button" className="accordion-toggle" onClick={() => setIsProfileOpen((prev) => !prev)} aria-expanded={isProfileOpen}>
                 <span>Ton profil olfactif</span>
@@ -687,7 +760,7 @@ function QuizPage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="result-cta-btn"
-                onClick={() => void trackEvent("buy_click", { productId: result.product.id })}
+                onClick={() => void trackEvent("buy_click", { productId: result.product.id, abVariant: abVariant ?? "standard" })}
               >
                 {ctaText}
               </a>
@@ -702,4 +775,9 @@ function QuizPage() {
   );
 }
 
-export default QuizPage;
+export default function QuizPage() {
+  const { loading, error, clientId, quizId } = useTenant();
+  if (loading) return <div className="question-card">Chargement du quiz...</div>;
+  if (error || !clientId || !quizId) return <div className="form-error">{error || "Lien de quiz incomplet : clientId requis."}</div>;
+  return <QuizContent key={quizId} />;
+}

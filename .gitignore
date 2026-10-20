@@ -16,6 +16,8 @@ build/
 # Prisma
 **/prisma/migrations/**/*.sql
 !**/prisma/migrations/
+!poapoback/prisma/migrations/20261015110000_add_sector_product_attributes/migration.sql
+!poapoback/prisma/migrations/20261015150000_add_multiple_quizzes/migration.sql
 
 # Python
 poapoai/__pycache__/

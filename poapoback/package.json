@@ -5,8 +5,9 @@
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsup src/server.ts --format cjs --out-dir dist",
+    "build": "tsc --noEmit && tsup src/server.ts --format cjs --out-dir dist",
     "start": "node dist/server.js",
+    "test": "node --import tsx --test tests/*.test.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",

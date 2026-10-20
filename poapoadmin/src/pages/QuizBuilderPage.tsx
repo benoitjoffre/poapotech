@@ -8,8 +8,11 @@ import type {
   QuestionType,
   QuestionUpdateInput,
   ReorderPayload,
+  ProductIndustry,
+  Quiz,
 } from "@poapo/types";
 import { apiFetch, getToken } from "../lib/api";
+import { QuizSelector, useQuiz } from "../contexts/QuizContext";
 
 // ─── Types locaux ─────────────────────────────────────────────────────────────
 
@@ -17,9 +20,15 @@ interface QuestionWithAnswers extends Question {
   answers: Answer[];
 }
 
-const IMPACT_LABELS: { key: keyof Answer["impacts"]; label: string; color: string }[] = [
+const PERFUME_IMPACT_LABELS: { key: string; label: string; color: string }[] = [
   { key: "freshness", label: "Fraîcheur", color: "#0ea5e9" },
   { key: "intensity", label: "Intensité", color: "#f97316" },
+  { key: "sweetness", label: "Douceur", color: "#ec4899" },
+];
+const COFFEE_IMPACT_LABELS: { key: string; label: string; color: string }[] = [
+  { key: "roastLevel", label: "Torréfaction", color: "#92400e" },
+  { key: "acidity", label: "Acidité", color: "#16a34a" },
+  { key: "body", label: "Corps", color: "#2563eb" },
   { key: "sweetness", label: "Douceur", color: "#ec4899" },
 ];
 
@@ -35,12 +44,14 @@ const AB_VARIANTS = ["A", "B", "C"];
 
 function AnswerRow({
   answer,
+  impactLabels,
   allQuestionsAnswers,
   onSave,
   onDelete,
   dragHandleProps,
 }: {
   answer: Answer;
+  impactLabels: { key: string; label: string; color: string }[];
   allQuestionsAnswers: { questionId: string; questionText: string; answers: Answer[] }[];
   onSave: (id: string, data: AnswerUpdateInput) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
@@ -51,9 +62,7 @@ function AnswerRow({
   const [fields, setFields] = useState({
     text: answer.text,
     emoji: answer.emoji ?? "",
-    freshness: answer.impacts.freshness,
-    intensity: answer.impacts.intensity,
-    sweetness: answer.impacts.sweetness,
+    impacts: { ...answer.impacts },
     active: answer.active,
   });
 
@@ -64,11 +73,7 @@ function AnswerRow({
         text: fields.text,
         emoji: fields.emoji || null,
         active: fields.active,
-        impacts: {
-          freshness: fields.freshness,
-          intensity: fields.intensity,
-          sweetness: fields.sweetness,
-        },
+        impacts: fields.impacts,
       });
       setEditing(false);
     } finally {
@@ -88,10 +93,10 @@ function AnswerRow({
         <span className="answer-emoji">{answer.emoji || "·"}</span>
         <span className="answer-text">{answer.text}</span>
         <span className="answer-impacts">
-          {IMPACT_LABELS.map(({ key, label, color }) => (
+          {impactLabels.map(({ key, label, color }) => (
             <span key={key} className="impact-chip" style={{ "--chip-color": color } as React.CSSProperties}>
-              {label[0]} {answer.impacts[key] > 0 ? "+" : ""}
-              {answer.impacts[key].toFixed(2)}
+              {label[0]} {(answer.impacts[key] ?? 0) > 0 ? "+" : ""}
+              {(answer.impacts[key] ?? 0).toFixed(2)}
             </span>
           ))}
         </span>
@@ -129,7 +134,7 @@ function AnswerRow({
         </label>
       </div>
       <div className="impact-sliders">
-        {IMPACT_LABELS.map(({ key, label, color }) => (
+        {impactLabels.map(({ key, label, color }) => (
           <div key={key} className="impact-slider-row">
             <label style={{ color, minWidth: 80 }}>{label}</label>
             <input
@@ -137,8 +142,8 @@ function AnswerRow({
               min="-1"
               max="1"
               step="0.01"
-              value={fields[key]}
-              onChange={(e) => setFields((f) => ({ ...f, [key]: parseFloat(e.target.value) }))}
+              value={fields.impacts[key] ?? 0}
+              onChange={(e) => setFields((f) => ({ ...f, impacts: { ...f.impacts, [key]: parseFloat(e.target.value) } }))}
               onMouseDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
               style={{ flex: 1, accentColor: color }}
@@ -148,11 +153,11 @@ function AnswerRow({
               min="-1"
               max="1"
               step="0.01"
-              value={fields[key].toFixed(2)}
+              value={(fields.impacts[key] ?? 0).toFixed(2)}
               onChange={(e) => {
                 const raw = parseFloat(e.target.value);
                 const safe = Number.isFinite(raw) ? Math.max(-1, Math.min(1, raw)) : 0;
-                setFields((f) => ({ ...f, [key]: safe }));
+                setFields((f) => ({ ...f, impacts: { ...f.impacts, [key]: safe } }));
               }}
               onMouseDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
@@ -160,8 +165,8 @@ function AnswerRow({
               style={{ width: 84 }}
             />
             <span className="impact-value" style={{ color }}>
-              {fields[key] > 0 ? "+" : ""}
-              {fields[key].toFixed(2)}
+              {(fields.impacts[key] ?? 0) > 0 ? "+" : ""}
+              {(fields.impacts[key] ?? 0).toFixed(2)}
             </span>
           </div>
         ))}
@@ -182,6 +187,7 @@ function AnswerRow({
 
 function QuestionCard({
   question,
+  impactLabels,
   allQuestionsAnswers,
   onUpdateQuestion,
   onDeleteQuestion,
@@ -192,6 +198,7 @@ function QuestionCard({
   dragHandleProps,
 }: {
   question: QuestionWithAnswers;
+  impactLabels: { key: string; label: string; color: string }[];
   allQuestionsAnswers: { questionId: string; questionText: string; answers: Answer[] }[];
   onUpdateQuestion: (id: string, data: QuestionUpdateInput) => Promise<void>;
   onDeleteQuestion: (id: string) => Promise<void>;
@@ -392,6 +399,7 @@ function QuestionCard({
             <div key={answer.id} onDragOver={(e) => e.preventDefault()} onDrop={() => handleAnswerDrop(answer.id)}>
               <AnswerRow
                 answer={answer}
+                impactLabels={impactLabels}
                 allQuestionsAnswers={allQuestionsAnswers}
                 onSave={onUpdateAnswer}
                 onDelete={(id) => onDeleteAnswer(question.id, id)}
@@ -445,10 +453,22 @@ function QuestionCard({
   );
 }
 
+export default function QuizBuilderPage() {
+  const { quiz, loading, error } = useQuiz();
+  if (loading) return <div className="loading-block">Chargement des quiz...</div>;
+  return <>
+    <QuizSelector />
+    {error && <div className="form-error">{error}</div>}
+    {quiz && <QuizBuilderContent key={quiz.id} quiz={quiz} />}
+  </>;
+}
+
 // ─── Page principale ──────────────────────────────────────────────────────────
 
-export default function QuizBuilderPage() {
+function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
+  const industry: ProductIndustry = quiz.industry;
+  const scope = useCallback((path: string) => `${path}?quizId=${encodeURIComponent(quiz.id)}`, [quiz.id]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -456,6 +476,7 @@ export default function QuizBuilderPage() {
   const [importTenantEmail, setImportTenantEmail] = useState("demo@poapo-tech.com");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string>("");
+  const impactLabels = industry === "coffee" ? COFFEE_IMPACT_LABELS : PERFUME_IMPACT_LABELS;
 
   // New question form
   const [showNewForm, setShowNewForm] = useState(false);
@@ -479,14 +500,14 @@ export default function QuizBuilderPage() {
     setLoading(true);
     setError("");
     try {
-      const data = await apiFetch<QuestionWithAnswers[]>("/api/quiz/builder/questions");
+      const data = await apiFetch<QuestionWithAnswers[]>(scope("/api/quiz/builder/questions"));
       setQuestions(data);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scope]);
 
   useEffect(() => {
     void load();
@@ -502,7 +523,7 @@ export default function QuizBuilderPage() {
       if (importTenantEmail.trim()) formData.append("tenantEmail", importTenantEmail.trim());
 
       const token = getToken();
-      const res = await fetch("/api/quiz/builder/questions/import-csv", {
+      const res = await fetch(scope("/api/quiz/builder/questions/import-csv"), {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: formData,
@@ -544,7 +565,7 @@ export default function QuizBuilderPage() {
     if (!newQuestion.text.trim()) return;
     setSaving(true);
     try {
-      const created = await apiFetch<QuestionWithAnswers>("/api/quiz/builder/questions", {
+      const created = await apiFetch<QuestionWithAnswers>(scope("/api/quiz/builder/questions"), {
         method: "POST",
         body: JSON.stringify({
           text: newQuestion.text.trim(),
@@ -563,7 +584,7 @@ export default function QuizBuilderPage() {
   };
 
   const handleUpdateQuestion = async (id: string, data: QuestionUpdateInput) => {
-    const updated = await apiFetch<QuestionWithAnswers>(`/api/quiz/builder/questions/${id}`, {
+    const updated = await apiFetch<QuestionWithAnswers>(scope(`/api/quiz/builder/questions/${id}`), {
       method: "PUT",
       body: JSON.stringify(data),
     });
@@ -573,14 +594,14 @@ export default function QuizBuilderPage() {
   const handleDeleteQuestion = async (id: string) => {
     const q = questions.find((q) => q.id === id);
     if (!confirm(`Supprimer la question « ${q?.text ?? id} » et toutes ses réponses ?`)) return;
-    await apiFetch(`/api/quiz/builder/questions/${id}`, { method: "DELETE" });
+    await apiFetch(scope(`/api/quiz/builder/questions/${id}`), { method: "DELETE" });
     setQuestions((prev) => prev.filter((q) => q.id !== id));
   };
 
   // ── CRUD Answers ────────────────────────────────────────────────────────────
 
   const handleAddAnswer = async (questionId: string, data: AnswerCreateInput) => {
-    const answer = await apiFetch<Answer>(`/api/quiz/builder/questions/${questionId}/answers`, {
+    const answer = await apiFetch<Answer>(scope(`/api/quiz/builder/questions/${questionId}/answers`), {
       method: "POST",
       body: JSON.stringify(data),
     });
@@ -588,7 +609,7 @@ export default function QuizBuilderPage() {
   };
 
   const handleUpdateAnswer = async (id: string, data: AnswerUpdateInput) => {
-    const updated = await apiFetch<Answer>(`/api/quiz/builder/answers/${id}`, {
+    const updated = await apiFetch<Answer>(scope(`/api/quiz/builder/answers/${id}`), {
       method: "PUT",
       body: JSON.stringify(data),
     });
@@ -601,14 +622,14 @@ export default function QuizBuilderPage() {
   };
 
   const handleDeleteAnswer = async (questionId: string, id: string) => {
-    await apiFetch(`/api/quiz/builder/answers/${id}`, { method: "DELETE" });
+    await apiFetch(scope(`/api/quiz/builder/answers/${id}`), { method: "DELETE" });
     setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, answers: q.answers.filter((a) => a.id !== id) } : q)));
   };
 
   // ── Reorder ─────────────────────────────────────────────────────────────────
 
   const handleReorderAnswers = async (questionId: string, payload: ReorderPayload) => {
-    await apiFetch<{ ok: boolean }>("/api/quiz/builder/answers/reorder-all", {
+    await apiFetch<{ ok: boolean }>(scope("/api/quiz/builder/answers/reorder-all"), {
       method: "PUT",
       body: JSON.stringify(payload),
     });
@@ -643,7 +664,7 @@ export default function QuizBuilderPage() {
     };
 
     try {
-      await apiFetch<{ ok: boolean }>("/api/quiz/builder/questions/reorder", {
+      await apiFetch<{ ok: boolean }>(scope("/api/quiz/builder/questions/reorder"), {
         method: "PUT",
         body: JSON.stringify(payload),
       });
@@ -665,7 +686,7 @@ export default function QuizBuilderPage() {
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Quiz Builder</h1>
+          <h1 className="page-title">Quiz Builder — {quiz.name}</h1>
           <p className="page-subtitle">
             {questions.length} question{questions.length !== 1 ? "s" : ""} · {questions.filter((q) => q.active).length} active
             {questions.filter((q) => q.active).length !== 1 ? "s" : ""}
@@ -785,6 +806,7 @@ export default function QuizBuilderPage() {
           <div key={question.id} onDragOver={(e) => e.preventDefault()} onDrop={() => handleQuestionDrop(question.id)}>
             <QuestionCard
               question={question}
+              impactLabels={impactLabels}
               allQuestionsAnswers={allQuestionsAnswers}
               onUpdateQuestion={handleUpdateQuestion}
               onDeleteQuestion={handleDeleteQuestion}

@@ -43,11 +43,17 @@ const TARGET_FIELDS = [
   { value: "freshness", label: "Fraîcheur [0 – 1]" },
   { value: "intensity", label: "Intensité [0 – 1]" },
   { value: "sweetness", label: "Douceur [0 – 1]" },
+  { value: "attribute.roastLevel", label: "Café : torréfaction [0 – 1]" },
+  { value: "attribute.acidity", label: "Café : acidité [0 – 1]" },
+  { value: "attribute.body", label: "Café : corps [0 – 1]" },
+  { value: "attribute.sweetness", label: "Café : douceur [0 – 1]" },
+  { value: "attribute.origin", label: "Café : origine" },
   { value: "seasons", label: "Saisons (virgules)" },
   { value: "occasions", label: "Occasions (virgules)" },
   { value: "timeOfDay", label: "Moment (virgules)" },
   { value: "active", label: "Actif (true / false)" },
   { value: "featured", label: "Mis en avant (true / false)" },
+  { value: "attributes", label: "Attributs métier (objet JSON)" },
 ];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

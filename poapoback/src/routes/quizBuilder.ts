@@ -4,6 +4,7 @@ import { verifyToken, AuthRequest } from "../middleware/auth";
 import multer from "multer";
 import csvParser from "csv-parser";
 import { Readable } from "stream";
+import { adminQuizScope, getQuiz, resolveQuiz, asyncRoute } from "../services/quizzes";
 
 const router = Router();
 const upload = multer({
@@ -22,19 +23,23 @@ const upload = multer({
 
 // Toutes les routes sont protégées
 router.use(verifyToken);
+router.use((req, res, next) => {
+  if (req.path === "/questions/import-csv") return next();
+  adminQuizScope(req, res, next);
+});
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function parseScoringImpacts(raw: unknown): { freshness: number; intensity: number; sweetness: number } {
+function parseScoringImpacts(raw: unknown): Record<string, number> {
   if (typeof raw === "object" && raw !== null) {
     const obj = raw as Record<string, unknown>;
-    return {
-      freshness: clamp(Number(obj.freshness ?? 0)),
-      intensity: clamp(Number(obj.intensity ?? 0)),
-      sweetness: clamp(Number(obj.sweetness ?? 0)),
-    };
+    return Object.fromEntries(
+      Object.entries(obj)
+        .filter(([, value]) => value !== null && value !== undefined && Number.isFinite(Number(value)))
+        .map(([key, value]) => [key, clamp(Number(value))]),
+    );
   }
-  return { freshness: 0, intensity: 0, sweetness: 0 };
+  return {};
 }
 
 function clamp(v: number, min = -1, max = 1): number {
@@ -93,6 +98,7 @@ router.post("/questions/import-csv", upload.single("file"), async (req: AuthRequ
   try {
     const tenantEmail = typeof req.body?.tenantEmail === "string" ? req.body.tenantEmail : undefined;
     const tenantId = await resolveTenantId(req, tenantEmail);
+    const quiz = await resolveQuiz(tenantId, req.query.quizId);
     const rows = await parseCSVBuffer(req.file.buffer);
 
     if (rows.length === 0) {
@@ -144,7 +150,7 @@ router.post("/questions/import-csv", upload.single("file"), async (req: AuthRequ
       return;
     }
 
-    const maxOrder = await prisma.question.aggregate({ where: { tenantId }, _max: { order: true } });
+    const maxOrder = await prisma.question.aggregate({ where: { tenantId, quizId: quiz.id }, _max: { order: true } });
     let nextOrder = (maxOrder._max.order ?? -1) + 1;
 
     let createdQuestions = 0;
@@ -155,6 +161,7 @@ router.post("/questions/import-csv", upload.single("file"), async (req: AuthRequ
         const createdQuestion = await tx.question.create({
           data: {
             tenantId,
+            quizId: quiz.id,
             text: group.question,
             helpText: group.helpText,
             type: group.type,
@@ -177,11 +184,13 @@ router.post("/questions/import-csv", upload.single("file"), async (req: AuthRequ
               emoji: String(answerRow.emoji ?? "").trim() || null,
               active: parseBool(answerRow.answerActive, true),
               order: answerOrder++,
-              impacts: {
-                freshness: clamp(Number(String(answerRow.freshness ?? "0").replace(",", "."))),
-                intensity: clamp(Number(String(answerRow.intensity ?? "0").replace(",", "."))),
-                sweetness: clamp(Number(String(answerRow.sweetness ?? "0").replace(",", "."))),
-              },
+              impacts: parseScoringImpacts(
+                Object.fromEntries(
+                  Object.entries(answerRow)
+                    .filter(([key]) => ["freshness", "intensity", "sweetness", "roastLevel", "acidity", "body"].includes(key) || key.startsWith("impact_"))
+                    .map(([key, value]) => [key.startsWith("impact_") ? key.slice(7) : key, Number(String(value ?? "0").replace(",", "."))]),
+                ),
+              ),
             },
           });
           createdAnswers++;
@@ -205,11 +214,11 @@ router.post("/questions/import-csv", upload.single("file"), async (req: AuthRequ
 // ─── Questions ──────────────────────────────────────────────────────────────
 
 // GET /api/quiz/builder/questions — liste complète (actives + inactives)
-router.get("/questions", async (req: AuthRequest, res: Response) => {
+router.get("/questions", asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
 
   const questions = await prisma.question.findMany({
-    where: { tenantId },
+    where: { tenantId, quizId: getQuiz(res).id },
     orderBy: { order: "asc" },
     include: {
       answers: {
@@ -219,11 +228,12 @@ router.get("/questions", async (req: AuthRequest, res: Response) => {
   });
 
   res.json(questions);
-});
+}));
 
 // POST /api/quiz/builder/questions — créer une question
-router.post("/questions", async (req: AuthRequest, res: Response) => {
+router.post("/questions", asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
+  const quizId = getQuiz(res).id;
   const { text, helpText, type, imageUrl, conditionAnswerId, abVariant } = req.body as {
     text?: string;
     helpText?: string;
@@ -243,13 +253,13 @@ router.post("/questions", async (req: AuthRequest, res: Response) => {
 
   // Calculer le prochain ordre
   const maxOrder = await prisma.question.aggregate({
-    where: { tenantId },
+    where: { tenantId, quizId },
     _max: { order: true },
   });
 
   // Valider conditionAnswerId si fourni
   if (conditionAnswerId) {
-    const answer = await prisma.answer.findUnique({ where: { id: conditionAnswerId } });
+    const answer = await prisma.answer.findFirst({ where: { id: conditionAnswerId, question: { tenantId, quizId } } });
     if (!answer) {
       res.status(400).json({ error: "conditionAnswerId invalide" });
       return;
@@ -259,6 +269,7 @@ router.post("/questions", async (req: AuthRequest, res: Response) => {
   const question = await prisma.question.create({
     data: {
       tenantId,
+      quizId,
       text: text.trim(),
       helpText: helpText?.trim() ?? null,
       type: questionType,
@@ -271,14 +282,15 @@ router.post("/questions", async (req: AuthRequest, res: Response) => {
   });
 
   res.status(201).json(question);
-});
+}));
 
 // PUT /api/quiz/builder/questions/:id — modifier une question
-router.put("/questions/:id", async (req: AuthRequest, res: Response) => {
+router.put("/questions/:id", (req, _res, next) => next(req.params.id === "reorder" ? "route" : undefined), asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
-  const { id } = req.params;
+  const quizId = getQuiz(res).id;
+  const id = String(req.params.id);
 
-  const existing = await prisma.question.findFirst({ where: { id, tenantId } });
+  const existing = await prisma.question.findFirst({ where: { id, tenantId, quizId } });
   if (!existing) {
     res.status(404).json({ error: "Question introuvable" });
     return;
@@ -298,7 +310,7 @@ router.put("/questions/:id", async (req: AuthRequest, res: Response) => {
 
   // Valider conditionAnswerId si fourni
   if (conditionAnswerId) {
-    const answer = await prisma.answer.findUnique({ where: { id: conditionAnswerId } });
+    const answer = await prisma.answer.findFirst({ where: { id: conditionAnswerId, question: { tenantId, quizId, id: { not: id } } } });
     if (!answer) {
       res.status(400).json({ error: "conditionAnswerId invalide" });
       return;
@@ -320,14 +332,14 @@ router.put("/questions/:id", async (req: AuthRequest, res: Response) => {
   });
 
   res.json(updated);
-});
+}));
 
 // DELETE /api/quiz/builder/questions/:id
-router.delete("/questions/:id", async (req: AuthRequest, res: Response) => {
+router.delete("/questions/:id", asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
-  const { id } = req.params;
+  const id = String(req.params.id);
 
-  const existing = await prisma.question.findFirst({ where: { id, tenantId } });
+  const existing = await prisma.question.findFirst({ where: { id, tenantId, quizId: getQuiz(res).id } });
   if (!existing) {
     res.status(404).json({ error: "Question introuvable" });
     return;
@@ -335,10 +347,10 @@ router.delete("/questions/:id", async (req: AuthRequest, res: Response) => {
 
   await prisma.question.delete({ where: { id } });
   res.json({ ok: true });
-});
+}));
 
 // PUT /api/quiz/builder/questions/reorder — réordonner toutes les questions
-router.put("/questions/reorder", async (req: AuthRequest, res: Response) => {
+router.put("/questions/reorder", asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
   const { order } = req.body as { order?: { id: string; order: number }[] };
 
@@ -350,7 +362,7 @@ router.put("/questions/reorder", async (req: AuthRequest, res: Response) => {
   // Vérifier que toutes les questions appartiennent au tenant
   const ids = order.map((o) => o.id);
   const owned = await prisma.question.findMany({
-    where: { id: { in: ids }, tenantId },
+    where: { id: { in: ids }, tenantId, quizId: getQuiz(res).id },
     select: { id: true },
   });
   if (owned.length !== ids.length) {
@@ -361,16 +373,16 @@ router.put("/questions/reorder", async (req: AuthRequest, res: Response) => {
   await prisma.$transaction(order.map(({ id, order: ord }) => prisma.question.update({ where: { id }, data: { order: ord } })));
 
   res.json({ ok: true });
-});
+}));
 
 // ─── Answers ─────────────────────────────────────────────────────────────────
 
 // POST /api/quiz/builder/questions/:questionId/answers
-router.post("/questions/:questionId/answers", async (req: AuthRequest, res: Response) => {
+router.post("/questions/:questionId/answers", asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
-  const { questionId } = req.params;
+  const questionId = String(req.params.questionId);
 
-  const question = await prisma.question.findFirst({ where: { id: questionId, tenantId } });
+  const question = await prisma.question.findFirst({ where: { id: questionId, tenantId, quizId: getQuiz(res).id } });
   if (!question) {
     res.status(404).json({ error: "Question introuvable" });
     return;
@@ -405,11 +417,11 @@ router.post("/questions/:questionId/answers", async (req: AuthRequest, res: Resp
   });
 
   res.status(201).json(answer);
-});
+}));
 
 // PUT /api/quiz/builder/answers/reorder-all (primary)
 // PUT /api/quiz/builder/answers/reorder (legacy alias)
-router.put(["/answers/reorder-all", "/answers/reorder"], async (req: AuthRequest, res: Response) => {
+router.put(["/answers/reorder-all", "/answers/reorder"], asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
   const { order } = req.body as { order?: { id: string; order: number }[] };
 
@@ -420,7 +432,7 @@ router.put(["/answers/reorder-all", "/answers/reorder"], async (req: AuthRequest
 
   const ids = order.map((o) => o.id);
   const owned = await prisma.answer.findMany({
-    where: { id: { in: ids }, question: { tenantId } },
+    where: { id: { in: ids }, question: { tenantId, quizId: getQuiz(res).id } },
     select: { id: true },
   });
   if (owned.length !== ids.length) {
@@ -431,16 +443,16 @@ router.put(["/answers/reorder-all", "/answers/reorder"], async (req: AuthRequest
   await prisma.$transaction(order.map(({ id, order: ord }) => prisma.answer.update({ where: { id }, data: { order: ord } })));
 
   res.json({ ok: true });
-});
+}));
 
 // PUT /api/quiz/builder/answers/:id
-router.put("/answers/:id", async (req: AuthRequest, res: Response) => {
+router.put("/answers/:id", asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
-  const { id } = req.params;
+  const id = String(req.params.id);
 
   // Vérifier appartenance via join question→tenant
   const existing = await prisma.answer.findFirst({
-    where: { id, question: { tenantId } },
+    where: { id, question: { tenantId, quizId: getQuiz(res).id } },
   });
   if (!existing) {
     res.status(404).json({ error: "Réponse introuvable" });
@@ -467,15 +479,15 @@ router.put("/answers/:id", async (req: AuthRequest, res: Response) => {
   });
 
   res.json(updated);
-});
+}));
 
 // DELETE /api/quiz/builder/answers/:id
-router.delete("/answers/:id", async (req: AuthRequest, res: Response) => {
+router.delete("/answers/:id", asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
-  const { id } = req.params;
+  const id = String(req.params.id);
 
   const existing = await prisma.answer.findFirst({
-    where: { id, question: { tenantId } },
+    where: { id, question: { tenantId, quizId: getQuiz(res).id } },
   });
   if (!existing) {
     res.status(404).json({ error: "Réponse introuvable" });
@@ -484,6 +496,6 @@ router.delete("/answers/:id", async (req: AuthRequest, res: Response) => {
 
   await prisma.answer.delete({ where: { id } });
   res.json({ ok: true });
-});
+}));
 
 export default router;

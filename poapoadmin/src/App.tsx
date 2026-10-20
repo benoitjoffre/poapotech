@@ -1,4 +1,4 @@
-import { Navigate, Outlet, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import CatalogPage from "./pages/CatalogPage";
@@ -8,11 +8,14 @@ import ImportPage from "./pages/ImportPage";
 import QuizBuilderPage from "./pages/QuizBuilderPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import TenantsAdminPage from "./pages/TenantsAdminPage";
+import QuizzesPage from "./pages/QuizzesPage";
+import QuizFormPage from "./pages/QuizFormPage";
+import { QuizProvider, useQuiz } from "./contexts/QuizContext";
 
 function ProtectedRoute() {
   const { token, loading } = useAuth();
   if (loading) return <div className="loading-screen">Chargement...</div>;
-  return token ? <Outlet /> : <Navigate to="/login" replace />;
+  return token ? <QuizProvider><Outlet /></QuizProvider> : <Navigate to="/login" replace />;
 }
 
 function SuperAdminRoute() {
@@ -24,6 +27,8 @@ function SuperAdminRoute() {
 
 function AppLayout() {
   const { user, logout } = useAuth();
+  const { quiz } = useQuiz();
+  const quizQuery = quiz ? `?quizId=${encodeURIComponent(quiz.id)}` : "";
   return (
     <div className="admin-layout">
       <nav className="admin-nav">
@@ -33,8 +38,9 @@ function AppLayout() {
         </div>
         <div className="admin-nav-links">
           <a href="/catalog">Catalogue</a>
-          <a href="/quiz-builder">Quiz Builder</a>
-          <a href="/analytics">Analytics</a>
+          <Link to="/quizzes">Mes quiz</Link>
+          <Link to={`/quiz-builder${quizQuery}`}>Quiz Builder</Link>
+          <Link to={`/analytics${quizQuery}`}>Analytics</Link>
           {user?.isSuperAdmin && <a href="/admin/tenants">Tenants</a>}
           <a href="/settings">Paramètres</a>
         </div>
@@ -70,6 +76,9 @@ function App() {
             <Route path="/catalog/import" element={<ImportPage />} />
             <Route path="/catalog/:id/edit" element={<ProductFormPage />} />
             <Route path="/quiz-builder" element={<QuizBuilderPage />} />
+            <Route path="/quizzes" element={<QuizzesPage />} />
+            <Route path="/quizzes/new" element={<QuizFormPage />} />
+            <Route path="/quizzes/:quizId" element={<QuizFormPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route element={<SuperAdminRoute />}>
               <Route path="/admin/tenants" element={<TenantsAdminPage />} />

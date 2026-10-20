@@ -6,6 +6,19 @@ import type { ProductCreateInput, ProductUpdateInput } from "@poapo/types";
 const router = Router();
 router.use(verifyToken);
 
+const SCORING_ATTRIBUTE_KEYS = new Set(["roastLevel", "acidity", "body", "sweetness"]);
+
+function isProductAttributes(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasInvalidScoringAttribute(attributes: Record<string, unknown>): boolean {
+  return Object.entries(attributes).some(
+    ([key, value]) =>
+      SCORING_ATTRIBUTE_KEYS.has(key) && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1),
+  );
+}
+
 async function resolveTenantId(req: AuthRequest): Promise<string> {
   const tokenTenantId = req.tenant!.tenantId;
   const tokenEmail = req.tenant!.email.toLowerCase().trim();
@@ -94,6 +107,14 @@ router.post("/products", async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: "Le champ 'name' est obligatoire" });
     return;
   }
+  if (body.attributes !== undefined && !isProductAttributes(body.attributes)) {
+    res.status(400).json({ error: "Le champ 'attributes' doit être un objet JSON" });
+    return;
+  }
+  if (body.attributes && hasInvalidScoringAttribute(body.attributes)) {
+    res.status(400).json({ error: "Les axes de recommandation dans 'attributes' doivent être numériques entre 0 et 1" });
+    return;
+  }
 
   const product = await prisma.product.create({
     data: {
@@ -121,6 +142,7 @@ router.post("/products", async (req: AuthRequest, res: Response) => {
       seasons: body.seasons ?? [],
       occasions: body.occasions ?? [],
       timeOfDay: body.timeOfDay ?? [],
+      attributes: body.attributes ?? {},
     },
   });
 
@@ -143,6 +165,14 @@ router.put("/products/:id", async (req: AuthRequest, res: Response) => {
   }
 
   const body = req.body as ProductUpdateInput;
+  if (body.attributes !== undefined && !isProductAttributes(body.attributes)) {
+    res.status(400).json({ error: "Le champ 'attributes' doit être un objet JSON" });
+    return;
+  }
+  if (body.attributes && hasInvalidScoringAttribute(body.attributes)) {
+    res.status(400).json({ error: "Les axes de recommandation dans 'attributes' doivent être numériques entre 0 et 1" });
+    return;
+  }
   const updated = await prisma.product.update({
     where: { id: productId },
     data: {
@@ -169,6 +199,7 @@ router.put("/products/:id", async (req: AuthRequest, res: Response) => {
       ...(body.seasons !== undefined && { seasons: body.seasons }),
       ...(body.occasions !== undefined && { occasions: body.occasions }),
       ...(body.timeOfDay !== undefined && { timeOfDay: body.timeOfDay }),
+      ...(body.attributes !== undefined && { attributes: body.attributes }),
     },
   });
 
@@ -186,6 +217,7 @@ router.put("/products/:id", async (req: AuthRequest, res: Response) => {
     "freshness",
     "intensity",
     "sweetness",
+    "attributes",
   ].some((k) => k in body);
 
   if (olfactoryChanged) {
@@ -232,6 +264,7 @@ async function triggerEmbedding(productId: string, tenantId: string): Promise<vo
       heartNotes: product.heartNotes,
       baseNotes: product.baseNotes,
       tags: product.tags,
+      attributes: product.attributes,
       freshness: product.freshness,
       intensity: product.intensity,
       sweetness: product.sweetness,

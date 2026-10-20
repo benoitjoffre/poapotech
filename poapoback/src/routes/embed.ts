@@ -1,11 +1,12 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
+import { asyncRoute, publicQuizScope, getQuiz } from "../services/quizzes";
 
 const router = Router();
 
 // GET /api/embed/config?clientId=
 // Endpoint public — utilisé par le widget pour charger la config tenant
-router.get("/config", async (req: Request, res: Response) => {
+router.get("/config", publicQuizScope, asyncRoute(async (req: Request, res: Response) => {
   const { clientId } = req.query as { clientId?: string };
   if (!clientId) {
     res.status(400).json({ error: "clientId manquant" });
@@ -16,6 +17,7 @@ router.get("/config", async (req: Request, res: Response) => {
     where: { id: clientId },
     select: {
       id: true,
+      industry: true,
       active: true,
       primaryColor: true,
       logoUrl: true,
@@ -50,14 +52,17 @@ router.get("/config", async (req: Request, res: Response) => {
     }
   }
 
+  const quiz = getQuiz(res);
   res.json({
     tenantId: tenant.id,
+    quizId: quiz.id,
+    industry: quiz.industry,
     primaryColor: tenant.primaryColor ?? "#0d9488",
     logoUrl: tenant.logoUrl,
-    quizTitle: tenant.quizTitle ?? "Trouve ton parfum idéal",
-    ctaText: tenant.ctaText ?? "Commencer le quiz",
-    active: tenant.active,
+    quizTitle: quiz.quizTitle,
+    ctaText: quiz.ctaText,
+    active: quiz.active,
   });
-});
+}));
 
 export default router;

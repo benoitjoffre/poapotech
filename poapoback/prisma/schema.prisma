@@ -17,6 +17,7 @@ model Tenant {
   email        String   @unique
   passwordHash String?
   name         String?
+  industry     String   @default("perfume")
   primaryColor String?  @default("#0d9488")
   logoUrl      String?
   quizTitle    String?  @default("Trouve ton parfum idéal")
@@ -28,9 +29,43 @@ model Tenant {
 
   magicTokens  MagicToken[]
   products     Product[]
+  quizzes      Quiz[]
   questions    Question[]
   sessions     QuizSession[]
   metrics      Metric[]
+}
+
+model Quiz {
+  id             String   @id @default(cuid())
+  tenantId       String
+  name           String
+  industry       String   @default("perfume")
+  quizTitle      String
+  ctaText        String
+  active         Boolean  @default(true)
+  isDefault      Boolean  @default(false)
+  useAllProducts Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  questions      Question[]
+  sessions       QuizSession[]
+  metrics        Metric[]
+  products       QuizProduct[]
+
+  @@unique([tenantId, id])
+  @@index([tenantId])
+}
+
+model QuizProduct {
+  quizId    String
+  productId String
+  quiz      Quiz    @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@id([quizId, productId])
+  @@index([productId])
 }
 
 // ─────────────────────────────────────────────
@@ -83,6 +118,8 @@ model Product {
   seasons       Season[]
   occasions     Occasion[]
   timeOfDay     TimeOfDay[]
+  // Sector-specific attributes (for example roast level, acidity and body for coffee)
+  attributes    Json      @default("{}")
   // AI embedding stored as JSON array (pgvector via raw SQL for queries)
   embedding     Json?
   createdAt     DateTime  @default(now())
@@ -90,6 +127,7 @@ model Product {
 
   tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   sessions      QuizSession[]
+  quizzes       QuizProduct[]
 
   @@index([tenantId])
   @@index([tenantId, active])
@@ -101,6 +139,7 @@ model Product {
 model Question {
   id                String       @id @default(cuid())
   tenantId          String
+  quizId            String
   text              String
   helpText          String?      // hint affiché sous la question
   type              QuestionType @default(single)
@@ -115,10 +154,12 @@ model Question {
   updatedAt         DateTime     @updatedAt
 
   tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quiz              Quiz         @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
   answers           Answer[]     @relation("QuestionAnswers")
   conditionAnswer   Answer?      @relation("QuestionCondition", fields: [conditionAnswerId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, order])
+  @@index([quizId, order])
   @@index([conditionAnswerId])
 }
 
@@ -147,6 +188,7 @@ model Answer {
 model QuizSession {
   id              String    @id @default(cuid())
   tenantId        String
+  quizId          String
   gender          GenderTarget?
   mood            String?
   // Stored as JSON: [{ questionId, answerId }]
@@ -160,10 +202,12 @@ model QuizSession {
   createdAt       DateTime  @default(now())
 
   tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quiz            Quiz      @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
   resultProduct   Product?  @relation(fields: [resultProductId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, createdAt])
+  @@index([quizId, createdAt])
 }
 
 // ─────────────────────────────────────────────
@@ -172,14 +216,17 @@ model QuizSession {
 model Metric {
   id        String     @id @default(cuid())
   tenantId  String
+  quizId    String
   type      MetricType
   payload   Json       @default("{}")
   createdAt DateTime   @default(now())
 
   tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quiz      Quiz       @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
 
   @@index([tenantId, type])
   @@index([tenantId, createdAt])
+  @@index([quizId, type, createdAt])
 }
 
 // ─────────────────────────────────────────────

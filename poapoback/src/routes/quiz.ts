@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { verifyToken, AuthRequest } from "../middleware/auth";
 import type { QuizSubmitPayload, MetricType } from "@poapo/types";
+import { publicQuizScope, adminQuizScope, getQuiz, asyncRoute } from "../services/quizzes";
 
 const router = Router();
 
@@ -82,12 +83,12 @@ function localInsightsFromSnapshot(snapshot: MetricsSnapshot) {
   return insights.slice(0, 3);
 }
 
-async function generateOpenAIInsights(snapshot: MetricsSnapshot) {
+async function generateOpenAIInsights(snapshot: MetricsSnapshot, industry: string) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
   const prompt = [
-    "Tu es analyste CRO senior pour un quiz e-commerce parfum.",
+    `Tu es analyste CRO senior pour un quiz e-commerce du secteur ${industry}.`,
     "Analyse ces métriques et retourne uniquement un JSON valide avec la forme:",
     '{"insights":[{"title":"...","insight":"...","priority":"high|medium|low","actions":["...","..."]}]}',
     "3 insights maximum, concis, orientés action.",
@@ -146,14 +147,14 @@ async function generateOpenAIInsights(snapshot: MetricsSnapshot) {
 // ─── Public routes ────────────────────────────────────────────────────────────
 
 // GET /api/quiz/questions?clientId=
-router.get("/questions", async (req: Request, res: Response) => {
+router.get("/questions", publicQuizScope, asyncRoute(async (req: Request, res: Response) => {
   const { clientId } = req.query as { clientId?: string };
   if (!clientId) {
     res.status(400).json({ error: "clientId manquant" });
     return;
   }
   const questions = await prisma.question.findMany({
-    where: { tenantId: clientId, active: true },
+    where: { tenantId: clientId, quizId: getQuiz(res).id, active: true },
     orderBy: { order: "asc" },
     include: {
       answers: {
@@ -163,15 +164,21 @@ router.get("/questions", async (req: Request, res: Response) => {
     },
   });
   res.json(questions);
-});
+}));
 
 // POST /api/quiz/submit
-router.post("/submit", async (req: Request, res: Response) => {
+router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
   const body = req.body as QuizSubmitPayload;
   const { clientId, gender, mood, answers, decisionTime, abVariant } = body as QuizSubmitPayload & { abVariant?: string };
 
   if (!clientId) {
     res.status(400).json({ error: "clientId manquant" });
+    return;
+  }
+  if (!Array.isArray(answers) || answers.length === 0 ||
+      answers.some((answer) => !answer || typeof answer.answerId !== "string" || typeof answer.questionId !== "string") ||
+      new Set(answers.map((answer) => answer.answerId)).size !== answers.length) {
+    res.status(400).json({ error: "Réponses invalides ou dupliquées" });
     return;
   }
 
@@ -182,20 +189,35 @@ router.post("/submit", async (req: Request, res: Response) => {
   }
 
   try {
-    // Construire le profil olfactif depuis les réponses
+    const quiz = getQuiz(res);
+    const productIds = quiz.useAllProducts ? undefined : quiz.products.map((product) => product.productId);
+    if (productIds && productIds.length === 0) {
+      res.status(422).json({ error: "Aucun produit sélectionné pour ce quiz" });
+      return;
+    }
+
+    // Les impacts sont des axes configurables ; les trois axes historiques restent le profil parfum par défaut.
     const answerDocs = await prisma.answer.findMany({
-      where: { id: { in: answers.map((a) => a.answerId) } },
+      where: { id: { in: answers.map((a) => a.answerId) }, active: true, question: { tenantId: clientId, quizId: quiz.id, active: true } },
+      include: { question: { select: { type: true } } },
     });
+    if (answerDocs.length !== answers.length ||
+        answers.some((answer) => !answerDocs.some((doc) => doc.id === answer.answerId && doc.questionId === answer.questionId)) ||
+        answerDocs.some((doc) => doc.question.type !== "multi" && answers.filter((a) => a.questionId === doc.questionId).length > 1)) {
+      res.status(400).json({ error: "Certaines réponses sont invalides pour ce quiz" });
+      return;
+    }
 
-    let freshness = 0.5;
-    let intensity = 0.5;
-    let sweetness = 0.5;
-
+    const profile: Record<string, number> = {};
     for (const ans of answerDocs) {
-      const impacts = ans.impacts as { freshness: number; intensity: number; sweetness: number };
-      freshness = Math.max(0, Math.min(1, freshness + (impacts.freshness ?? 0)));
-      intensity = Math.max(0, Math.min(1, intensity + (impacts.intensity ?? 0)));
-      sweetness = Math.max(0, Math.min(1, sweetness + (impacts.sweetness ?? 0)));
+      const impacts = ans.impacts as Record<string, unknown>;
+      for (const [axis, impact] of Object.entries(impacts)) {
+        if (typeof impact !== "number" || !Number.isFinite(impact)) continue;
+        profile[axis] = Math.max(0, Math.min(1, (profile[axis] ?? 0.5) + impact));
+      }
+    }
+    if (quiz.industry === "perfume") {
+      for (const axis of ["freshness", "intensity", "sweetness"]) profile[axis] ??= 0.5;
     }
 
     // Appel au service IA pour la recommandation
@@ -204,7 +226,9 @@ router.post("/submit", async (req: Request, res: Response) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tenantId: clientId,
-        profile: { freshness, intensity, sweetness },
+        profile,
+        industry: quiz.industry,
+        productIds,
         gender: gender ?? null,
         mood: mood ?? null,
       }),
@@ -221,8 +245,12 @@ router.post("/submit", async (req: Request, res: Response) => {
       profileSummary: Record<string, unknown>;
     };
 
-    const product = await prisma.product.findUnique({
-      where: { id: productId },
+    if (productIds && !productIds.includes(productId)) {
+      res.status(502).json({ error: "Le produit recommandé ne fait pas partie de ce quiz" });
+      return;
+    }
+    const product = await prisma.product.findFirst({
+      where: { id: productId, tenantId: clientId, active: true },
       select: {
         id: true,
         name: true,
@@ -242,13 +270,19 @@ router.post("/submit", async (req: Request, res: Response) => {
         heartNotes: true,
         baseNotes: true,
         genderTarget: true,
+        attributes: true,
       },
     });
+    if (!product) {
+      res.status(502).json({ error: "La recommandation renvoyée ne correspond à aucun produit" });
+      return;
+    }
 
     // Persister la session
     const session = await prisma.quizSession.create({
       data: {
         tenantId: clientId,
+        quizId: quiz.id,
         gender: gender ?? null,
         mood: mood ?? null,
         answers: answers as unknown as object,
@@ -259,7 +293,7 @@ router.post("/submit", async (req: Request, res: Response) => {
       },
     });
 
-    res.json({ sessionId: session.id, product, explanation, profileSummary });
+    res.json({ sessionId: session.id, quizId: quiz.id, industry: quiz.industry, product, explanation, profileSummary });
   } catch (err) {
     console.error("[quiz] submit error:", err);
     res.status(500).json({ error: "Erreur lors du calcul de la recommandation" });
@@ -267,7 +301,7 @@ router.post("/submit", async (req: Request, res: Response) => {
 });
 
 // POST /api/quiz/track
-router.post("/track", async (req: Request, res: Response) => {
+router.post("/track", publicQuizScope, asyncRoute(async (req: Request, res: Response) => {
   const { clientId, type, payload } = req.body as {
     clientId?: string;
     type?: string;
@@ -298,6 +332,7 @@ router.post("/track", async (req: Request, res: Response) => {
   await prisma.metric.create({
     data: {
       tenantId: clientId,
+      quizId: getQuiz(res).id,
       type: type as MetricType,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       payload: (payload ?? {}) as any,
@@ -305,7 +340,7 @@ router.post("/track", async (req: Request, res: Response) => {
   });
 
   res.json({ ok: true });
-});
+}));
 
 // POST /api/quiz/feedback
 router.post("/feedback", async (req: Request, res: Response) => {
@@ -331,40 +366,49 @@ router.post("/feedback", async (req: Request, res: Response) => {
 // ─── Protected — dashboard métriques ────────────────────────────────────────
 
 // GET /api/quiz/metrics
-router.get("/metrics", verifyToken, async (req: AuthRequest, res: Response) => {
+router.get("/metrics", verifyToken, adminQuizScope, asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
+  const quizId = getQuiz(res).id;
   const since = req.query.since ? new Date(req.query.since as string) : new Date(Date.now() - 30 * 24 * 3600 * 1000); // 30j par défaut
+  if (Number.isNaN(since.getTime())) {
+    res.status(400).json({ error: "Date de début invalide" });
+    return;
+  }
 
-  const [totalStarted, totalCompleted, totalAbandoned, totalBuyClicks, feedbackStats, topProducts, genderStats, stepViews, stepAnswers] =
+  const [totalStarted, totalCompleted, totalAbandoned, totalBuyClicks, feedbackStats, topProducts, genderStats, stepViews, stepAnswers, abEvents] =
     await Promise.all([
-      prisma.metric.count({ where: { tenantId, type: "quiz_start", createdAt: { gte: since } } }),
-      prisma.metric.count({ where: { tenantId, type: "quiz_complete", createdAt: { gte: since } } }),
-      prisma.metric.count({ where: { tenantId, type: "quiz_abandon", createdAt: { gte: since } } }),
-      prisma.metric.count({ where: { tenantId, type: "buy_click", createdAt: { gte: since } } }),
+      prisma.metric.count({ where: { tenantId, quizId, type: "quiz_start", createdAt: { gte: since } } }),
+      prisma.metric.count({ where: { tenantId, quizId, type: "quiz_complete", createdAt: { gte: since } } }),
+      prisma.metric.count({ where: { tenantId, quizId, type: "quiz_abandon", createdAt: { gte: since } } }),
+      prisma.metric.count({ where: { tenantId, quizId, type: "buy_click", createdAt: { gte: since } } }),
       prisma.quizSession.groupBy({
         by: ["feedback"],
-        where: { tenantId, feedback: { not: null }, createdAt: { gte: since } },
+        where: { tenantId, quizId, feedback: { not: null }, createdAt: { gte: since } },
         _count: true,
       }),
       prisma.quizSession.groupBy({
         by: ["resultProductId"],
-        where: { tenantId, resultProductId: { not: null }, completedAt: { gte: since } },
+        where: { tenantId, quizId, resultProductId: { not: null }, completedAt: { gte: since } },
         _count: true,
         orderBy: { _count: { resultProductId: "desc" } },
         take: 5,
       }),
       prisma.quizSession.groupBy({
         by: ["gender"],
-        where: { tenantId, createdAt: { gte: since } },
+        where: { tenantId, quizId, createdAt: { gte: since } },
         _count: true,
       }),
       prisma.metric.findMany({
-        where: { tenantId, type: "step_view", createdAt: { gte: since } },
+        where: { tenantId, quizId, type: "step_view", createdAt: { gte: since } },
         select: { payload: true },
       }),
       prisma.metric.findMany({
-        where: { tenantId, type: "step_answer", createdAt: { gte: since } },
+        where: { tenantId, quizId, type: "step_answer", createdAt: { gte: since } },
         select: { payload: true },
+      }),
+      prisma.metric.findMany({
+        where: { tenantId, quizId, type: { in: ["quiz_start", "quiz_complete", "buy_click"] }, createdAt: { gte: since } },
+        select: { type: true, payload: true },
       }),
     ]);
 
@@ -402,6 +446,29 @@ router.get("/metrics", verifyToken, async (req: AuthRequest, res: Response) => {
     })
     .sort((a, b) => b.views - a.views);
 
+  type AbMetricRow = { type: MetricType; payload: unknown };
+  const variants = new Map<string, { started: number; completed: number; clicks: number }>();
+  for (const row of abEvents as AbMetricRow[]) {
+    const payload =
+      typeof row.payload === "object" && row.payload !== null && !Array.isArray(row.payload)
+        ? (row.payload as Record<string, unknown>)
+        : {};
+    const variant = typeof payload.abVariant === "string" && payload.abVariant.trim() ? payload.abVariant.trim() : "standard";
+    const counts = variants.get(variant) ?? { started: 0, completed: 0, clicks: 0 };
+    if (row.type === "quiz_start") counts.started++;
+    if (row.type === "quiz_complete") counts.completed++;
+    if (row.type === "buy_click") counts.clicks++;
+    variants.set(variant, counts);
+  }
+  const variantPerformance = [...variants.entries()]
+    .map(([variant, counts]) => ({
+      variant,
+      ...counts,
+      completionRate: counts.started > 0 ? Math.round((counts.completed / counts.started) * 100) : 0,
+      clickThroughRate: counts.completed > 0 ? Math.round((counts.clicks / counts.completed) * 100) : 0,
+    }))
+    .sort((a, b) => b.started - a.started);
+
   // Résoudre les noms des top produits
   const productIds = (topProducts as TopProductRow[]).map((p) => p.resultProductId).filter(Boolean) as string[];
   const products = await prisma.product.findMany({
@@ -423,6 +490,7 @@ router.get("/metrics", verifyToken, async (req: AuthRequest, res: Response) => {
       clickThroughRate: totalCompleted > 0 ? Math.round((totalBuyClicks / totalCompleted) * 100) : 0,
     },
     steps,
+    variants: variantPerformance,
     // Legacy keys kept for compatibility with existing clients
     quizStarted: totalStarted,
     quizCompleted: totalCompleted,
@@ -436,32 +504,37 @@ router.get("/metrics", verifyToken, async (req: AuthRequest, res: Response) => {
     })),
     genders: (genderStats as GenderRow[]).map((g) => ({ gender: g.gender ?? "unknown", count: g._count })),
   });
-});
+}));
 
 // GET /api/quiz/metrics/ai-insights
-router.get("/metrics/ai-insights", verifyToken, async (req: AuthRequest, res: Response) => {
+router.get("/metrics/ai-insights", verifyToken, adminQuizScope, asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
+  const quizId = getQuiz(res).id;
   const since = req.query.since ? new Date(req.query.since as string) : new Date(Date.now() - 30 * 24 * 3600 * 1000);
+  if (Number.isNaN(since.getTime())) {
+    res.status(400).json({ error: "Date de début invalide" });
+    return;
+  }
 
   const [started, completed, abandoned, ctaClicks, feedbackStats, topProducts, stepViews, stepAnswers] = await Promise.all([
-    prisma.metric.count({ where: { tenantId, type: "quiz_start", createdAt: { gte: since } } }),
-    prisma.metric.count({ where: { tenantId, type: "quiz_complete", createdAt: { gte: since } } }),
-    prisma.metric.count({ where: { tenantId, type: "quiz_abandon", createdAt: { gte: since } } }),
-    prisma.metric.count({ where: { tenantId, type: "buy_click", createdAt: { gte: since } } }),
+    prisma.metric.count({ where: { tenantId, quizId, type: "quiz_start", createdAt: { gte: since } } }),
+    prisma.metric.count({ where: { tenantId, quizId, type: "quiz_complete", createdAt: { gte: since } } }),
+    prisma.metric.count({ where: { tenantId, quizId, type: "quiz_abandon", createdAt: { gte: since } } }),
+    prisma.metric.count({ where: { tenantId, quizId, type: "buy_click", createdAt: { gte: since } } }),
     prisma.quizSession.groupBy({
       by: ["feedback"],
-      where: { tenantId, feedback: { not: null }, createdAt: { gte: since } },
+      where: { tenantId, quizId, feedback: { not: null }, createdAt: { gte: since } },
       _count: true,
     }),
     prisma.quizSession.groupBy({
       by: ["resultProductId"],
-      where: { tenantId, resultProductId: { not: null }, completedAt: { gte: since } },
+      where: { tenantId, quizId, resultProductId: { not: null }, completedAt: { gte: since } },
       _count: true,
       orderBy: { _count: { resultProductId: "desc" } },
       take: 3,
     }),
-    prisma.metric.findMany({ where: { tenantId, type: "step_view", createdAt: { gte: since } }, select: { payload: true } }),
-    prisma.metric.findMany({ where: { tenantId, type: "step_answer", createdAt: { gte: since } }, select: { payload: true } }),
+    prisma.metric.findMany({ where: { tenantId, quizId, type: "step_view", createdAt: { gte: since } }, select: { payload: true } }),
+    prisma.metric.findMany({ where: { tenantId, quizId, type: "step_answer", createdAt: { gte: since } }, select: { payload: true } }),
   ]);
 
   type FeedbackRow = { feedback: string | null; _count: number };
@@ -517,13 +590,13 @@ router.get("/metrics/ai-insights", verifyToken, async (req: AuthRequest, res: Re
     topDropOffSteps: stepDropOff,
   };
 
-  const aiInsights = await generateOpenAIInsights(snapshot);
+  const aiInsights = await generateOpenAIInsights(snapshot, getQuiz(res).industry);
   if (aiInsights && aiInsights.length > 0) {
     res.json({ source: "openai", generatedAt: new Date(), insights: aiInsights });
     return;
   }
 
   res.json({ source: "fallback", generatedAt: new Date(), insights: localInsightsFromSnapshot(snapshot) });
-});
+}));
 
 export default router;

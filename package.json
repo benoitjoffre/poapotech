@@ -12,6 +12,8 @@
     "back": "npm run dev --workspace=poapoback",
     "front": "npm run dev --workspace=poapofront",
     "admin": "npm run dev --workspace=poapoadmin",
-    "ai": "cd poapoai && uvicorn main:app --reload --port 8000"
+    "ai": "cd poapoai && uvicorn main:app --reload --port 8000",
+    "build": "npm run build --workspaces --if-present",
+    "test:back": "npm run test --workspace=poapoback"
   }
 }

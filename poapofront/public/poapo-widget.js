@@ -3,6 +3,7 @@
 
   var script = document.currentScript;
   var clientId = script ? script.getAttribute("data-client-id") : null;
+  var quizId = script ? script.getAttribute("data-quiz-id") : null;
   var widgetUrl = script ? script.getAttribute("data-url") : null;
   var buttonLabel = script ? script.getAttribute("data-label") : null;
   var buttonColor = script ? script.getAttribute("data-color") : null;
@@ -17,8 +18,9 @@
   }
 
   var iframeSrc = widgetUrl + "/?clientId=" + encodeURIComponent(clientId);
+  if (quizId) iframeSrc += "&quizId=" + encodeURIComponent(quizId);
   var accentColor = buttonColor || "#2e6f6d";
-  var label = buttonLabel || "Trouve ton parfum";
+  var label = buttonLabel || "Trouve un produit";
 
   // ── Inject styles ──────────────────────────────────────────────
   var style = document.createElement("style");
@@ -84,7 +86,7 @@
   // ── FAB button ─────────────────────────────────────────────────
   var fab = document.createElement("button");
   fab.id = "poapo-fab";
-  fab.setAttribute("aria-label", "Ouvrir le quiz parfum Poapo");
+  fab.setAttribute("aria-label", "Ouvrir le quiz Poapo");
   // Icône flacon de parfum
   fab.innerHTML = [
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
@@ -107,10 +109,10 @@
   panel.id = "poapo-panel";
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-modal", "true");
-  panel.setAttribute("aria-label", "Quiz parfum Poapo");
+  panel.setAttribute("aria-label", "Quiz Poapo");
   panel.innerHTML = [
     '<div id="poapo-panel-header">',
-    '<span id="poapo-panel-title">✦ Trouve ton parfum idéal</span>',
+    '<span id="poapo-panel-title">✦ Votre sélection</span>',
     '<button id="poapo-close" aria-label="Fermer">',
     '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">',
     '<line x1="1" y1="1" x2="13" y2="13"/><line x1="13" y1="1" x2="1" y2="13"/>',
@@ -118,7 +120,7 @@
     "</button>",
     "</div>",
     '<div id="poapo-iframe-wrap">',
-    '<iframe src="" title="Quiz parfum Poapo" allow="clipboard-write" loading="lazy"></iframe>',
+    '<iframe src="" title="Quiz Poapo" allow="clipboard-write" loading="lazy"></iframe>',
     "</div>",
   ].join("");
   document.body.appendChild(panel);

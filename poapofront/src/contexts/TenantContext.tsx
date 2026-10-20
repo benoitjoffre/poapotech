@@ -5,20 +5,26 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
 
 interface TenantContextValue {
   clientId: string | null;
+  quizId: string | null;
   config: EmbedConfig | null;
   loading: boolean;
+  error: string;
 }
 
 const TenantContext = createContext<TenantContextValue>({
   clientId: null,
+  quizId: null,
   config: null,
   loading: false,
+  error: "",
 });
 
 export function TenantProvider({ children }: { children: ReactNode }) {
   const clientId = new URLSearchParams(window.location.search).get("clientId");
+  const requestedQuizId = new URLSearchParams(window.location.search).get("quizId");
   const [config, setConfig] = useState<EmbedConfig | null>(null);
   const [loading, setLoading] = useState(clientId !== null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!clientId) return;
@@ -27,8 +33,10 @@ export function TenantProvider({ children }: { children: ReactNode }) {
 
     const load = async () => {
       try {
-        const res = await fetch(`${apiBaseUrl}/api/embed/config?clientId=${encodeURIComponent(clientId)}`);
-        if (!res.ok) throw new Error("embed config unavailable");
+        const params = new URLSearchParams({ clientId });
+        if (requestedQuizId !== null) params.set("quizId", requestedQuizId);
+        const res = await fetch(`${apiBaseUrl}/api/embed/config?${params}`);
+        if (!res.ok) throw new Error("Ce quiz est introuvable ou désactivé.");
         const data = (await res.json()) as EmbedConfig;
         if (!cancelled) {
           setConfig(data);
@@ -36,8 +44,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
             document.documentElement.style.setProperty("--primary-color", data.primaryColor);
           }
         }
-      } catch {
-        // Fallback aux valeurs par défaut — pas de crash
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Impossible de charger le quiz.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -47,9 +55,9 @@ export function TenantProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [clientId]);
+  }, [clientId, requestedQuizId]);
 
-  return <TenantContext.Provider value={{ clientId, config, loading }}>{children}</TenantContext.Provider>;
+  return <TenantContext.Provider value={{ clientId, quizId: config?.quizId ?? null, config, loading, error }}>{children}</TenantContext.Provider>;
 }
 
 export function useTenant(): TenantContextValue {
