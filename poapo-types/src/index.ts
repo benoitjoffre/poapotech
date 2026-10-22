@@ -77,6 +77,65 @@ export interface QuizInput {
 }
 
 // ─────────────────────────────────────────────
+// Campaign Studio
+// ─────────────────────────────────────────────
+export type CampaignStatus = "DRAFT" | "SCHEDULED" | "ACTIVE" | "PAUSED" | "COMPLETED";
+
+export type CampaignOccasion =
+  | "CHRISTMAS" | "VALENTINES_DAY" | "SPRING" | "MOTHERS_DAY" | "BACK_TO_SCHOOL"
+  | "BLACK_FRIDAY" | "PROMOTION" | "PERMANENT" | "CUSTOM";
+
+export interface CampaignQuizSummary {
+  id: string;
+  name: string;
+  active: boolean;
+  /** Nombre de questions actives du quiz. */
+  questionCount: number;
+  /** Produits proposés par le quiz (catalogue actif si useAllProducts). */
+  productCount: number;
+}
+
+export interface Campaign {
+  id: string;
+  tenantId: string;
+  quizId: string;
+  name: string;
+  occasion: CampaignOccasion;
+  occasionLabel: string | null;
+  description: string | null;
+  objectives: string[];
+  imageUrl: string | null;
+  /** Statut enregistré, choisi par le tenant. */
+  status: CampaignStatus;
+  /** Statut calculé à partir du statut enregistré et des dates (SCHEDULED/ACTIVE/COMPLETED). */
+  effectiveStatus: CampaignStatus;
+  startsAt: string | null;
+  endsAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  quiz: CampaignQuizSummary;
+}
+
+export interface CampaignInput {
+  quizId?: string;
+  name?: string;
+  occasion?: CampaignOccasion;
+  occasionLabel?: string | null;
+  description?: string | null;
+  objectives?: string[];
+  imageUrl?: string | null;
+  status?: CampaignStatus;
+  startsAt?: string | null;
+  endsAt?: string | null;
+}
+
+export interface CampaignListResponse {
+  data: Campaign[];
+  /** Nombre de campagnes du tenant par statut calculé, indépendamment des filtres. */
+  counts: Record<CampaignStatus, number> & { total: number };
+}
+
+// ─────────────────────────────────────────────
 // Auth
 // ─────────────────────────────────────────────
 export interface MagicLinkRequest {

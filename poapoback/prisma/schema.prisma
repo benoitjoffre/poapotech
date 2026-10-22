@@ -34,6 +34,7 @@ model Tenant {
   questions    Question[]
   sessions     QuizSession[]
   metrics      Metric[]
+  campaigns    Campaign[]
 }
 
 model Quiz {
@@ -57,9 +58,39 @@ model Quiz {
   sessions       QuizSession[]
   metrics        Metric[]
   products       QuizProduct[]
+  campaigns      Campaign[]
 
   @@unique([tenantId, id])
   @@index([tenantId])
+}
+
+// ─────────────────────────────────────────────
+// Campaign — occasion marketing associée à un quiz existant
+// ─────────────────────────────────────────────
+model Campaign {
+  id            String           @id @default(cuid())
+  tenantId      String
+  quizId        String
+  name          String
+  occasion      CampaignOccasion
+  // Libellé libre, requis pour l'occasion CUSTOM
+  occasionLabel String?
+  description   String?
+  objectives    String[]
+  imageUrl      String?
+  // Statut choisi par le tenant ; le statut affiché est calculé avec les dates
+  status        CampaignStatus   @default(DRAFT)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Clé composite : une campagne ne peut référencer qu'un quiz de son propre tenant
+  quiz          Quiz             @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+  @@index([tenantId, quizId])
 }
 
 model QuizProduct {
@@ -219,6 +250,26 @@ enum QuestionType {
   single
   multi
   scale
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  COMPLETED
+}
+
+enum CampaignOccasion {
+  CHRISTMAS
+  VALENTINES_DAY
+  SPRING
+  MOTHERS_DAY
+  BACK_TO_SCHOOL
+  BLACK_FRIDAY
+  PROMOTION
+  PERMANENT
+  CUSTOM
 }
 
 enum FeedbackType {

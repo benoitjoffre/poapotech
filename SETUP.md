@@ -232,7 +232,8 @@ repli vers un autre quiz.
 3. Appliquer dans l'ordre les migrations non encore appliquées :
    - `20261015110000_add_sector_product_attributes` ;
    - `20261015150000_add_multiple_quizzes` ;
-   - `20261022100000_generic_recommendation_axes`.
+   - `20261022100000_generic_recommendation_axes` ;
+   - `20261022120000_add_campaigns` (Campaign Studio, purement additive).
 4. Régénérer le client Prisma, reconstruire et redéployer ensemble le backend,
    le service IA, l'administration et le front.
 5. Vérifier l'ancien lien `clientId` seul, puis un nouveau lien avec `quizId`.
@@ -253,6 +254,12 @@ concentration, axes…) sont fusionnées dans `attributes`, les axes de chaque q
 sont déduits des clés d'impact de ses réponses, et les codes d'activité deviennent
 des libellés. Les axes ainsi créés reprennent leur clé comme libellé ; renommez-les
 depuis la fiche quiz.
+
+La migration `add_campaigns` crée uniquement les types `CampaignStatus` et
+`CampaignOccasion`, la table `Campaign`, ses index et ses clés étrangères. Elle ne
+modifie aucune table ni donnée existante. La clé étrangère composite
+`(tenantId, quizId)` garantit en base qu'une campagne ne référence qu'un quiz de
+son propre tenant.
 
 ### Tests ciblés multi-quiz
 
@@ -390,7 +397,21 @@ PUT  /api/quizzes/:id                Modifier ou désactiver un quiz
 GET  /api/quiz/builder/questions?quizId=   Questions du quiz choisi
 GET  /api/quiz/metrics?quizId=             Analytics du quiz choisi
 GET  /api/quiz/metrics/ai-insights?quizId=  Insights du quiz choisi
+
+GET    /api/campaigns?search=&status=&occasion=&quizId=&sort=   Campagnes du tenant + compteurs par statut
+POST   /api/campaigns                Créer une campagne (quiz existant du tenant)
+GET    /api/campaigns/:id            Détail d'une campagne
+PUT    /api/campaigns/:id            Modifier (dont en ligne / en pause)
+POST   /api/campaigns/:id/duplicate  Dupliquer en brouillon, sans dates
+DELETE /api/campaigns/:id            Supprimer un brouillon uniquement
 ```
+
+Une campagne a un statut **enregistré** (`status`) et un statut **calculé**
+(`effectiveStatus`) : `SCHEDULED`/`ACTIVE` deviennent `SCHEDULED` avant
+`startsAt`, `COMPLETED` après `endsAt`, `ACTIVE` sinon. Aucun job ne réécrit le
+statut. Le filtre `status` porte sur le statut calculé ; `sort` accepte `recent`,
+`oldest`, `startsAt` et `name`. Dans ce sprint, le statut d'une campagne n'a aucun
+effet sur le widget, le quiz ou les recommandations.
 
 Le paramètre `quizId` est facultatif pour la rétrocompatibilité : son absence
 cible le quiz par défaut. Toutes les mutations du builder acceptent `?quizId=`,
