@@ -6,11 +6,12 @@ import { verifyToken } from "../middleware/auth";
 import type { AuthRequest } from "../middleware/auth";
 import {
   asyncRoute,
+  createQuiz,
   ensureDefaultQuiz,
   quizInclude,
-  quizDefaults,
   QuizError,
   resolveQuiz,
+  validateTenantProducts,
 } from "../services/quizzes";
 import { AxisValidationError, validateAxes } from "../services/axes";
 
@@ -64,22 +65,6 @@ function validateInput(raw: unknown, creating: boolean): asserts raw is Partial<
   }
 }
 
-async function validateProducts(tenantId: string, productIds: string[] | undefined) {
-  if (productIds === undefined) return undefined;
-
-  const uniqueProductIds = [...new Set(productIds)];
-  const tenantProducts = await prisma.product.findMany({
-    where: { tenantId, id: { in: uniqueProductIds } },
-    select: { id: true },
-  });
-
-  if (tenantProducts.length !== uniqueProductIds.length) {
-    throw new QuizError(400, "Certains produits n'appartiennent pas à votre catalogue");
-  }
-
-  return uniqueProductIds;
-}
-
 router.get(
   "/",
   asyncRoute(async (req: AuthRequest, res) => {
@@ -104,27 +89,19 @@ router.post(
 
     const body = req.body;
     const tenantId = req.tenant!.tenantId;
-    const productIds = await validateProducts(tenantId, body.productIds);
+    const productIds = await validateTenantProducts(tenantId, body.productIds);
 
     await ensureDefaultQuiz(tenantId);
 
-    const industry = body.industry?.trim() ?? "";
-    const defaults = quizDefaults();
-    const quiz = await prisma.quiz.create({
-      data: {
-        tenantId,
-        name: body.name!.trim(),
-        industry,
-        axes: (body.axes ?? []) as unknown as Prisma.InputJsonValue,
-        quizTitle: body.quizTitle?.trim() ?? defaults.quizTitle,
-        ctaText: body.ctaText?.trim() ?? defaults.ctaText,
-        active: body.active ?? true,
-        useAllProducts: body.useAllProducts ?? true,
-        products: {
-          create: (productIds ?? []).map((productId) => ({ productId })),
-        },
-      },
-      include: quizInclude,
+    const quiz = await createQuiz(tenantId, {
+      name: body.name!,
+      industry: body.industry,
+      axes: body.axes,
+      quizTitle: body.quizTitle,
+      ctaText: body.ctaText,
+      active: body.active,
+      useAllProducts: body.useAllProducts,
+      productIds,
     });
 
     res.status(201).json(quiz);
@@ -147,7 +124,7 @@ router.put(
     const body = req.body;
     const tenantId = req.tenant!.tenantId;
     const quiz = await resolveQuiz(tenantId, req.params.id);
-    const productIds = await validateProducts(tenantId, body.productIds);
+    const productIds = await validateTenantProducts(tenantId, body.productIds);
 
     const updateQuiz = prisma.quiz.update({
       where: { id: quiz.id },

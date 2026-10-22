@@ -4,6 +4,7 @@ import { verifyToken, AuthRequest } from "../middleware/auth";
 import type { QuizSubmitPayload, MetricType } from "@poapo/types";
 import { publicQuizScope, adminQuizScope, getQuiz, asyncRoute } from "../services/quizzes";
 import { parseAxes } from "../services/axes";
+import { computeProfile } from "../services/scoring";
 import { localInsightsFromSnapshot, type MetricsSnapshot } from "../services/quizInsights";
 
 const router = Router();
@@ -132,16 +133,8 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
       return;
     }
 
-    // Chaque axe du quiz part du milieu (0.5) puis est ajusté par les impacts des réponses.
     const axes = parseAxes(quiz.axes);
-    const profile: Record<string, number> = Object.fromEntries(axes.map((axis) => [axis.key, 0.5]));
-    for (const ans of answerDocs) {
-      const impacts = ans.impacts as Record<string, unknown>;
-      for (const [axis, impact] of Object.entries(impacts)) {
-        if (!(axis in profile) || typeof impact !== "number" || !Number.isFinite(impact)) continue;
-        profile[axis] = Math.max(0, Math.min(1, profile[axis] + impact));
-      }
-    }
+    const profile = computeProfile(axes, answerDocs.map((ans) => ans.impacts));
 
     // Appel au service IA pour la recommandation
     const aiResponse = await fetch(`${aiUrl}/recommend`, {

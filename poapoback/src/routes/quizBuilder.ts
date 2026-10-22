@@ -5,7 +5,7 @@ import multer from "multer";
 import csvParser from "csv-parser";
 import { Readable } from "stream";
 import { adminQuizScope, getQuiz, resolveQuiz, asyncRoute } from "../services/quizzes";
-import { parseAxes } from "../services/axes";
+import { createQuestionsWithAnswers, parseScoringImpacts } from "../services/questions";
 
 const router = Router();
 const upload = multer({
@@ -30,25 +30,6 @@ router.use((req, res, next) => {
 });
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
-
-/** Ne conserve que les impacts portant sur un axe du quiz, bornés entre -1 et 1. */
-function parseScoringImpacts(raw: unknown, quizAxes: unknown): Record<string, number> {
-  if (typeof raw === "object" && raw !== null) {
-    const axisKeys = new Set(parseAxes(quizAxes).map((axis) => axis.key));
-    const obj = raw as Record<string, unknown>;
-    return Object.fromEntries(
-      Object.entries(obj)
-        .filter(([key, value]) => axisKeys.has(key) && value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) && Number(value) !== 0)
-        .map(([key, value]) => [key, clamp(Number(value))]),
-    );
-  }
-  return {};
-}
-
-function clamp(v: number, min = -1, max = 1): number {
-  if (isNaN(v)) return 0;
-  return Math.max(min, Math.min(max, v));
-}
 
 function parseBool(raw: unknown, fallback = true): boolean {
   if (raw === undefined || raw === null) return fallback;
@@ -155,52 +136,29 @@ router.post("/questions/import-csv", upload.single("file"), async (req: AuthRequ
     }
 
     const maxOrder = await prisma.question.aggregate({ where: { tenantId, quizId: quiz.id }, _max: { order: true } });
-    let nextOrder = (maxOrder._max.order ?? -1) + 1;
-
-    let createdQuestions = 0;
-    let createdAnswers = 0;
-
-    await prisma.$transaction(async (tx) => {
-      for (const group of groups.values()) {
-        const createdQuestion = await tx.question.create({
-          data: {
-            tenantId,
-            quizId: quiz.id,
-            text: group.question,
-            helpText: group.helpText,
-            type: group.type,
-            active: group.active,
-            abVariant: group.abVariant,
-            order: nextOrder++,
-          },
-        });
-        createdQuestions++;
-
-        let answerOrder = 0;
-        for (const answerRow of group.answers) {
-          const text = String(answerRow.answer ?? "").trim();
-          if (!text) continue;
-
-          await tx.answer.create({
-            data: {
-              questionId: createdQuestion.id,
-              text,
-              emoji: String(answerRow.emoji ?? "").trim() || null,
-              active: parseBool(answerRow.answerActive, true),
-              order: answerOrder++,
-              impacts: parseScoringImpacts(
-                Object.fromEntries(
-                  Object.entries(answerRow)
-                    .map(([key, value]) => [key.startsWith("impact_") ? key.slice(7) : key, String(value ?? "").trim().replace(",", ".")]),
-                ),
-                quiz.axes,
-              ),
-            },
-          });
-          createdAnswers++;
-        }
-      }
-    });
+    const { createdQuestions, createdAnswers } = await prisma.$transaction((tx) => createQuestionsWithAnswers(
+      tx,
+      { tenantId, quizId: quiz.id, startOrder: (maxOrder._max.order ?? -1) + 1 },
+      [...groups.values()].map((group) => ({
+        text: group.question,
+        helpText: group.helpText,
+        type: group.type,
+        active: group.active,
+        abVariant: group.abVariant,
+        answers: group.answers.map((answerRow) => ({
+          text: String(answerRow.answer ?? ""),
+          emoji: String(answerRow.emoji ?? ""),
+          active: parseBool(answerRow.answerActive, true),
+          impacts: parseScoringImpacts(
+            Object.fromEntries(
+              Object.entries(answerRow)
+                .map(([key, value]) => [key.startsWith("impact_") ? key.slice(7) : key, String(value ?? "").trim().replace(",", ".")]),
+            ),
+            quiz.axes,
+          ),
+        })),
+      })),
+    ));
 
     res.json({
       createdQuestions,

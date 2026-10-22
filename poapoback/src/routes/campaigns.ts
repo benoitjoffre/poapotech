@@ -18,6 +18,7 @@ import {
   serializeCampaign,
 } from "../services/campaigns";
 import type { CampaignWithQuiz } from "../services/campaigns";
+import quizGenerationRouter from "./quizGeneration";
 
 const router = Router();
 
@@ -39,6 +40,7 @@ const requireTenant: RequestHandler = (req: AuthRequest, _res, next) => {
 };
 
 router.use(verifyToken, requireTenant);
+router.use("/:id/quiz-generation", quizGenerationRouter);
 
 function tenantOf(req: AuthRequest) {
   return req.tenant!.tenantId;

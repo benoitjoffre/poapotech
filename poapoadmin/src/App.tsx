@@ -13,6 +13,7 @@ import QuizFormPage from "./pages/QuizFormPage";
 import CampaignsPage from "./pages/CampaignsPage";
 import CampaignFormPage from "./pages/CampaignFormPage";
 import CampaignDetailPage from "./pages/CampaignDetailPage";
+import CampaignQuizGeneratorPage from "./pages/CampaignQuizGeneratorPage";
 import Icon from "./components/Icon";
 import { QuizProvider, useQuiz } from "./contexts/QuizContext";
 
@@ -90,6 +91,7 @@ function App() {
             <Route path="/campaigns/new" element={<CampaignFormPage />} />
             <Route path="/campaigns/:campaignId" element={<CampaignDetailPage />} />
             <Route path="/campaigns/:campaignId/edit" element={<CampaignFormPage />} />
+            <Route path="/campaigns/:campaignId/generate-quiz" element={<CampaignQuizGeneratorPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route element={<SuperAdminRoute />}>
               <Route path="/admin/tenants" element={<TenantsAdminPage />} />

@@ -267,7 +267,7 @@ Depuis la racine, sans connexion à une base et sans appel à un modèle externe
 
 ```bash
 npm run test:back
-cd poapoai && .venv/bin/python -m unittest test_recommend -v
+cd poapoai && .venv/bin/python -m unittest test_recommend test_generate -v
 ```
 
 Les tests API exécutent les routes HTTP avec une persistance simulée. Les tests IA
@@ -358,6 +358,7 @@ poapotech/
     │   ├── POST /embed/batch       Embedding batch
     │   ├── POST /recommend         Recommandation par profil utilisateur
     │   ├── POST /infer/impacts     Impacts d'une réponse sur les axes (GPT-4o-mini)
+    │   ├── POST /generate/quiz     Génération d'un brouillon de quiz de campagne (GPT-4o-mini)
     │   └── POST /map-catalog       Mapping colonnes CSV → champs Poapo (GPT-4o-mini)
     └── requirements.txt
 ```
@@ -412,6 +413,34 @@ Une campagne a un statut **enregistré** (`status`) et un statut **calculé**
 statut. Le filtre `status` porte sur le statut calculé ; `sort` accepte `recent`,
 `oldest`, `startsAt` et `name`. Dans ce sprint, le statut d'une campagne n'a aucun
 effet sur le widget, le quiz ou les recommandations.
+
+```
+GET  /api/campaigns/:id/quiz-generation/context   Quiz, axes, produits (500 max) et canAttach
+POST /api/campaigns/:id/quiz-generation           Générer un brouillon de quiz (aucune écriture en base)
+POST /api/campaigns/:id/quiz-generation/preview   Aperçu : profil + un seul appel /recommend (top 3)
+POST /api/campaigns/:id/quiz-generation/save      Enregistrer comme nouveau quiz inactif
+```
+
+Génération de quiz par IA (Campaign Studio, sprint 2) :
+
+- Seuls les axes du quiz de la campagne sont utilisables. Le mode est `AXES` si au
+  moins un axe s'écarte de 0,2 entre les produits sélectionnés, sinon `SEMANTIC`
+  si au moins un produit possède un embedding, sinon la génération est refusée (422).
+- L'IA ne reçoit que des références locales (`p1`, `p2`…), jamais d'identifiant
+  produit, tenant ou campagne. Toute référence, tout axe inconnu ou tout impact
+  hors de ±0,15 est rejeté ; une seconde tentative est faite avec le détail des
+  erreurs, puis 502. Délai dépassé → 504, service indisponible → 503.
+- Les impacts modifiés manuellement par le commerçant sont validés sur ±1, comme
+  dans le Quiz Builder.
+- Le quiz enregistré est toujours un **nouveau quiz inactif**. Il n'est rattaché
+  automatiquement à la campagne que si celle-ci est en `DRAFT` ; sinon il reste
+  indépendant. Il n'est jamais publié automatiquement.
+- Limitation : une génération à la fois par tenant et
+  `QUIZ_GENERATION_HOURLY_LIMIT` générations par heure (10 par défaut, compteur en
+  mémoire par instance).
+- Variables du service IA : `OPENAI_API_KEY`, `GENERATION_MODEL` (défaut
+  `gpt-4o-mini`), `GENERATION_TIMEOUT_S` (défaut 30). Le backend utilise
+  `AI_SERVICE_URL`.
 
 Le paramètre `quizId` est facultatif pour la rétrocompatibilité : son absence
 cible le quiz par défaut. Toutes les mutations du builder acceptent `?quizId=`,

@@ -141,7 +141,12 @@ export default function CampaignDetailPage() {
         <div className="campaign-detail-links">
           <Link className="btn-ghost" to={`/quizzes/${encodeURIComponent(campaign.quiz.id)}`}>Configurer / intégrer le quiz</Link>
           <Link className="btn-ghost" to={`/quiz-builder${quizQuery}`}>Questions</Link>
+          <Link className="btn-primary" to={`/campaigns/${campaign.id}/generate-quiz`}>✨ Générer un quiz avec l'IA</Link>
         </div>
+        <p className="section-hint">
+          La génération part des axes de ce quiz et des produits que vous choisissez. Le résultat est enregistré comme nouveau quiz inactif
+          {campaign.status === "DRAFT" ? ", que vous pouvez associer à cette campagne." : " et reste indépendant, car la campagne n'est plus en brouillon."}
+        </p>
       </section>
     </div>
   );
