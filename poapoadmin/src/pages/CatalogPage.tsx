@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import type { PaginatedResponse, ProductAttributes } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 import { useQuiz } from "../contexts/QuizContext";
-import { collectAxes } from "../lib/productForm";
+import { catalogAxes, CatalogSelect, useCatalogSelection } from "../lib/catalogs";
 
 interface ProductRow {
   id: string;
@@ -12,6 +12,8 @@ interface ProductRow {
   price: number | null;
   tags: string[];
   attributes: ProductAttributes;
+  catalogId: string;
+  catalog?: { id: string; name: string };
   active: boolean;
   featured: boolean;
   createdAt: string;
@@ -22,7 +24,12 @@ const PAGE_SIZE = 20;
 export default function CatalogPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { quizzes } = useQuiz();
-  const axes = useMemo(() => collectAxes(quizzes), [quizzes]);
+  const { catalogs, catalog, catalogId, setCatalogId, loading: catalogsLoading } = useCatalogSelection({ allowAll: true });
+  const axesByCatalog = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof catalogAxes>>();
+    for (const item of catalogs) map.set(item.id, catalogAxes(quizzes, item.id));
+    return map;
+  }, [catalogs, quizzes]);
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
   const search = searchParams.get("search") ?? "";
   const activeFilter = searchParams.get("active") ?? "";
@@ -44,6 +51,7 @@ export default function CatalogPage() {
         pageSize: String(PAGE_SIZE),
         ...(search ? { search } : {}),
         ...(activeFilter !== "" ? { active: activeFilter } : {}),
+        ...(catalogId ? { catalogId } : {}),
       });
       const res = await apiFetch<PaginatedResponse<ProductRow>>(`/api/catalog/products?${params.toString()}`);
       setData(res.data);
@@ -56,8 +64,8 @@ export default function CatalogPage() {
   };
 
   useEffect(() => {
-    void load();
-  }, [page, search, activeFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!catalogsLoading) void load();
+  }, [page, search, activeFilter, catalogId, catalogsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDelete = async (id: string, name: string) => {
     if (!confirm(`Supprimer « ${name} » ?`)) return;
@@ -73,6 +81,8 @@ export default function CatalogPage() {
     }
   };
 
+  const catalogLink = (path: string) => (catalogId ? `${path}?catalogId=${encodeURIComponent(catalogId)}` : path);
+
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
@@ -85,20 +95,22 @@ export default function CatalogPage() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Catalogue</h1>
+          <h1 className="page-title">{catalog ? catalog.name : "Produits"}</h1>
           <p className="page-subtitle">
             {total} produit{total !== 1 ? "s" : ""}
+            {catalog ? "" : " · tous les catalogues"}
           </p>
         </div>
-        <Link to="/catalog/new" className="btn-primary">
+        <Link to={catalogLink("/catalog/new")} className="btn-primary">
           + Nouveau produit
         </Link>
-        <Link to="/catalog/import" className="btn-ghost">
+        <Link to={catalogLink("/catalog/import")} className="btn-ghost">
           Importer CSV
         </Link>
       </div>
 
       <div className="toolbar">
+        <CatalogSelect catalogs={catalogs} value={catalogId} onChange={setCatalogId} allowAll label="Catalogue" />
         <input
           className="field-input toolbar-search"
           type="search"
@@ -120,7 +132,7 @@ export default function CatalogPage() {
       ) : data.length === 0 ? (
         <div className="empty-state">
           <p>Aucun produit trouvé.</p>
-          <Link to="/catalog/new" className="btn-primary">
+          <Link to={catalogLink("/catalog/new")} className="btn-primary">
             Ajouter le premier produit
           </Link>
         </div>
@@ -132,6 +144,7 @@ export default function CatalogPage() {
                 <th>Nom</th>
                 <th>Marque</th>
                 <th>Prix</th>
+                {!catalog && <th>Catalogue</th>}
                 <th>Tags</th>
                 <th>Axes</th>
                 <th>Statut</th>
@@ -153,9 +166,10 @@ export default function CatalogPage() {
                   </td>
                   <td>{p.brand ?? "—"}</td>
                   <td>{p.price != null ? `${p.price.toFixed(2)} €` : "—"}</td>
+                  {!catalog && <td>{p.catalog?.name ?? "—"}</td>}
                   <td>{p.tags.length > 0 ? p.tags.slice(0, 3).join(", ") : "—"}</td>
                   <td>
-                    {axes
+                    {(axesByCatalog.get(p.catalogId) ?? [])
                       .filter((axis) => typeof p.attributes?.[axis.key] === "number")
                       .map((axis) => `${axis.label} ${Math.round((p.attributes[axis.key] as number) * 100)}%`)
                       .join(" · ") || "—"}

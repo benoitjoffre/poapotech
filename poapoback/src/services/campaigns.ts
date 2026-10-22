@@ -24,6 +24,8 @@ export const campaignInclude = {
       name: true,
       active: true,
       useAllProducts: true,
+      catalogId: true,
+      catalog: { select: { id: true, name: true } },
       _count: { select: { questions: { where: { active: true } }, products: { where: { product: { active: true } } } } },
     },
   },
@@ -179,7 +181,12 @@ export function assertCampaignConsistency(
   }
 }
 
-export function serializeCampaign(campaign: CampaignWithQuiz, activeProductCount: number, now = new Date()): CampaignDto {
+/** `activeProductsByCatalog` : nombre de produits actifs par catalogue (utilisé pour les quiz « tous les produits »). */
+export function serializeCampaign(
+  campaign: CampaignWithQuiz,
+  activeProductsByCatalog: ReadonlyMap<string, number>,
+  now = new Date(),
+): CampaignDto {
   const { quiz, ...rest } = campaign;
   return {
     ...rest,
@@ -193,7 +200,8 @@ export function serializeCampaign(campaign: CampaignWithQuiz, activeProductCount
       name: quiz.name,
       active: quiz.active,
       questionCount: quiz._count.questions,
-      productCount: quiz.useAllProducts ? activeProductCount : quiz._count.products,
+      productCount: quiz.useAllProducts ? activeProductsByCatalog.get(quiz.catalogId) ?? 0 : quiz._count.products,
+      catalog: quiz.catalog,
     },
   };
 }

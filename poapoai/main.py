@@ -182,6 +182,8 @@ class ProductInput(BaseModel):
 
 class RecommendRequest(BaseModel):
     tenantId: str
+    # Catalogue du quiz : sans lui (anciens appelants), tous les produits du tenant sont candidats.
+    catalogId: str | None = None
     profile: dict[str, float] = Field(default_factory=dict)
     industry: str = ""
     axes: list[AxisInput] = Field(default_factory=list)
@@ -457,15 +459,21 @@ def recommend(req: RecommendRequest):
     try:
         conn = get_connection()
         cur = conn.cursor()
-        product_filter = ' AND id = ANY(%s)' if req.productIds is not None else ''
-        params = (req.tenantId, req.productIds) if req.productIds is not None else (req.tenantId,)
+        product_filter = ''
+        params: list = [req.tenantId]
+        if req.catalogId is not None:
+            product_filter += ' AND "catalogId" = %s'
+            params.append(req.catalogId)
+        if req.productIds is not None:
+            product_filter += ' AND id = ANY(%s)'
+            params.append(req.productIds)
         cur.execute(
             """
             SELECT id, embedding, attributes
             FROM "Product"
             WHERE "tenantId" = %s AND active = true
             """ + product_filter,
-            params
+            tuple(params)
         )
         rows = cur.fetchall()
         cur.close()

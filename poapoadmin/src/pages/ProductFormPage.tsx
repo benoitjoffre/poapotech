@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { Product } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 import { useQuiz } from "../contexts/QuizContext";
+import { catalogAxes, CatalogSelect, storedCatalogId, useCatalogs } from "../lib/catalogs";
 import {
-  collectAxes,
   EMPTY_PRODUCT_FORM,
   formToPayload,
   productToForm,
@@ -16,7 +16,10 @@ export default function ProductFormPage() {
   const isEditing = Boolean(id);
   const navigate = useNavigate();
   const { quizzes, loading: quizzesLoading } = useQuiz();
-  const axes = useMemo(() => collectAxes(quizzes), [quizzes]);
+  const [searchParams] = useSearchParams();
+  const { catalogs, loading: catalogsLoading } = useCatalogs();
+  const [catalogId, setCatalogId] = useState("");
+  const axes = useMemo(() => catalogAxes(quizzes, catalogId), [quizzes, catalogId]);
 
   const [form, setForm] = useState<ProductFormState>(EMPTY_PRODUCT_FORM);
   const [product, setProduct] = useState<Product | null>(null);
@@ -33,10 +36,22 @@ export default function ProductFormPage() {
       .finally(() => setIsLoading(false));
   }, [id]);
 
+  // Création : catalogue demandé (?catalogId), sinon dernier choisi, sinon catalogue principal.
+  useEffect(() => {
+    if (isEditing || catalogsLoading || catalogId) return;
+    const requested = searchParams.get("catalogId") ?? storedCatalogId();
+    const fallback = catalogs.find((catalog) => catalog.isDefault)?.id ?? catalogs[0]?.id ?? "";
+    setCatalogId(catalogs.some((catalog) => catalog.id === requested) ? requested : fallback);
+  }, [isEditing, catalogsLoading, catalogs, catalogId, searchParams]);
+
+  useEffect(() => {
+    if (product) setCatalogId(product.catalogId);
+  }, [product]);
+
   // Les valeurs d'axes sont extraites des attributs une fois les axes des quiz connus.
   useEffect(() => {
-    if (product && !quizzesLoading) setForm(productToForm(product, axes));
-  }, [product, axes, quizzesLoading]);
+    if (product && !quizzesLoading) setForm(productToForm(product, catalogAxes(quizzes, product.catalogId)));
+  }, [product, quizzes, quizzesLoading]);
 
   const set = <K extends keyof ProductFormState>(key: K, value: ProductFormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
@@ -56,12 +71,13 @@ export default function ProductFormPage() {
     setError("");
     setSuccess("");
     try {
-      const payload = formToPayload(form);
+      const payload = { ...formToPayload(form), ...(catalogId ? { catalogId } : {}) };
       if (isEditing) {
         await apiFetch(`/api/catalog/products/${id}`, {
           method: "PUT",
           body: JSON.stringify(payload),
         });
+        if (product && catalogId !== product.catalogId) setProduct({ ...product, catalogId });
         setSuccess("Produit mis à jour avec succès.");
       } else {
         const created = await apiFetch<Product>("/api/catalog/products", {
@@ -86,7 +102,7 @@ export default function ProductFormPage() {
           <h1 className="page-title">{isEditing ? "Éditer un produit" : "Nouveau produit"}</h1>
           <p className="page-subtitle">{isEditing ? `ID : ${id}` : "Remplissez les informations du produit"}</p>
         </div>
-        <button type="button" className="btn-ghost" onClick={() => navigate("/catalog")}>
+        <button type="button" className="btn-ghost" onClick={() => navigate(catalogId ? `/catalog?catalogId=${encodeURIComponent(catalogId)}` : "/catalog")}>
           ← Retour
         </button>
       </div>
@@ -96,6 +112,14 @@ export default function ProductFormPage() {
         <section className="form-section">
           <h2 className="section-title">Identité</h2>
           <div className="form-grid">
+            <div className="field-span2">
+              <CatalogSelect catalogs={catalogs} value={catalogId} onChange={setCatalogId} id="product-catalog" disabled={catalogsLoading} />
+              {isEditing && product && catalogId !== product.catalogId && (
+                <p className="field-hint">
+                  Le produit sera déplacé. Ce déplacement est refusé s'il est sélectionné dans un quiz ; ses valeurs d'axes seront vérifiées pour le catalogue cible.
+                </p>
+              )}
+            </div>
             <div className="field-group field-span2">
               <label className="field-label" htmlFor="name">
                 Nom *
@@ -182,13 +206,13 @@ export default function ProductFormPage() {
           <h2 className="section-title">Axes de recommandation (0 – 1)</h2>
           {axes.length === 0 ? (
             <p className="section-hint">
-              Aucun axe défini. Ajoutez des axes numériques dans la <Link to="/quizzes">configuration de vos quiz</Link>{" "}
+              Aucun axe défini. Ajoutez des axes numériques dans la <Link to={`/quizzes?catalogId=${encodeURIComponent(catalogId)}`}>configuration des quiz de ce catalogue</Link>{" "}
               pour positionner vos produits.
             </p>
           ) : (
             <>
               <p className="section-hint">
-                Positionnez le produit sur les axes définis dans vos quiz. Les réponses des visiteurs déplacent leur profil
+                Positionnez le produit sur les axes définis dans les quiz de ce catalogue. Les réponses des visiteurs déplacent leur profil
                 sur ces mêmes axes.
               </p>
               <div className="form-grid">

@@ -2,42 +2,36 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { verifyToken, AuthRequest } from "../middleware/auth";
 import type { ProductCreateInput, ProductUpdateInput } from "@poapo/types";
-import { invalidAxisValue, isProductAttributes, tenantAxes } from "../services/axes";
+import { invalidAxisValue, isProductAttributes } from "../services/axes";
+import { catalogAxes, resolveAccountTenantId, resolveCatalog } from "../services/catalogs";
+import { asyncRoute, QuizError } from "../services/quizzes";
 
 const router = Router();
 router.use(verifyToken);
 
-/** Vérifie la forme des attributs et que les valeurs des axes du tenant restent entre 0 et 1. */
-async function attributesError(tenantId: string, attributes: unknown): Promise<string | null> {
+/** Vérifie la forme des attributs et que les valeurs des axes du catalogue restent entre 0 et 1. */
+async function attributesError(tenantId: string, catalogId: string, attributes: unknown): Promise<string | null> {
   if (attributes === undefined) return null;
   if (!isProductAttributes(attributes)) return "Le champ 'attributes' doit être un objet JSON";
-  const axes = await tenantAxes(tenantId);
+  const axes = await catalogAxes(tenantId, catalogId);
   const invalid = invalidAxisValue(attributes, axes.map((axis) => axis.key));
   return invalid ? `L'axe « ${invalid} » doit être un nombre entre 0 et 1` : null;
 }
 
 async function resolveTenantId(req: AuthRequest): Promise<string> {
-  const tokenTenantId = req.tenant!.tenantId;
-  const tokenEmail = req.tenant!.email.toLowerCase().trim();
-
-  const tenantFromToken = await prisma.tenant.findUnique({
-    where: { id: tokenTenantId },
-    select: { id: true },
-  });
-  if (tenantFromToken) return tenantFromToken.id;
-
-  const tenantByEmail = await prisma.tenant.findUnique({
-    where: { email: tokenEmail },
-    select: { id: true },
-  });
-  if (tenantByEmail) return tenantByEmail.id;
-
-  throw new Error("Aucun tenant valide associe a ce compte");
+  const tenantId = await resolveAccountTenantId(req);
+  if (!tenantId) throw new QuizError(400, "Aucun tenant valide associé à ce compte");
+  return tenantId;
 }
 
-// GET /api/catalog/products?page=1&pageSize=20&search=&active=
-router.get("/products", async (req: AuthRequest, res: Response) => {
+// GET /api/catalog/products?page=1&pageSize=20&search=&active=&catalogId=
+// Sans catalogId : tous les produits du tenant (comportement historique).
+router.get("/products", asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = await resolveTenantId(req);
+  const catalogId = req.query.catalogId;
+  if (catalogId !== undefined && (typeof catalogId !== "string" || !catalogId)) {
+    throw new QuizError(400, "catalogId invalide");
+  }
   const page = Math.max(1, Number(req.query.page ?? 1));
   const pageSize = Math.min(100, Math.max(1, Number(req.query.pageSize ?? 20)));
   const search = req.query.search as string | undefined;
@@ -45,6 +39,7 @@ router.get("/products", async (req: AuthRequest, res: Response) => {
 
   const where = {
     tenantId,
+    ...(catalogId && { catalogId }),
     ...(activeFilter !== undefined ? { active: activeFilter === "true" } : {}),
     ...(search
       ? {
@@ -70,16 +65,18 @@ router.get("/products", async (req: AuthRequest, res: Response) => {
         active: true,
         featured: true,
         createdAt: true,
+        catalogId: true,
+        catalog: { select: { id: true, name: true } },
       },
     }),
     prisma.product.count({ where }),
   ]);
 
   res.json({ data, total, page, pageSize });
-});
+}));
 
 // GET /api/catalog/products/:id
-router.get("/products/:id", async (req: AuthRequest, res: Response) => {
+router.get("/products/:id", asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = await resolveTenantId(req);
   const productId = String(req.params.id);
   const product = await prisma.product.findFirst({
@@ -90,17 +87,18 @@ router.get("/products/:id", async (req: AuthRequest, res: Response) => {
     return;
   }
   res.json(product);
-});
+}));
 
 // POST /api/catalog/products
-router.post("/products", async (req: AuthRequest, res: Response) => {
+router.post("/products", asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = await resolveTenantId(req);
   const body = req.body as ProductCreateInput;
   if (!body.name?.trim()) {
     res.status(400).json({ error: "Le champ 'name' est obligatoire" });
     return;
   }
-  const createError = await attributesError(tenantId, body.attributes);
+  const catalog = await resolveCatalog(tenantId, body.catalogId);
+  const createError = await attributesError(tenantId, catalog.id, body.attributes);
   if (createError) {
     res.status(400).json({ error: createError });
     return;
@@ -109,6 +107,7 @@ router.post("/products", async (req: AuthRequest, res: Response) => {
   const product = await prisma.product.create({
     data: {
       tenantId,
+      catalogId: catalog.id,
       name: body.name.trim(),
       brand: body.brand ?? null,
       description: body.description ?? null,
@@ -126,10 +125,10 @@ router.post("/products", async (req: AuthRequest, res: Response) => {
   triggerEmbedding(product.id, tenantId).catch(console.error);
 
   res.status(201).json(product);
-});
+}));
 
 // PUT /api/catalog/products/:id
-router.put("/products/:id", async (req: AuthRequest, res: Response) => {
+router.put("/products/:id", asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = await resolveTenantId(req);
   const productId = String(req.params.id);
   const existing = await prisma.product.findFirst({
@@ -141,7 +140,18 @@ router.put("/products/:id", async (req: AuthRequest, res: Response) => {
   }
 
   const body = req.body as ProductUpdateInput;
-  const updateError = await attributesError(tenantId, body.attributes);
+  const catalogId = body.catalogId === undefined ? existing.catalogId : (await resolveCatalog(tenantId, body.catalogId)).id;
+  const catalogChanged = catalogId !== existing.catalogId;
+  if (catalogChanged) {
+    const selections = await prisma.quizProduct.count({ where: { productId } });
+    if (selections > 0) {
+      throw new QuizError(
+        409,
+        `Ce produit est sélectionné dans ${selections} quiz de son catalogue actuel : retirez-le de ces sélections avant de le déplacer`,
+      );
+    }
+  }
+  const updateError = await attributesError(tenantId, catalogId, body.attributes);
   if (updateError) {
     res.status(400).json({ error: updateError });
     return;
@@ -149,6 +159,7 @@ router.put("/products/:id", async (req: AuthRequest, res: Response) => {
   const updated = await prisma.product.update({
     where: { id: productId },
     data: {
+      ...(catalogChanged && { catalogId }),
       ...(body.name !== undefined && { name: body.name.trim() }),
       ...(body.brand !== undefined && { brand: body.brand }),
       ...(body.description !== undefined && { description: body.description }),
@@ -163,16 +174,17 @@ router.put("/products/:id", async (req: AuthRequest, res: Response) => {
   });
 
   // Re-embed si le contenu décrivant le produit a changé
-  const descriptionChanged = ["name", "brand", "description", "tags", "attributes"].some((k) => k in body);
+  // Les axes du nouveau catalogue entrent dans le texte d'embedding.
+  const descriptionChanged = catalogChanged || ["name", "brand", "description", "tags", "attributes"].some((k) => k in body);
   if (descriptionChanged) {
     triggerEmbedding(updated.id, tenantId).catch(console.error);
   }
 
   res.json(updated);
-});
+}));
 
 // DELETE /api/catalog/products/:id
-router.delete("/products/:id", async (req: AuthRequest, res: Response) => {
+router.delete("/products/:id", asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = await resolveTenantId(req);
   const productId = String(req.params.id);
   const existing = await prisma.product.findFirst({
@@ -184,7 +196,9 @@ router.delete("/products/:id", async (req: AuthRequest, res: Response) => {
   }
   await prisma.product.delete({ where: { id: productId } });
   res.json({ ok: true });
-});
+}));
+
+export default router;
 
 // ─── AI embedding (fire & forget) ────────────────────────────────────────────
 async function triggerEmbedding(productId: string, tenantId: string): Promise<void> {
@@ -204,7 +218,7 @@ async function triggerEmbedding(productId: string, tenantId: string): Promise<vo
       description: product.description,
       tags: product.tags,
       attributes: product.attributes,
-      axes: await tenantAxes(tenantId),
+      axes: await catalogAxes(tenantId, product.catalogId),
     }),
   });
 
@@ -216,5 +230,3 @@ async function triggerEmbedding(productId: string, tenantId: string): Promise<vo
     });
   }
 }
-
-export default router;

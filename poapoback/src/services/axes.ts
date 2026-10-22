@@ -1,5 +1,4 @@
 import type { JsonValue, ProductAttributes, QuizAxis } from "@poapo/types";
-import { prisma } from "../lib/prisma";
 
 const AXIS_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
 const MAX_AXES = 12;
@@ -61,16 +60,6 @@ export function parseAxes(raw: unknown): QuizAxis[] {
       highLabel: typeof axis.highLabel === "string" ? axis.highLabel : null,
     }];
   });
-}
-
-/** Union des axes de tous les quiz du tenant (le catalogue est partagé entre quiz). */
-export async function tenantAxes(tenantId: string): Promise<QuizAxis[]> {
-  const quizzes = await prisma.quiz.findMany({ where: { tenantId }, select: { axes: true } });
-  const byKey = new Map<string, QuizAxis>();
-  for (const quiz of quizzes) {
-    for (const axis of parseAxes(quiz.axes)) if (!byKey.has(axis.key)) byKey.set(axis.key, axis);
-  }
-  return [...byKey.values()];
 }
 
 export function isAxisValue(value: unknown): value is number {

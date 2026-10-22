@@ -8,7 +8,7 @@ BODY_AXIS = {"key": "body", "label": "Corps", "lowLabel": "Léger", "highLabel":
 
 
 class RecommendationTests(unittest.TestCase):
-    def recommend(self, product_ids=None, rows=None, profile=None, axes=None, industry="Café"):
+    def recommend(self, product_ids=None, rows=None, profile=None, axes=None, industry="Café", catalog_id=None):
         connection = MagicMock()
         cursor = connection.cursor.return_value
         cursor.fetchall.return_value = rows if rows is not None else [
@@ -19,7 +19,7 @@ class RecommendationTests(unittest.TestCase):
         with patch.object(main, "get_connection", return_value=connection), \
                 patch.object(main, "get_model", return_value=model):
             result = main.recommend(main.RecommendRequest(
-                tenantId="tenant-a", industry=industry,
+                tenantId="tenant-a", catalogId=catalog_id, industry=industry,
                 profile=profile if profile is not None else {"body": 0.7},
                 axes=axes if axes is not None else [BODY_AXIS],
                 productIds=product_ids,
@@ -39,6 +39,25 @@ class RecommendationTests(unittest.TestCase):
         self.assertNotIn("ANY", sql)
         self.assertEqual(params, ("tenant-a",))
         self.assertEqual(result["productId"], "coffee-product")
+
+    def test_catalog_filter_is_applied_in_sql(self):
+        _, cursor, _ = self.recommend(catalog_id="catalog-voyages")
+        sql, params = cursor.execute.call_args.args
+        self.assertIn('"catalogId" = %s', sql)
+        self.assertNotIn("ANY", sql)
+        self.assertEqual(params, ("tenant-a", "catalog-voyages"))
+
+    def test_catalog_filter_combines_with_selection(self):
+        _, cursor, _ = self.recommend(product_ids=["coffee-product"], catalog_id="catalog-voyages")
+        sql, params = cursor.execute.call_args.args
+        self.assertIn('"catalogId" = %s', sql)
+        self.assertIn("id = ANY(%s)", sql)
+        self.assertEqual(params, ("tenant-a", "catalog-voyages", ["coffee-product"]))
+
+    def test_without_catalog_keeps_tenant_scope(self):
+        _, cursor, _ = self.recommend(product_ids=["coffee-product"])
+        sql, _ = cursor.execute.call_args.args
+        self.assertNotIn("catalogId", sql)
 
     def test_empty_selection_does_not_expand_to_catalog(self):
         with self.assertRaises(HTTPException) as caught:

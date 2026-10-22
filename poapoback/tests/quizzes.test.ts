@@ -10,8 +10,19 @@ import builderRouter from "../src/routes/quizBuilder";
 import embedRouter from "../src/routes/embed";
 import { quizErrorHandler } from "../src/services/quizzes";
 
+const DEFAULT_CATALOG = "catalog_tenant-a";
+const catalogs = [
+  { id: DEFAULT_CATALOG, tenantId: "tenant-a", name: "Catalogue principal", isDefault: true },
+  { id: "catalog-voyages", tenantId: "tenant-a", name: "Voyages", isDefault: false },
+  { id: "catalog-b", tenantId: "tenant-b", name: "Catalogue B", isDefault: true },
+];
+const products = [
+  { id: "coffee-product", tenantId: "tenant-a", catalogId: DEFAULT_CATALOG },
+  { id: "trip-product", tenantId: "tenant-a", catalogId: "catalog-voyages" },
+  { id: "foreign-product", tenantId: "tenant-b", catalogId: "catalog-b" },
+];
 const defaultQuiz = {
-  id: "default_tenant-a", tenantId: "tenant-a", name: "Historique", industry: "",
+  id: "default_tenant-a", tenantId: "tenant-a", catalogId: DEFAULT_CATALOG, name: "Historique", industry: "",
   axes: [] as unknown[], quizTitle: "Mon quiz", ctaText: "Acheter", active: true, isDefault: true, useAllProducts: true,
   products: [], createdAt: new Date(), updatedAt: new Date(),
 };
@@ -25,6 +36,9 @@ let base: string;
 let savedQuestion: unknown;
 let savedMetric: unknown;
 let lastQuestionWhere: unknown;
+let lastQuizListWhere: unknown;
+let lastProductFindFirstWhere: unknown;
+const writes: string[] = [];
 let aiPayload: Record<string, unknown>;
 let recommendedId = "coffee-product";
 const metricScopes: { tenantId?: string; quizId?: string }[] = [];
@@ -44,16 +58,34 @@ before(async () => {
     id: "tenant-a", industry: "", active: true, quizTitle: "Mon quiz", ctaText: "Acheter",
   })) as typeof prisma.tenant.findUnique);
   stub(prisma.quiz, "upsert", (async () => defaultQuiz) as typeof prisma.quiz.upsert);
+  stub(prisma.quiz, "findUnique", (async ({ where }: { where: { id: string } }) =>
+    where.id === defaultQuiz.id ? defaultQuiz : null
+  ) as typeof prisma.quiz.findUnique);
+  stub(prisma.catalog, "findFirst", (async ({ where }: { where: { id?: string; tenantId: string; isDefault?: boolean } }) =>
+    catalogs.find((catalog) => catalog.tenantId === where.tenantId &&
+      (where.id === undefined || catalog.id === where.id) &&
+      (where.isDefault === undefined || catalog.isDefault === where.isDefault)) ?? null
+  ) as unknown as typeof prisma.catalog.findFirst);
+  stub(prisma.catalog, "upsert", (async () => catalogs[0]) as unknown as typeof prisma.catalog.upsert);
+  stub(prisma, "$transaction", (async (fn: (tx: typeof prisma) => unknown) => fn(prisma)) as unknown as typeof prisma.$transaction);
+  stub(prisma.quizProduct, "deleteMany", (async () => {
+    writes.push("quizProduct.deleteMany");
+    return { count: 1 };
+  }) as unknown as typeof prisma.quizProduct.deleteMany);
   stub(prisma.quiz, "findFirst", (async ({ where }: { where: { id: string; tenantId: string } }) =>
     where.tenantId === "tenant-a" && where.id === "coffee" ? coffeeQuiz : null
   ) as typeof prisma.quiz.findFirst);
-  stub(prisma.quiz, "findMany", (async () => [defaultQuiz, coffeeQuiz]) as typeof prisma.quiz.findMany);
+  stub(prisma.quiz, "findMany", (async ({ where }: { where: unknown }) => {
+    lastQuizListWhere = where;
+    return [defaultQuiz, coffeeQuiz];
+  }) as typeof prisma.quiz.findMany);
   stub(prisma.quiz, "create", (async ({ data }: { data: Record<string, unknown> }) => ({
     ...coffeeQuiz, ...data, id: "new-quiz",
   })) as typeof prisma.quiz.create);
-  stub(prisma.quiz, "update", (async ({ data }: { data: Record<string, unknown> }) => ({
-    ...coffeeQuiz, ...data,
-  })) as typeof prisma.quiz.update);
+  stub(prisma.quiz, "update", (async ({ data }: { data: Record<string, unknown> }) => {
+    writes.push("quiz.update");
+    return { ...coffeeQuiz, ...data };
+  }) as typeof prisma.quiz.update);
   stub(prisma.question, "findMany", (async ({ where }: { where: unknown }) => {
     lastQuestionWhere = where;
     return [];
@@ -69,12 +101,16 @@ before(async () => {
     id: "answer-coffee", questionId: "question-coffee", impacts: { body: 0.2, removedAxis: 0.4 },
     question: { type: "single" },
   }]) as typeof prisma.answer.findMany);
-  stub(prisma.product, "findMany", (async ({ where }: { where: { id: { in: string[] } } }) =>
-    where.id.in.includes("coffee-product") ? [{ id: "coffee-product" }] : []
-  ) as typeof prisma.product.findMany);
-  stub(prisma.product, "findFirst", (async ({ where }: { where: { id: string } }) =>
-    where.id === "coffee-product" ? { id: "coffee-product" } : null
-  ) as typeof prisma.product.findFirst);
+  stub(prisma.product, "findMany", (async ({ where }: { where: { tenantId: string; id: { in: string[] } } }) =>
+    products
+      .filter((product) => product.tenantId === where.tenantId && where.id.in.includes(product.id))
+      .map(({ id, catalogId }) => ({ id, catalogId }))
+  ) as unknown as typeof prisma.product.findMany);
+  stub(prisma.product, "findFirst", (async ({ where }: { where: { id: string; catalogId?: string } }) => {
+    lastProductFindFirstWhere = where;
+    const product = products.find((item) => item.id === where.id && (!where.catalogId || item.catalogId === where.catalogId));
+    return product ? { id: product.id } : null;
+  }) as unknown as typeof prisma.product.findFirst);
   stub(prisma.metric, "create", (async ({ data }: { data: unknown }) => {
     savedMetric = data;
     return data;
@@ -294,4 +330,66 @@ test("question reorder route is reachable and rejects foreign questions", async 
     order: [{ id: "foreign-question", order: 0 }],
   });
   assert.equal(res.status, 403);
+});
+
+test("multi-catalogue : sans catalogId, le quiz est créé dans le catalogue par défaut", async () => {
+  const created = await request("/api/quizzes", "POST", { name: "Sans catalogue" });
+  assert.equal(created.status, 201);
+  assert.equal((await created.json()).catalogId, DEFAULT_CATALOG);
+});
+
+test("multi-catalogue : la sélection d'un quiz est limitée aux produits de son catalogue", async () => {
+  const mixed = await request("/api/quizzes", "POST", {
+    name: "Voyages", catalogId: "catalog-voyages", useAllProducts: false, productIds: ["coffee-product"],
+  });
+  assert.equal(mixed.status, 400);
+  assert.match((await mixed.json()).error, /catalogue de ce quiz/);
+
+  const created = await request("/api/quizzes", "POST", {
+    name: "Voyages", catalogId: "catalog-voyages", useAllProducts: false, productIds: ["trip-product", "trip-product"],
+  });
+  assert.equal(created.status, 201);
+  const data = await created.json();
+  assert.equal(data.catalogId, "catalog-voyages");
+  assert.deepEqual(data.products.create, [{ productId: "trip-product" }]);
+});
+
+test("multi-catalogue : catalogue d'un autre tenant introuvable, catalogId invalide refusé", async () => {
+  assert.equal((await request("/api/quizzes", "POST", { name: "X", catalogId: "catalog-b" })).status, 404);
+  assert.equal((await request("/api/quizzes", "POST", { name: "X", catalogId: 42 })).status, 400);
+  assert.equal((await request("/api/quizzes/coffee", "PUT", { catalogId: "catalog-b", productIds: [] })).status, 404);
+});
+
+test("multi-catalogue : la liste des quiz se filtre par catalogue, toujours dans le tenant", async () => {
+  assert.equal((await request("/api/quizzes?catalogId=catalog-voyages")).status, 200);
+  assert.deepEqual(lastQuizListWhere, { tenantId: "tenant-a", catalogId: "catalog-voyages" });
+  assert.equal((await request("/api/quizzes")).status, 200);
+  assert.deepEqual(lastQuizListWhere, { tenantId: "tenant-a" });
+});
+
+test("multi-catalogue : changer le catalogue d'un quiz exige une nouvelle sélection", async () => {
+  const refused = await request("/api/quizzes/coffee", "PUT", { catalogId: "catalog-voyages" });
+  assert.equal(refused.status, 409);
+
+  assert.equal((await request("/api/quizzes/coffee", "PUT", {
+    catalogId: "catalog-voyages", productIds: ["coffee-product"],
+  })).status, 400);
+
+  writes.length = 0;
+  const moved = await request("/api/quizzes/coffee", "PUT", { catalogId: "catalog-voyages", productIds: ["trip-product"] });
+  assert.equal(moved.status, 200);
+  const data = await moved.json();
+  assert.equal(data.catalogId, "catalog-voyages");
+  assert.deepEqual(data.products.create, [{ productId: "trip-product" }]);
+  assert.deepEqual(writes, ["quizProduct.deleteMany", "quiz.update"], "l'ancienne sélection est retirée avant le changement");
+});
+
+test("multi-catalogue : /submit limite le moteur et le produit recommandé au catalogue du quiz", async () => {
+  const res = await request("/api/quiz/submit", "POST", {
+    clientId: "tenant-a", quizId: "coffee",
+    answers: [{ questionId: "question-coffee", answerId: "answer-coffee" }],
+  });
+  assert.equal(res.status, 200);
+  assert.equal(aiPayload.catalogId, DEFAULT_CATALOG);
+  assert.equal((lastProductFindFirstWhere as { catalogId: string }).catalogId, DEFAULT_CATALOG);
 });

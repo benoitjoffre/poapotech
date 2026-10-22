@@ -1,8 +1,9 @@
 import type { RequestHandler, ErrorRequestHandler, Response } from "express";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { QuizAxis } from "@poapo/types";
 import { prisma } from "../lib/prisma";
 import type { AuthRequest } from "../middleware/auth";
+import { ensureDefaultCatalog } from "./catalogs";
 
 export class QuizError extends Error {
   constructor(public status: number, message: string) {
@@ -11,7 +12,10 @@ export class QuizError extends Error {
   }
 }
 
-export const quizInclude = { products: { select: { productId: true } } } satisfies Prisma.QuizInclude;
+export const quizInclude = {
+  products: { select: { productId: true } },
+  catalog: { select: { id: true, name: true } },
+} satisfies Prisma.QuizInclude;
 export type ScopedQuiz = Prisma.QuizGetPayload<{ include: typeof quizInclude }>;
 
 const DEFAULT_QUIZ_TITLE = "Trouve ton produit idéal";
@@ -23,32 +27,17 @@ export function quizDefaults() {
 
 type QuizDb = Prisma.TransactionClient | typeof prisma;
 
-/** Vérifie que tous les produits appartiennent au tenant et renvoie la liste dédoublonnée. */
-export async function validateTenantProducts(tenantId: string, productIds: string[] | undefined, db: QuizDb = prisma) {
-  if (productIds === undefined) return undefined;
-
-  const uniqueProductIds = [...new Set(productIds)];
-  const tenantProducts = await db.product.findMany({
-    where: { tenantId, id: { in: uniqueProductIds } },
-    select: { id: true },
-  });
-
-  if (tenantProducts.length !== uniqueProductIds.length) {
-    throw new QuizError(400, "Certains produits n'appartiennent pas à votre catalogue");
-  }
-
-  return uniqueProductIds;
-}
-
 export interface QuizCreateData {
   name: string;
+  /** Catalogue du tenant déjà résolu par l'appelant. */
+  catalogId: string;
   industry?: string;
   axes?: QuizAxis[];
   quizTitle?: string;
   ctaText?: string;
   active?: boolean;
   useAllProducts?: boolean;
-  /** Identifiants déjà validés pour ce tenant. */
+  /** Identifiants déjà validés pour ce catalogue. */
   productIds?: string[];
 }
 
@@ -58,6 +47,7 @@ export function createQuiz(tenantId: string, input: QuizCreateData, db: QuizDb =
   return db.quiz.create({
     data: {
       tenantId,
+      catalogId: input.catalogId,
       name: input.name.trim(),
       industry: input.industry?.trim() ?? "",
       axes: (input.axes ?? []) as unknown as Prisma.InputJsonValue,
@@ -76,6 +66,9 @@ export function createQuiz(tenantId: string, input: QuizCreateData, db: QuizDb =
 export async function ensureDefaultQuiz(tenantId: string) {
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
   if (!tenant) throw new QuizError(404, "Client introuvable");
+  const existing = await prisma.quiz.findUnique({ where: { id: `default_${tenantId}` }, include: quizInclude });
+  if (existing) return existing;
+  const catalog = await ensureDefaultCatalog(tenantId);
   const defaults = quizDefaults();
   return prisma.quiz.upsert({
     where: { id: `default_${tenantId}` },
@@ -83,6 +76,7 @@ export async function ensureDefaultQuiz(tenantId: string) {
     create: {
       id: `default_${tenantId}`,
       tenantId,
+      catalogId: catalog.id,
       isDefault: true,
       name: "Quiz par défaut",
       industry: tenant.industry,
@@ -142,6 +136,11 @@ export const adminQuizScope: RequestHandler = (req: AuthRequest, res, next) => {
 export const quizErrorHandler: ErrorRequestHandler = (err: unknown, _req, res, _next) => {
   if (err instanceof QuizError) {
     res.status(err.status).json({ error: err.message });
+    return;
+  }
+  // Clé étrangère composite refusée par PostgreSQL (ex. catalogues mélangés lors d'une écriture concurrente).
+  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+    res.status(409).json({ error: "Opération refusée : elle associerait des éléments de catalogues différents ou encore utilisés" });
     return;
   }
   console.error("[api]", err);

@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { Quiz, QuizAxis, QuizInput } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 import { useQuiz } from "../contexts/QuizContext";
+import { CatalogSelect, storedCatalogId, useCatalogs } from "../lib/catalogs";
 
 type CatalogItem = { id: string; name: string; active: boolean };
 /** Un axe pas encore enregistré garde une clé modifiable (elle est ensuite référencée par les produits et réponses). */
 type AxisDraft = QuizAxis & { isNew?: boolean };
 const EMPTY = {
   name: "", industry: "", axes: [] as AxisDraft[], quizTitle: "Trouve ton produit idéal",
-  ctaText: "Découvrir ma sélection", active: true, useAllProducts: true, productIds: [] as string[],
+  ctaText: "Découvrir ma sélection", active: true, useAllProducts: true, productIds: [] as string[], catalogId: "",
 };
 
 /** « Niveau de torréfaction » → « niveauDeTorrefaction » */
@@ -35,6 +36,9 @@ export default function QuizFormPage() {
   const [form, setForm] = useState(EMPTY);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [searchParams] = useSearchParams();
+  const { catalogs, loading: catalogsLoading } = useCatalogs();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -46,22 +50,13 @@ export default function QuizFormPage() {
       setError("");
       try {
         const existing = quizId ? await apiFetch<Quiz>(`/api/quizzes/${encodeURIComponent(quizId)}`) : null;
-        const products: CatalogItem[] = [];
-        let page = 1;
-        let total = 0;
-        do {
-          const result = await apiFetch<{ data: CatalogItem[]; total: number }>(`/api/catalog/products?pageSize=100&page=${page++}`);
-          products.push(...result.data);
-          total = result.total;
-          if (result.data.length === 0) break;
-        } while (products.length < total);
         if (cancelled) return;
         setQuiz(existing);
         setForm(existing ? {
           name: existing.name, industry: existing.industry, axes: existing.axes ?? [], quizTitle: existing.quizTitle, ctaText: existing.ctaText,
           active: existing.active, useAllProducts: existing.useAllProducts, productIds: existing.products.map((p) => p.productId),
+          catalogId: existing.catalogId,
         } : EMPTY);
-        setCatalog(products);
       } catch (err) {
         if (!cancelled) setError((err as Error).message);
       } finally {
@@ -71,6 +66,47 @@ export default function QuizFormPage() {
     void load();
     return () => { cancelled = true; };
   }, [quizId]);
+  // Nouveau quiz : catalogue demandé (?catalogId), sinon dernier choisi, sinon catalogue principal.
+  useEffect(() => {
+    if (quizId || loading || catalogsLoading || form.catalogId) return;
+    const requested = searchParams.get("catalogId") ?? storedCatalogId();
+    const fallback = catalogs.find((item) => item.isDefault)?.id ?? catalogs[0]?.id ?? "";
+    const catalogId = catalogs.some((item) => item.id === requested) ? requested : fallback;
+    if (catalogId) setForm((current) => ({ ...current, catalogId }));
+  }, [quizId, loading, catalogsLoading, catalogs, form.catalogId, searchParams]);
+  // Seuls les produits du catalogue du quiz sont sélectionnables.
+  useEffect(() => {
+    if (!form.catalogId) return;
+    let cancelled = false;
+    const loadProducts = async () => {
+      setProductsLoading(true);
+      try {
+        const products: CatalogItem[] = [];
+        let page = 1;
+        let total = 0;
+        do {
+          const params = new URLSearchParams({ pageSize: "100", page: String(page++), catalogId: form.catalogId });
+          const result = await apiFetch<{ data: CatalogItem[]; total: number }>(`/api/catalog/products?${params}`);
+          products.push(...result.data);
+          total = result.total;
+          if (result.data.length === 0) break;
+        } while (products.length < total);
+        if (!cancelled) setCatalog(products);
+      } catch (err) {
+        if (!cancelled) setError((err as Error).message);
+      } finally {
+        if (!cancelled) setProductsLoading(false);
+      }
+    };
+    void loadProducts();
+    return () => { cancelled = true; };
+  }, [form.catalogId]);
+  const changeCatalog = (catalogId: string) => {
+    if (catalogId === form.catalogId) return;
+    if (form.productIds.length > 0 && !window.confirm("Changer de catalogue retire les produits sélectionnés pour ce quiz. Continuer ?")) return;
+    setCatalog([]);
+    setForm({ ...form, catalogId, productIds: [] });
+  };
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     setSaving(true);
@@ -103,13 +139,17 @@ export default function QuizFormPage() {
     <div className="page page-form">
       <div className="page-header">
         <h1 className="page-title">{quizId ? "Configurer le quiz" : "Nouveau quiz"}</h1>
-        <Link className="btn-ghost" to="/quizzes">Mes quiz</Link>
+        <Link className="btn-ghost" to={form.catalogId ? `/quizzes?catalogId=${encodeURIComponent(form.catalogId)}` : "/quizzes"}>Mes quiz</Link>
       </div>
       {error && <div className="form-error">{error}</div>}
       {success && <div className="form-success">{success}</div>}
       {(!quizId || quiz) && <form className="product-form" onSubmit={save}>
         <section className="form-section">
           <div className="form-grid">
+            <div className="field-span2">
+              <CatalogSelect catalogs={catalogs} value={form.catalogId} onChange={changeCatalog} id="quiz-catalog" disabled={catalogsLoading} />
+              <p className="field-hint">Le quiz recommande uniquement des produits de ce catalogue ; ses axes restent propres au quiz.</p>
+            </div>
             <div className="field-group">
               <label className="field-label" htmlFor="quiz-name">Nom interne</label>
               <input id="quiz-name" className="field-input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
@@ -183,10 +223,12 @@ export default function QuizFormPage() {
           <h2 className="section-title">Produits recommandables</h2>
           <label className="checkbox-label">
             <input type="checkbox" checked={form.useAllProducts} onChange={(e) => setForm({ ...form, useAllProducts: e.target.checked })} />
-            Tout le catalogue du tenant (y compris les futurs produits)
+            Tous les produits actifs du catalogue « {catalogs.find((item) => item.id === form.catalogId)?.name ?? "—"} » (y compris les futurs produits)
           </label>
-          <p className="section-hint">Pour un catalogue multi-activité, sélectionnez les produits adaptés à ce quiz. Seuls les produits actifs sont recommandés.</p>
+          <p className="section-hint">Sélectionnez au besoin un sous-ensemble des produits de ce catalogue. Seuls les produits actifs sont recommandés.</p>
           {!form.useAllProducts && <>
+            {productsLoading && <p className="section-hint">Chargement des produits...</p>}
+            {!productsLoading && catalog.length === 0 && <p className="section-hint">Ce catalogue ne contient encore aucun produit.</p>}
             {catalog.map((product) => <label key={product.id} className="checkbox-label">
               <input type="checkbox" checked={form.productIds.includes(product.id)} onChange={(e) => setForm({
                 ...form, productIds: e.target.checked ? [...form.productIds, product.id] : form.productIds.filter((id) => id !== product.id),
@@ -196,7 +238,7 @@ export default function QuizFormPage() {
             {form.productIds.length === 0 && <p className="form-error">Sans produit sélectionné, ce quiz ne pourra pas recommander de produit.</p>}
           </>}
         </section>
-        <button className="btn-primary" disabled={saving} type="submit">{saving ? "Enregistrement..." : "Enregistrer"}</button>
+        <button className="btn-primary" disabled={saving || !form.catalogId} type="submit">{saving ? "Enregistrement..." : "Enregistrer"}</button>
       </form>}
       {quiz && <section className="form-section">
         <h2 className="section-title">Diffusion</h2>

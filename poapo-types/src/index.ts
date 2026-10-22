@@ -48,9 +48,41 @@ export interface QuizAxis {
   highLabel?: string | null;
 }
 
+// ─────────────────────────────────────────────
+// Catalogues — ensembles indépendants de produits d'un tenant
+// ─────────────────────────────────────────────
+export interface CatalogRef {
+  id: string;
+  name: string;
+}
+
+export interface Catalog extends CatalogRef {
+  tenantId: string;
+  description: string | null;
+  /** Catalogue utilisé lorsque aucun catalogId n'est fourni (anciennes API, nouveaux quiz). */
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CatalogSummary extends Catalog {
+  productCount: number;
+  activeProductCount: number;
+  quizCount: number;
+  campaignCount: number;
+}
+
+export interface CatalogInput {
+  name?: string;
+  description?: string | null;
+}
+
 export interface Quiz {
   id: string;
   tenantId: string;
+  /** Le quiz ne recommande que des produits de ce catalogue. */
+  catalogId: string;
+  catalog?: CatalogRef;
   name: string;
   /** Libellé libre de l'activité (ex. « Café de spécialité »). */
   industry: string;
@@ -59,6 +91,7 @@ export interface Quiz {
   ctaText: string;
   active: boolean;
   isDefault: boolean;
+  /** Tous les produits actifs du catalogue du quiz ; sinon la sélection `products`. */
   useAllProducts: boolean;
   products: { productId: string }[];
   createdAt: string | Date;
@@ -67,12 +100,15 @@ export interface Quiz {
 
 export interface QuizInput {
   name?: string;
+  /** Catalogue par défaut du tenant si absent à la création. */
+  catalogId?: string;
   industry?: string;
   axes?: QuizAxis[];
   quizTitle?: string;
   ctaText?: string;
   active?: boolean;
   useAllProducts?: boolean;
+  /** Produits du catalogue du quiz uniquement. */
   productIds?: string[];
 }
 
@@ -93,6 +129,7 @@ export interface CampaignQuizSummary {
   questionCount: number;
   /** Produits proposés par le quiz (catalogue actif si useAllProducts). */
   productCount: number;
+  catalog: CatalogRef;
 }
 
 export interface Campaign {
@@ -186,6 +223,8 @@ export interface QuizGenerationContext {
     quizId: string;
     quizName: string;
   };
+  /** Catalogue du quiz de la campagne : seuls ses produits sont proposés. */
+  catalog: CatalogRef;
   industry: string;
   /** Axes du quiz de la campagne : les seuls utilisables par la génération. */
   axes: QuizAxis[];
@@ -325,6 +364,7 @@ export type ProductAttributes = { [key: string]: JsonValue };
 export interface Product {
   id: string;
   tenantId: string;
+  catalogId: string;
   name: string;
   brand: string | null;
   description: string | null;
@@ -340,8 +380,10 @@ export interface Product {
   updatedAt: Date;
 }
 
-export type ProductCreateInput = Omit<Product, "id" | "tenantId" | "embedding" | "createdAt" | "updatedAt" | "attributes"> & {
+export type ProductCreateInput = Omit<Product, "id" | "tenantId" | "catalogId" | "embedding" | "createdAt" | "updatedAt" | "attributes"> & {
   attributes?: ProductAttributes;
+  /** Catalogue par défaut du tenant si absent. */
+  catalogId?: string;
 };
 export type ProductUpdateInput = Partial<ProductCreateInput>;
 
@@ -541,7 +583,7 @@ export interface QuizMetricsAIResponse {
 // Catalog import
 // ─────────────────────────────────────────────
 /** Champ produit, ou `attribute.<clé>` pour une caractéristique propre à l'activité. */
-export type CatalogField = Exclude<keyof ProductCreateInput, "attributes"> | `attribute.${string}`;
+export type CatalogField = Exclude<keyof ProductCreateInput, "attributes" | "catalogId"> | `attribute.${string}`;
 
 export interface ColumnMapping {
   sourceColumn: string;

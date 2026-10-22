@@ -2,6 +2,7 @@ import { Navigate, NavLink, Outlet, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import CatalogPage from "./pages/CatalogPage";
+import CatalogsPage from "./pages/CatalogsPage";
 import ProductFormPage from "./pages/ProductFormPage";
 import SettingsPage from "./pages/SettingsPage";
 import ImportPage from "./pages/ImportPage";
@@ -43,6 +44,7 @@ function AppLayout() {
           <span className="admin-nav-label">Back-office</span>
         </div>
         <nav className="admin-side-nav" aria-label="Navigation principale">
+          <NavLink className={link} to="/catalogs"><Icon name="box" />Catalogues</NavLink>
           <NavLink className={link} to="/catalog" reloadDocument><Icon name="box" />Produits</NavLink>
           <NavLink className={link} to="/quizzes"><Icon name="quiz" />Quiz</NavLink>
           <NavLink className={link} to={`/quiz-builder${quizQuery}`}><Icon name="builder" />Quiz Builder</NavLink>
@@ -79,6 +81,7 @@ function App() {
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route path="/" element={<HomeRoute />} />
+            <Route path="/catalogs" element={<CatalogsPage />} />
             <Route path="/catalog" element={<CatalogPage />} />
             <Route path="/catalog/new" element={<ProductFormPage />} />
             <Route path="/catalog/import" element={<ImportPage />} />

@@ -4,7 +4,8 @@ import csvParser from "csv-parser";
 import { Readable } from "stream";
 import { verifyToken, AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
-import { tenantAxes } from "../services/axes";
+import { catalogAxes, resolveAccountTenantId, resolveCatalog, toCatalogRef } from "../services/catalogs";
+import { asyncRoute } from "../services/quizzes";
 
 const router = Router();
 
@@ -112,11 +113,16 @@ export function applyMapping(
 }
 
 // ─── POST /api/catalog/import/parse ──────────────────────────────────────────
-router.post("/parse", verifyToken, upload.single("file"), async (req: AuthRequest, res: Response) => {
+// Champ multipart facultatif `catalogId` : catalogue cible (par défaut, le catalogue principal).
+router.post("/parse", verifyToken, upload.single("file"), asyncRoute(async (req: AuthRequest, res: Response) => {
   if (!req.file) {
     res.status(400).json({ error: "Fichier CSV requis" });
     return;
   }
+
+  const tenantId = await resolveAccountTenantId(req);
+  const catalog = tenantId ? await resolveCatalog(tenantId, req.body?.catalogId) : null;
+  const axes = tenantId && catalog ? await catalogAxes(tenantId, catalog.id) : [];
 
   try {
     const { headers, rows } = await parseCSVBuffer(req.file.buffer);
@@ -139,7 +145,7 @@ router.post("/parse", verifyToken, upload.single("file"), async (req: AuthReques
         const aiRes = await fetch(`${aiUrl}/map-catalog`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ headers, sampleRows, axes: await tenantAxes(req.tenant!.tenantId) }),
+          body: JSON.stringify({ headers, sampleRows, axes }),
         });
         if (aiRes.ok) {
           const aiData = (await aiRes.json()) as { mappings?: FieldMapping[] };
@@ -152,18 +158,20 @@ router.post("/parse", verifyToken, upload.single("file"), async (req: AuthReques
       }
     }
 
-    res.json({ headers, rows, suggestedMapping, total: rows.length });
+    res.json({ headers, rows, suggestedMapping, total: rows.length, catalog: catalog && toCatalogRef(catalog) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erreur de parsing";
     res.status(400).json({ error: message });
   }
-});
+}));
 
 // ─── POST /api/catalog/import/execute ────────────────────────────────────────
-router.post("/execute", verifyToken, async (req: AuthRequest, res: Response) => {
-  const { mapping, rows } = req.body as {
+// Corps : { mapping, rows, catalogId? } — catalogId absent : catalogue par défaut du tenant.
+router.post("/execute", verifyToken, asyncRoute(async (req: AuthRequest, res: Response) => {
+  const { mapping, rows, catalogId } = req.body as {
     mapping: FieldMapping[];
     rows: Record<string, string>[];
+    catalogId?: unknown;
   };
 
   if (!Array.isArray(mapping) || !Array.isArray(rows) || rows.length === 0) {
@@ -171,32 +179,17 @@ router.post("/execute", verifyToken, async (req: AuthRequest, res: Response) => 
     return;
   }
 
-  let tenantId = req.tenant!.tenantId;
-  const normalizedEmail = req.tenant!.email.toLowerCase().trim();
-
   // Le token peut contenir un tenantId logique/invalide (ex: super-admin)
   // ou un ancien tenant supprime. On securise en validant l'existence du tenant.
-  const tenantFromToken = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { id: true },
-  });
-
-  if (!tenantFromToken) {
-    const tenantByEmail = await prisma.tenant.findUnique({
-      where: { email: normalizedEmail },
-      select: { id: true },
+  const tenantId = await resolveAccountTenantId(req);
+  if (!tenantId) {
+    res.status(400).json({
+      error: "Aucun tenant valide associe a ce compte. Creez/associez un tenant dans l'onglet Tenants puis reconnectez-vous.",
     });
-
-    if (!tenantByEmail) {
-      res.status(400).json({
-        error: "Aucun tenant valide associe a ce compte. Creez/associez un tenant dans l'onglet Tenants puis reconnectez-vous.",
-      });
-      return;
-    }
-
-    tenantId = tenantByEmail.id;
+    return;
   }
-  const axisKeys = new Set((await tenantAxes(tenantId)).map((axis) => axis.key));
+  const catalog = await resolveCatalog(tenantId, catalogId);
+  const axisKeys = new Set((await catalogAxes(tenantId, catalog.id)).map((axis) => axis.key));
   let created = 0;
   let skipped = 0;
   const errors: string[] = [];
@@ -213,6 +206,7 @@ router.post("/execute", verifyToken, async (req: AuthRequest, res: Response) => 
       await prisma.product.create({
         data: {
           tenantId,
+          catalogId: catalog.id,
           name,
           brand: typeof data.brand === "string" ? data.brand : null,
           description: typeof data.description === "string" ? data.description : null,
@@ -237,7 +231,7 @@ router.post("/execute", verifyToken, async (req: AuthRequest, res: Response) => 
     }
   }
 
-  res.json({ created, skipped, errors });
-});
+  res.json({ created, skipped, errors, catalog: toCatalogRef(catalog) });
+}));
 
 export default router;

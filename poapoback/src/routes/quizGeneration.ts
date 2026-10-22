@@ -65,9 +65,10 @@ router.get("/context", asyncRoute(async (req, res) => {
       quizId: campaign.quiz.id,
       quizName: campaign.quiz.name,
     },
+    catalog: campaign.quiz.catalog,
     industry: scope.industry,
     axes: scope.axes,
-    products: await listContextProducts(tenantId, scope.axes),
+    products: await listContextProducts(tenantId, scope.catalogId, scope.axes),
     canAttach: campaign.status === "DRAFT",
     limits: GENERATION_LIMITS,
   };
@@ -79,7 +80,7 @@ router.post("/", asyncRoute(async (req, res) => {
   const tenantId = tenantOf(req);
   const scope = await loadGenerationScope(tenantId, req.params.id);
   const input = parseGenerationInput(req.body, scope);
-  const products = await loadSelectedProducts(tenantId, input.productIds);
+  const products = await loadSelectedProducts(tenantId, scope.catalogId, input.productIds);
   const plan = planGeneration(scope, input, products);
 
   const release = generationLimiter.acquire(tenantId);
@@ -132,13 +133,14 @@ router.post("/preview", asyncRoute(async (req, res) => {
   ) {
     throw new QuizError(400, "Choisissez une réponse pour chaque question");
   }
-  const products = await loadSelectedProducts(tenantId, draft.productIds);
+  const products = await loadSelectedProducts(tenantId, scope.catalogId, draft.productIds);
   const profile = computeProfile(axes, choices.map((choice: number, index) => draft.questions[index].answers[choice].impacts));
 
   let result: { productId: string; explanation: string[]; profileSummary: ProfileSummary; topN?: { id: string; score: number }[] };
   try {
     result = await callAiService("/recommend", {
       tenantId,
+      catalogId: scope.catalogId,
       profile,
       industry: scope.industry,
       axes,
@@ -176,12 +178,13 @@ router.post("/save", asyncRoute(async (req, res) => {
   const { draft, axes } = parseDraft(req.body?.draft, scope);
   const attachRequested = req.body?.attachToCampaign;
   if (typeof attachRequested !== "boolean") throw new QuizError(400, "attachToCampaign doit être un booléen");
-  await loadSelectedProducts(tenantId, draft.productIds);
+  await loadSelectedProducts(tenantId, scope.catalogId, draft.productIds);
   await ensureDefaultQuiz(tenantId);
 
   const result = await prisma.$transaction(async (tx) => {
     const quiz = await createQuiz(tenantId, {
       name: draft.name,
+      catalogId: scope.catalogId,
       industry: scope.industry,
       axes,
       quizTitle: draft.quizTitle,

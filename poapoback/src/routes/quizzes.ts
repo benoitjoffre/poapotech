@@ -11,8 +11,8 @@ import {
   quizInclude,
   QuizError,
   resolveQuiz,
-  validateTenantProducts,
 } from "../services/quizzes";
+import { resolveCatalog, validateCatalogProducts } from "../services/catalogs";
 import { AxisValidationError, validateAxes } from "../services/axes";
 
 const router = Router();
@@ -56,6 +56,10 @@ function validateInput(raw: unknown, creating: boolean): asserts raw is Partial<
     }
   }
 
+  if (body.catalogId !== undefined && (typeof body.catalogId !== "string" || !body.catalogId)) {
+    throw new QuizError(400, "catalogId invalide");
+  }
+
   if (
     body.productIds !== undefined &&
     (!Array.isArray(body.productIds) ||
@@ -69,11 +73,15 @@ router.get(
   "/",
   asyncRoute(async (req: AuthRequest, res) => {
     const tenantId = req.tenant!.tenantId;
+    const catalogId = req.query.catalogId;
+    if (catalogId !== undefined && (typeof catalogId !== "string" || !catalogId)) {
+      throw new QuizError(400, "catalogId invalide");
+    }
 
     await ensureDefaultQuiz(tenantId);
 
     const quizzes = await prisma.quiz.findMany({
-      where: { tenantId },
+      where: { tenantId, ...(catalogId && { catalogId }) },
       include: quizInclude,
       orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
     });
@@ -89,12 +97,15 @@ router.post(
 
     const body = req.body;
     const tenantId = req.tenant!.tenantId;
-    const productIds = await validateTenantProducts(tenantId, body.productIds);
 
     await ensureDefaultQuiz(tenantId);
 
+    const catalog = await resolveCatalog(tenantId, body.catalogId);
+    const productIds = await validateCatalogProducts(tenantId, catalog.id, body.productIds);
+
     const quiz = await createQuiz(tenantId, {
       name: body.name!,
+      catalogId: catalog.id,
       industry: body.industry,
       axes: body.axes,
       quizTitle: body.quizTitle,
@@ -124,44 +135,51 @@ router.put(
     const body = req.body;
     const tenantId = req.tenant!.tenantId;
     const quiz = await resolveQuiz(tenantId, req.params.id);
-    const productIds = await validateTenantProducts(tenantId, body.productIds);
-
-    const updateQuiz = prisma.quiz.update({
-      where: { id: quiz.id },
-      data: {
-        ...(body.name !== undefined && { name: body.name.trim() }),
-        ...(body.industry !== undefined && { industry: body.industry.trim() }),
-        ...(body.axes !== undefined && { axes: body.axes as unknown as Prisma.InputJsonValue }),
-        ...(body.quizTitle !== undefined && { quizTitle: body.quizTitle.trim() }),
-        ...(body.ctaText !== undefined && { ctaText: body.ctaText.trim() }),
-        ...(body.active !== undefined && { active: body.active }),
-        ...(body.useAllProducts !== undefined && { useAllProducts: body.useAllProducts }),
-        ...(productIds !== undefined && {
-          products: {
-            deleteMany: {},
-            create: productIds.map((productId) => ({ productId })),
-          },
-        }),
-      },
-      include: quizInclude,
-    });
-
-    if (!quiz.isDefault) {
-      res.json(await updateQuiz);
-      return;
+    const catalogId = body.catalogId === undefined ? quiz.catalogId : (await resolveCatalog(tenantId, body.catalogId)).id;
+    const catalogChanged = catalogId !== quiz.catalogId;
+    if (catalogChanged && body.productIds === undefined && quiz.products.length > 0) {
+      throw new QuizError(
+        409,
+        "Ce quiz a une sélection de produits de son catalogue actuel : fournissez une nouvelle sélection (éventuellement vide) pour changer de catalogue",
+      );
     }
+    const productIds = await validateCatalogProducts(tenantId, catalogId, body.productIds);
 
-    const [updatedQuiz] = await prisma.$transaction([
-      updateQuiz,
-      prisma.tenant.update({
-        where: { id: tenantId },
+    const updatedQuiz = await prisma.$transaction(async (tx) => {
+      // La sélection est remplacée avant le changement de catalogue : les clés composites
+      // de QuizProduct refuseraient sinon des produits de l'ancien catalogue.
+      if (productIds !== undefined) await tx.quizProduct.deleteMany({ where: { quizId: quiz.id } });
+
+      const updated = await tx.quiz.update({
+        where: { id: quiz.id },
         data: {
-          industry: body.industry?.trim(),
-          quizTitle: body.quizTitle?.trim(),
-          ctaText: body.ctaText?.trim(),
+          ...(catalogChanged && { catalogId }),
+          ...(body.name !== undefined && { name: body.name.trim() }),
+          ...(body.industry !== undefined && { industry: body.industry.trim() }),
+          ...(body.axes !== undefined && { axes: body.axes as unknown as Prisma.InputJsonValue }),
+          ...(body.quizTitle !== undefined && { quizTitle: body.quizTitle.trim() }),
+          ...(body.ctaText !== undefined && { ctaText: body.ctaText.trim() }),
+          ...(body.active !== undefined && { active: body.active }),
+          ...(body.useAllProducts !== undefined && { useAllProducts: body.useAllProducts }),
+          ...(productIds !== undefined && {
+            products: { create: productIds.map((productId) => ({ productId })) },
+          }),
         },
-      }),
-    ]);
+        include: quizInclude,
+      });
+
+      if (quiz.isDefault) {
+        await tx.tenant.update({
+          where: { id: tenantId },
+          data: {
+            industry: body.industry?.trim(),
+            quizTitle: body.quizTitle?.trim(),
+            ctaText: body.ctaText?.trim(),
+          },
+        });
+      }
+      return updated;
+    });
 
     res.json(updatedQuiz);
   }),

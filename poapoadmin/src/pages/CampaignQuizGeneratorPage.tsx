@@ -354,7 +354,7 @@ export default function CampaignQuizGeneratorPage() {
           <Link className="table-link" to={campaignPath}>← {context.campaign.name}</Link>
           <h1 className="page-title">Générer un quiz avec l'IA</h1>
           <p className="page-subtitle">
-            Basé sur les axes du quiz « {context.campaign.quizName} »{context.industry ? ` · secteur ${context.industry}` : ""}.
+            Basé sur les axes du quiz « {context.campaign.quizName} » et les produits du catalogue « {context.catalog.name} »{context.industry ? ` · secteur ${context.industry}` : ""}.
             Le quiz généré est enregistré comme nouveau brouillon inactif : il n'est jamais publié automatiquement.
           </p>
         </div>
@@ -405,7 +405,7 @@ export default function CampaignQuizGeneratorPage() {
 
         <div className="field-group">
           <div className="gen-row-between">
-            <span className="field-label">Produits du catalogue ({settings.productIds.length} / {limits.maxProducts})</span>
+            <span className="field-label">Produits du catalogue « {context.catalog.name} » ({settings.productIds.length} / {limits.maxProducts})</span>
             <div className="gen-row">
               <input className="field-input gen-search" type="search" placeholder="Rechercher un produit" value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)} aria-label="Rechercher un produit" />
@@ -415,7 +415,7 @@ export default function CampaignQuizGeneratorPage() {
             </div>
           </div>
           {context.products.length === 0 ? (
-            <p className="text-muted">Aucun produit actif dans votre catalogue.</p>
+            <p className="text-muted">Aucun produit actif dans le catalogue « {context.catalog.name} ».</p>
           ) : (
             <div className="gen-products">
               {filteredProducts.map((product) => {

@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import type { Campaign, CampaignListResponse, CampaignOccasion, CampaignStatus } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 import { useQuiz } from "../contexts/QuizContext";
+import { useCatalogSelection } from "../lib/catalogs";
 import Icon from "../components/Icon";
 import { CampaignImage, CampaignStatusToggle } from "../components/CampaignVisuals";
 import {
@@ -45,6 +46,8 @@ export default function CampaignsPage() {
   const [sort, setSort] = useState<Sort>("recent");
   const [occasion, setOccasion] = useState<CampaignOccasion | "">("");
   const [quizId, setQuizId] = useState("");
+  const { catalogs, catalogId, setCatalogId, loading: catalogsLoading } = useCatalogSelection({ allowAll: true });
+  const catalogQuizzes = catalogId ? quizzes.filter((quiz) => quiz.catalogId === catalogId) : quizzes;
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [counts, setCounts] = useState(EMPTY_COUNTS);
   const [loading, setLoading] = useState(true);
@@ -66,6 +69,7 @@ export default function CampaignsPage() {
     if (search) params.set("search", search);
     if (occasion) params.set("occasion", occasion);
     if (quizId) params.set("quizId", quizId);
+    if (catalogId) params.set("catalogId", catalogId);
     try {
       const result = await apiFetch<CampaignListResponse>(`/api/campaigns?${params}`);
       if (current !== requestId.current) return;
@@ -76,11 +80,11 @@ export default function CampaignsPage() {
     } finally {
       if (current === requestId.current) setLoading(false);
     }
-  }, [tab, search, sort, occasion, quizId]);
+  }, [tab, search, sort, occasion, quizId, catalogId]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!catalogsLoading) void load();
+  }, [load, catalogsLoading]);
 
   const runAction = async (campaign: Campaign, action: () => Promise<unknown>) => {
     setBusyId(campaign.id);
@@ -106,7 +110,7 @@ export default function CampaignsPage() {
     void runAction(campaign, () => apiFetch(`/api/campaigns/${encodeURIComponent(campaign.id)}`, { method: "DELETE" }));
   };
 
-  const hasFilters = !!(search || occasion || quizId || tab !== "ALL");
+  const hasFilters = !!(search || occasion || quizId || catalogId || tab !== "ALL");
 
   return (
     <div className="page campaigns-page">
@@ -158,10 +162,17 @@ export default function CampaignsPage() {
                 <option value="">Toutes les occasions</option>
                 {OCCASIONS.map((value) => <option key={value} value={value}>{OCCASION_LABELS[value]}</option>)}
               </select>
-              {quizzes.length > 1 && (
+              {catalogs.length > 1 && (
+                <select className="field-select" aria-label="Filtrer par catalogue" value={catalogId} disabled={catalogsLoading}
+                  onChange={(e) => { setQuizId(""); setCatalogId(e.target.value); }}>
+                  <option value="">Tous les catalogues</option>
+                  {catalogs.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              )}
+              {catalogQuizzes.length > 1 && (
                 <select className="field-select" aria-label="Filtrer par quiz" value={quizId} onChange={(e) => setQuizId(e.target.value)}>
                   <option value="">Tous les quiz</option>
-                  {quizzes.map((quiz) => <option key={quiz.id} value={quiz.id}>{quiz.name}</option>)}
+                  {catalogQuizzes.map((quiz) => <option key={quiz.id} value={quiz.id}>{quiz.name}</option>)}
                 </select>
               )}
               <label className="campaign-sort">
@@ -289,6 +300,7 @@ function CampaignCard({ campaign, busy, onOpen, onStatus, onDuplicate, onDelete 
         <div className="campaign-chips">
           <span className="campaign-chip">{occasionName(campaign)}</span>
           <span className="campaign-chip"><Icon name="quiz" size={13} />{campaign.quiz.name} ({campaign.quiz.questionCount} question{campaign.quiz.questionCount > 1 ? "s" : ""})</span>
+          {campaign.quiz.catalog && <span className="campaign-chip" title="Catalogue du quiz">{campaign.quiz.catalog.name}</span>}
           <span className="campaign-chip"><Icon name="box" size={13} />{campaign.quiz.productCount} produit{campaign.quiz.productCount > 1 ? "s" : ""}</span>
           {!campaign.quiz.active && <span className="campaign-chip chip-warning">Quiz désactivé</span>}
         </div>

@@ -17,10 +17,12 @@ const AXES = [
 ];
 
 const quizzes: Row[] = [
-  { id: "coffee", tenantId: "tenant-a", name: "Mon café", industry: "café", axes: AXES },
-  { id: "flat", tenantId: "tenant-a", name: "Sans axes", industry: "", axes: [] },
-  { id: "foreign-quiz", tenantId: "tenant-b", name: "Quiz B", industry: "thé", axes: AXES },
+  { id: "coffee", tenantId: "tenant-a", catalogId: "catalog-a", name: "Mon café", industry: "café", axes: AXES },
+  { id: "flat", tenantId: "tenant-a", catalogId: "catalog-a", name: "Sans axes", industry: "", axes: [] },
+  { id: "trips", tenantId: "tenant-a", catalogId: "catalog-voyages", name: "Voyages", industry: "voyage", axes: AXES },
+  { id: "foreign-quiz", tenantId: "tenant-b", catalogId: "catalog-b", name: "Quiz B", industry: "thé", axes: AXES },
 ];
+const catalogNames: Record<string, string> = { "catalog-a": "Catalogue principal", "catalog-voyages": "Voyages", "catalog-b": "Catalogue B" };
 
 const products: Row[] = [
   { id: "prod-1", tenantId: "tenant-a", active: true, name: "Moka doux", attributes: { intensity: 0.2, sweetness: 0.8 }, embedding: [0.1] },
@@ -31,8 +33,10 @@ const products: Row[] = [
   { id: "bare-1", tenantId: "tenant-a", active: true, name: "Sans données 1", attributes: {}, embedding: null },
   { id: "bare-2", tenantId: "tenant-a", active: true, name: "Sans données 2", attributes: {}, embedding: null },
   { id: "inactive", tenantId: "tenant-a", active: false, name: "Retiré", attributes: {}, embedding: null },
-  { id: "foreign-prod", tenantId: "tenant-b", active: true, name: "Thé B", attributes: { intensity: 0.1 }, embedding: [0.4] },
-].map((row) => ({ brand: null, description: `Description de ${row.name}`, tags: ["café"], price: 12, imageUrl: null, featured: false, ...row }));
+  { id: "foreign-prod", tenantId: "tenant-b", catalogId: "catalog-b", active: true, name: "Thé B", attributes: { intensity: 0.1 }, embedding: [0.4] },
+  { id: "trip-1", tenantId: "tenant-a", catalogId: "catalog-voyages", active: true, name: "Trek", attributes: { intensity: 0.9, sweetness: 0.1 }, embedding: [0.5] },
+  { id: "trip-2", tenantId: "tenant-a", catalogId: "catalog-voyages", active: true, name: "Croisière", attributes: { intensity: 0.1, sweetness: 0.9 }, embedding: [0.6] },
+].map((row) => ({ catalogId: "catalog-a", brand: null, description: `Description de ${row.name}`, tags: ["café"], price: 12, imageUrl: null, featured: false, ...row }));
 
 let campaigns: Row[] = [];
 let writes: string[] = [];
@@ -104,7 +108,14 @@ before(async () => {
     const row = campaigns.find((c) => matches(c, where));
     if (!row) return null;
     const quiz = quizzes.find((q) => q.id === row.quizId && q.tenantId === row.tenantId)!;
-    return { ...row, quiz: { id: quiz.id, name: quiz.name, industry: quiz.industry, axes: quiz.axes }, tenant: { industry: "épicerie fine" } };
+    return {
+      ...row,
+      quiz: {
+        id: quiz.id, name: quiz.name, industry: quiz.industry, axes: quiz.axes,
+        catalogId: quiz.catalogId, catalog: { id: quiz.catalogId, name: catalogNames[quiz.catalogId] },
+      },
+      tenant: { industry: "épicerie fine" },
+    };
   }) as unknown as typeof prisma.campaign.findFirst);
   stub(prisma.campaign, "updateMany", (async ({ where, data }: { where: Row; data: Row }) => {
     writes.push("campaign.updateMany");
@@ -115,6 +126,10 @@ before(async () => {
   stub(prisma.product, "findMany", (async ({ where }: { where: Row }) => (
     products.filter((p) => matches(p, where))
   )) as unknown as typeof prisma.product.findMany);
+  stub(prisma.quiz, "findUnique", (async () => null) as unknown as typeof prisma.quiz.findUnique);
+  stub(prisma.catalog, "findFirst", (async ({ where }: { where: Row }) => (
+    where.tenantId === "tenant-a" && where.isDefault ? { id: "catalog-a", tenantId: "tenant-a", name: "Catalogue principal", isDefault: true } : null
+  )) as unknown as typeof prisma.catalog.findFirst);
   stub(prisma.quiz, "upsert", (async () => {
     writes.push("quiz.upsert");
     return { id: "default_tenant-a" };
@@ -366,6 +381,7 @@ test("aperçu : un seul appel /recommend restreint aux produits du brouillon, sa
   const sent = aiCalls[0].body;
   assert.deepEqual(sent.productIds, ["prod-1", "prod-2"]);
   assert.equal(sent.tenantId, "tenant-a");
+  assert.equal(sent.catalogId, "catalog-a");
   assert.deepEqual(sent.axes.map((axis: Row) => axis.key), ["intensity", "sweetness"]);
   // Profil calculé comme au /submit du widget : 0,5 + impacts, borné à [0, 1].
   assert.deepEqual(Object.keys(sent.profile).sort(), ["intensity", "sweetness"]);
@@ -420,6 +436,7 @@ test("enregistrement : nouveau quiz inactif limité aux produits choisis, rattac
   assert.equal(quiz.industry, "café");
   assert.deepEqual(quiz.axes.map((axis: Row) => axis.key), ["intensity", "sweetness"]);
   assert.deepEqual(quiz.products.create, [{ productId: "prod-1" }, { productId: "prod-2" }]);
+  assert.equal(quiz.catalogId, "catalog-a", "le quiz généré reste dans le catalogue du quiz de la campagne");
   assert.equal(body.questionCount, 2);
   assert.equal(body.answerCount, 4);
   assert.equal(body.attachedToCampaign, true);
@@ -450,4 +467,37 @@ test("campagnes programmées, actives ou suspendues : le quiz généré reste in
 test("attachToCampaign doit être un booléen explicite", async () => {
   assert.equal((await request("/draft-a/quiz-generation/save", "POST", { draft: manualDraft() })).status, 400);
   assert.deepEqual(writes, []);
+});
+
+// ─── Multi-catalogue ──────────────────────────────────────────────────────────
+
+test("multi-catalogue : contexte, génération, aperçu et enregistrement limités au catalogue du quiz", async () => {
+  campaigns.push(campaignRow({ id: "trips-a", quizId: "trips" }));
+
+  const context = await (await request("/draft-a/quiz-generation/context")).json();
+  assert.deepEqual(context.catalog, { id: "catalog-a", name: "Catalogue principal" });
+  const ids = context.products.map((p: Row) => p.id);
+  assert.ok(!ids.includes("trip-1") && !ids.includes("trip-2"), "aucun produit d'un autre catalogue du tenant");
+
+  const trips = await (await request("/trips-a/quiz-generation/context")).json();
+  assert.deepEqual(trips.catalog, { id: "catalog-voyages", name: "Voyages" });
+  assert.deepEqual(trips.products.map((p: Row) => p.id).sort(), ["trip-1", "trip-2"]);
+
+  const mixed = await request("/draft-a/quiz-generation", "POST", { ...generateInput, productIds: ["prod-1", "trip-1"] });
+  assert.equal(mixed.status, 400);
+  assert.match((await mixed.json()).error, /catalogue du quiz/);
+  assert.equal((await request("/draft-a/quiz-generation/preview", "POST", {
+    draft: manualDraft({ productIds: ["prod-1", "trip-1"] }), answers: [0, 0],
+  })).status, 400);
+  assert.equal((await request("/draft-a/quiz-generation/save", "POST", {
+    draft: manualDraft({ productIds: ["prod-1", "trip-1"] }), attachToCampaign: false,
+  })).status, 400);
+  assert.equal(aiCalls.length, 0);
+  assert.deepEqual(writes, []);
+
+  const saved = await request("/trips-a/quiz-generation/save", "POST", {
+    draft: manualDraft({ productIds: ["trip-1", "trip-2"] }), attachToCampaign: false,
+  });
+  assert.equal(saved.status, 201, await saved.clone().text());
+  assert.equal(createdQuizzes[0].catalogId, "catalog-voyages");
 });

@@ -35,11 +35,36 @@ model Tenant {
   sessions     QuizSession[]
   metrics      Metric[]
   campaigns    Campaign[]
+  catalogs     Catalog[]
+}
+
+// ─────────────────────────────────────────────
+// Catalog — ensemble indépendant de produits d'un tenant
+// Un seul catalogue par défaut par tenant : index partiel "Catalog_one_default_per_tenant" (SQL).
+// ─────────────────────────────────────────────
+model Catalog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  name        String
+  description String?
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products    Product[]
+  quizzes     Quiz[]
+
+  @@unique([tenantId, id])
+  @@unique([tenantId, name])
+  @@index([tenantId])
 }
 
 model Quiz {
   id             String   @id @default(cuid())
   tenantId       String
+  // Le quiz ne recommande que des produits de ce catalogue
+  catalogId      String
   name           String
   // Libellé libre de l'activité
   industry       String   @default("")
@@ -54,6 +79,8 @@ model Quiz {
   updatedAt      DateTime @updatedAt
 
   tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Clé composite : le catalogue appartient au même tenant que le quiz
+  catalog        Catalog       @relation(fields: [tenantId, catalogId], references: [tenantId, id], onDelete: NoAction)
   questions      Question[]
   sessions       QuizSession[]
   metrics        Metric[]
@@ -61,7 +88,9 @@ model Quiz {
   campaigns      Campaign[]
 
   @@unique([tenantId, id])
+  @@unique([catalogId, id])
   @@index([tenantId])
+  @@index([tenantId, catalogId])
 }
 
 // ─────────────────────────────────────────────
@@ -93,11 +122,13 @@ model Campaign {
   @@index([tenantId, quizId])
 }
 
+// Sélection manuelle de produits : le quiz et le produit doivent partager le même catalogue (FK composites).
 model QuizProduct {
   quizId    String
   productId String
-  quiz      Quiz    @relation(fields: [quizId], references: [id], onDelete: Cascade)
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  catalogId String
+  quiz      Quiz    @relation(fields: [catalogId, quizId], references: [catalogId, id], onDelete: Cascade, onUpdate: Cascade)
+  product   Product @relation(fields: [catalogId, productId], references: [catalogId, id], onDelete: Cascade, onUpdate: Cascade)
 
   @@id([quizId, productId])
   @@index([productId])
@@ -125,6 +156,7 @@ model MagicToken {
 model Product {
   id            String    @id @default(cuid())
   tenantId      String
+  catalogId     String
   name          String
   brand         String?
   description   String?
@@ -142,11 +174,15 @@ model Product {
   updatedAt     DateTime  @updatedAt
 
   tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Clé composite : le catalogue appartient au même tenant que le produit
+  catalog       Catalog   @relation(fields: [tenantId, catalogId], references: [tenantId, id], onDelete: NoAction)
   sessions      QuizSession[]
   quizzes       QuizProduct[]
 
+  @@unique([catalogId, id])
   @@index([tenantId])
   @@index([tenantId, active])
+  @@index([tenantId, catalogId, active])
 }
 
 // ─────────────────────────────────────────────

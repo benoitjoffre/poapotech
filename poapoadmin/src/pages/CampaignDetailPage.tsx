@@ -112,6 +112,7 @@ export default function CampaignDetailPage() {
             <dt>Quiz</dt>
             <dd>
               {campaign.quiz.name} · {campaign.quiz.questionCount} question{campaign.quiz.questionCount > 1 ? "s" : ""} · {campaign.quiz.productCount} produit{campaign.quiz.productCount > 1 ? "s" : ""}
+              {campaign.quiz.catalog && <> · catalogue « {campaign.quiz.catalog.name} »</>}
               {!campaign.quiz.active && <span className="campaign-chip chip-warning">Quiz désactivé</span>}
             </dd>
           </div>

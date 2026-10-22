@@ -46,13 +46,20 @@ function tenantOf(req: AuthRequest) {
   return req.tenant!.tenantId;
 }
 
-async function activeProductCount(tenantId: string, campaigns: CampaignWithQuiz[]) {
-  if (!campaigns.some((campaign) => campaign.quiz.useAllProducts)) return 0;
-  return prisma.product.count({ where: { tenantId, active: true } });
+/** Produits actifs par catalogue, uniquement pour les catalogues des quiz « tous les produits ». */
+async function activeProductsByCatalog(tenantId: string, campaigns: CampaignWithQuiz[]): Promise<Map<string, number>> {
+  const catalogIds = [...new Set(campaigns.filter((c) => c.quiz.useAllProducts).map((c) => c.quiz.catalogId))];
+  if (!catalogIds.length) return new Map();
+  const groups = await prisma.product.groupBy({
+    by: ["catalogId"],
+    where: { tenantId, active: true, catalogId: { in: catalogIds } },
+    _count: { _all: true },
+  });
+  return new Map(groups.map((group) => [group.catalogId, group._count._all]));
 }
 
 async function respondWith(tenantId: string, campaign: CampaignWithQuiz) {
-  return serializeCampaign(campaign, await activeProductCount(tenantId, [campaign]));
+  return serializeCampaign(campaign, await activeProductsByCatalog(tenantId, [campaign]));
 }
 
 async function findCampaign(tenantId: string, id: unknown) {
@@ -77,6 +84,7 @@ router.get(
     const status = queryString(req.query.status, "status");
     const occasion = queryString(req.query.occasion, "occasion");
     const quizId = queryString(req.query.quizId, "quizId");
+    const catalogId = queryString(req.query.catalogId, "catalogId");
     const sort = queryString(req.query.sort, "sort") ?? "recent";
 
     if (search && search.length > CAMPAIGN_LIMITS.search) throw new QuizError(400, "Recherche trop longue");
@@ -84,7 +92,9 @@ router.get(
     if (occasion && !CAMPAIGN_OCCASIONS.includes(occasion as CampaignOccasion)) throw new QuizError(400, "Occasion invalide");
     if (!Object.prototype.hasOwnProperty.call(SORTS, sort)) throw new QuizError(400, "Tri invalide");
 
-    const filters: Prisma.CampaignWhereInput[] = [{ tenantId }];
+    // Le catalogue délimite l'espace de travail : il s'applique aussi aux compteurs par statut.
+    const scope: Prisma.CampaignWhereInput = { tenantId, ...(catalogId && { quiz: { catalogId } }) };
+    const filters: Prisma.CampaignWhereInput[] = [scope];
     if (status) filters.push(effectiveStatusWhere(status as CampaignStatus, now));
     if (occasion) filters.push({ occasion: occasion as CampaignOccasion });
     if (quizId) filters.push({ quizId });
@@ -100,13 +110,13 @@ router.get(
 
     const [campaigns, all] = await Promise.all([
       prisma.campaign.findMany({ where: { AND: filters }, include: campaignInclude, orderBy: SORTS[sort as keyof typeof SORTS] }),
-      prisma.campaign.findMany({ where: { tenantId }, select: { status: true, startsAt: true, endsAt: true } }),
+      prisma.campaign.findMany({ where: scope, select: { status: true, startsAt: true, endsAt: true } }),
     ]);
 
     const counts: CampaignListResponse["counts"] = { total: all.length, DRAFT: 0, SCHEDULED: 0, ACTIVE: 0, PAUSED: 0, COMPLETED: 0 };
     for (const campaign of all) counts[effectiveStatus(campaign, now)] += 1;
 
-    const products = await activeProductCount(tenantId, campaigns);
+    const products = await activeProductsByCatalog(tenantId, campaigns);
     res.json({ data: campaigns.map((campaign) => serializeCampaign(campaign, products, now)), counts } satisfies CampaignListResponse);
   }),
 );

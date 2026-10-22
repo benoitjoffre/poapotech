@@ -70,7 +70,7 @@ const scopeSelect = {
   endsAt: true,
   occasion: true,
   occasionLabel: true,
-  quiz: { select: { id: true, name: true, industry: true, axes: true } },
+  quiz: { select: { id: true, name: true, industry: true, axes: true, catalogId: true, catalog: { select: { id: true, name: true } } } },
   tenant: { select: { industry: true } },
 } satisfies Prisma.CampaignSelect;
 
@@ -78,6 +78,8 @@ export type GenerationCampaign = Prisma.CampaignGetPayload<{ select: typeof scop
 
 export interface GenerationScope {
   campaign: GenerationCampaign;
+  /** Catalogue du quiz de la campagne : seul périmètre de produits autorisé pour la génération. */
+  catalogId: string;
   axes: QuizAxis[];
   industry: string;
 }
@@ -88,6 +90,7 @@ export async function loadGenerationScope(tenantId: string, campaignId: unknown)
   if (!campaign) throw new QuizError(404, "Campagne introuvable");
   return {
     campaign,
+    catalogId: campaign.quiz.catalogId,
     axes: parseAxes(campaign.quiz.axes),
     industry: campaign.quiz.industry.trim() || campaign.tenant.industry.trim(),
   };
@@ -107,37 +110,45 @@ const productSelect = {
 type ProductRow = Prisma.ProductGetPayload<{ select: typeof productSelect }>;
 export type GenerationProductRow = ProductRow & { hasEmbedding: boolean };
 
-async function idsWithEmbedding(tenantId: string, ids?: string[]) {
+async function idsWithEmbedding(tenantId: string, catalogId: string, ids?: string[]) {
   const rows = await prisma.product.findMany({
-    where: { tenantId, active: true, ...(ids && { id: { in: ids } }), embedding: { not: Prisma.AnyNull } },
+    where: { tenantId, catalogId, active: true, ...(ids && { id: { in: ids } }), embedding: { not: Prisma.AnyNull } },
     select: { id: true },
   });
   return new Set(rows.map((row) => row.id));
 }
 
-/** Produits actifs du tenant demandés ; refuse tout identifiant étranger, inconnu ou inactif. */
-export async function loadSelectedProducts(tenantId: string, productIds: string[]): Promise<GenerationProductRow[]> {
+/** Produits actifs du catalogue demandés ; refuse tout identifiant étranger, inconnu, inactif ou d'un autre catalogue. */
+export async function loadSelectedProducts(
+  tenantId: string,
+  catalogId: string,
+  productIds: string[],
+): Promise<GenerationProductRow[]> {
   const rows = await prisma.product.findMany({
-    where: { tenantId, active: true, id: { in: productIds } },
+    where: { tenantId, catalogId, active: true, id: { in: productIds } },
     select: productSelect,
   });
   if (rows.length !== productIds.length) {
-    throw new QuizError(400, "Certains produits sont inactifs ou n'appartiennent pas à votre catalogue");
+    throw new QuizError(400, "Certains produits sont inactifs ou n'appartiennent pas au catalogue du quiz de cette campagne");
   }
-  const embedded = await idsWithEmbedding(tenantId, productIds);
+  const embedded = await idsWithEmbedding(tenantId, catalogId, productIds);
   const byId = new Map(rows.map((row) => [row.id, row]));
   return productIds.map((id) => ({ ...byId.get(id)!, hasEmbedding: embedded.has(id) }));
 }
 
-export async function listContextProducts(tenantId: string, axes: QuizAxis[]): Promise<QuizGenerationProduct[]> {
+export async function listContextProducts(
+  tenantId: string,
+  catalogId: string,
+  axes: QuizAxis[],
+): Promise<QuizGenerationProduct[]> {
   const [rows, embedded] = await Promise.all([
     prisma.product.findMany({
-      where: { tenantId, active: true },
+      where: { tenantId, catalogId, active: true },
       select: productSelect,
       orderBy: [{ featured: "desc" }, { name: "asc" }],
       take: CONTEXT_PRODUCT_LIMIT,
     }),
-    idsWithEmbedding(tenantId),
+    idsWithEmbedding(tenantId, catalogId),
   ]);
   return rows.map((row) => ({
     id: row.id,

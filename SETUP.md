@@ -166,13 +166,36 @@ Dans **Mes quiz**, créez un quiz puis configurez :
 - son nom interne, son activité (libellé libre : « Café », « Vins », « Cosmétique »…),
   son titre public et son CTA ;
 - ses **axes de recommandation** (voir ci-dessous) ;
-- les produits recommandables : tout le catalogue, ou une sélection explicite ;
+- son **catalogue** (voir « Plusieurs catalogues par tenant ») ;
+- les produits recommandables : tous les produits actifs de son catalogue, ou une
+  sélection explicite dans ce catalogue ;
 - son état actif/désactivé. La désactivation conserve les questions et les statistiques.
 
-Le catalogue, le logo, la couleur et le domaine autorisé restent partagés au niveau
-du tenant. Pour éviter de recommander un produit d'une autre activité, utilisez une
-sélection explicite dans chaque quiz. Une sélection vide ne retombe jamais sur tout
-le catalogue.
+Le logo, la couleur et le domaine autorisé restent partagés au niveau du tenant.
+Un quiz ne recommande jamais un produit d'un autre catalogue. Une sélection vide ne
+retombe jamais sur tout le catalogue.
+
+### Plusieurs catalogues par tenant
+
+Un tenant possède un ou plusieurs catalogues indépendants (par exemple
+« Expériences » et « Hébergements »). Chaque produit et chaque quiz appartient à un
+seul catalogue ; chaque tenant possède un **catalogue principal** (`isDefault`),
+créé automatiquement et non supprimable.
+
+- Page **Catalogues** : créer, renommer, supprimer un catalogue secondaire vide, et
+  accéder à ses produits, quiz, campagnes, à l'import CSV et à la création de quiz.
+- Les listes Produits, Quiz et Campagnes ont un sélecteur de catalogue (mémorisé
+  dans le navigateur).
+- `useAllProducts` signifie « tous les produits actifs du catalogue du quiz ».
+- Changer le catalogue d'un quiz exige une nouvelle sélection de produits ; déplacer
+  un produit sélectionné par un quiz est refusé (409).
+- Les axes restent définis **par quiz** et la recommandation utilise uniquement les
+  axes du quiz. La réunion des axes des quiz d'un catalogue sert seulement d'aide à
+  l'édition des produits et à l'import.
+- Le service IA filtre en SQL les produits sur le catalogue du quiz ; le générateur
+  de quiz (Campaign Studio) ne propose que les produits du catalogue du quiz.
+- Rétrocompatibilité : les API sans `catalogId` (création de produit, import,
+  création de quiz) utilisent le catalogue principal ; le widget est inchangé.
 
 ### Axes de recommandation (vecteurs numériques)
 
@@ -233,7 +256,8 @@ repli vers un autre quiz.
    - `20261015110000_add_sector_product_attributes` ;
    - `20261015150000_add_multiple_quizzes` ;
    - `20261022100000_generic_recommendation_axes` ;
-   - `20261022120000_add_campaigns` (Campaign Studio, purement additive).
+   - `20261022120000_add_campaigns` (Campaign Studio, purement additive) ;
+   - `20261022140000_add_catalogs` (multi-catalogue, additive avec reprise).
 4. Régénérer le client Prisma, reconstruire et redéployer ensemble le backend,
    le service IA, l'administration et le front.
 5. Vérifier l'ancien lien `clientId` seul, puis un nouveau lien avec `quizId`.
@@ -260,6 +284,25 @@ La migration `add_campaigns` crée uniquement les types `CampaignStatus` et
 modifie aucune table ni donnée existante. La clé étrangère composite
 `(tenantId, quizId)` garantit en base qu'une campagne ne référence qu'un quiz de
 son propre tenant.
+
+La migration `add_catalogs` crée la table `Catalog`, un catalogue principal
+`catalog_<tenantId>` par tenant, et y rattache tous les produits et quiz existants.
+`QuizProduct` reçoit une colonne `catalogId` reprise du quiz. Des clés étrangères
+composites garantissent en base que :
+
+- le catalogue d'un produit ou d'un quiz appartient au même tenant
+  (`(tenantId, catalogId)` → `Catalog(tenantId, id)`) ;
+- un quiz et un produit sélectionné partagent le même catalogue
+  (`QuizProduct(catalogId, quizId)` → `Quiz(catalogId, id)` et
+  `QuizProduct(catalogId, productId)` → `Product(catalogId, id)`).
+
+Un index unique partiel limite chaque tenant à un seul catalogue principal. Aucune
+ligne n'est supprimée. La migration commence par un contrôle : si une sélection
+`QuizProduct` associe un quiz et un produit de tenants différents, elle s'arrête
+(`RAISE EXCEPTION`) sans rien modifier. Corrigez ces lignes, marquez la migration
+comme annulée (`npx prisma migrate resolve --rolled-back 20261022140000_add_catalogs`)
+puis relancez `npx prisma migrate deploy`. Le backend et le service IA doivent être
+déployés **après** cette migration : leur code utilise la colonne `catalogId`.
 
 ### Tests ciblés multi-quiz
 
@@ -385,21 +428,27 @@ GET  /api/auth/verify?token=         Vérifier token → JWT
 GET  /api/auth/me                    Profil tenant
 PUT  /api/auth/me/branding           Modifier branding
 
-GET  /api/catalog/products           Liste produits (paginée)
-POST /api/catalog/products           Créer un produit
+GET    /api/catalogs                 Catalogues du tenant + compteurs (produits, quiz, campagnes)
+POST   /api/catalogs                 Créer un catalogue (nom unique par tenant)
+GET    /api/catalogs/:id             Détail d'un catalogue
+PUT    /api/catalogs/:id             Renommer / décrire
+DELETE /api/catalogs/:id             Supprimer un catalogue secondaire vide (409 sinon)
+
+GET  /api/catalog/products?catalogId=  Liste produits (paginée ; sans catalogId : tout le tenant)
+POST /api/catalog/products           Créer un produit (catalogId facultatif → catalogue principal)
 GET  /api/catalog/products/:id       Détail produit
 PUT  /api/catalog/products/:id       Modifier produit
 DELETE /api/catalog/products/:id     Supprimer produit
 
-GET  /api/quizzes                    Liste des quiz du tenant
-POST /api/quizzes                    Créer un quiz
+GET  /api/quizzes?catalogId=          Liste des quiz du tenant
+POST /api/quizzes                    Créer un quiz (catalogId facultatif → catalogue principal)
 GET  /api/quizzes/:id                Configuration et produits sélectionnés
 PUT  /api/quizzes/:id                Modifier ou désactiver un quiz
 GET  /api/quiz/builder/questions?quizId=   Questions du quiz choisi
 GET  /api/quiz/metrics?quizId=             Analytics du quiz choisi
 GET  /api/quiz/metrics/ai-insights?quizId=  Insights du quiz choisi
 
-GET    /api/campaigns?search=&status=&occasion=&quizId=&sort=   Campagnes du tenant + compteurs par statut
+GET    /api/campaigns?search=&status=&occasion=&quizId=&catalogId=&sort=   Campagnes du tenant + compteurs par statut
 POST   /api/campaigns                Créer une campagne (quiz existant du tenant)
 GET    /api/campaigns/:id            Détail d'une campagne
 PUT    /api/campaigns/:id            Modifier (dont en ligne / en pause)
@@ -446,7 +495,8 @@ Le paramètre `quizId` est facultatif pour la rétrocompatibilité : son absence
 cible le quiz par défaut. Toutes les mutations du builder acceptent `?quizId=`,
 y compris l'import CSV. Le choix des produits utilise `useAllProducts` et
 `productIds` dans `POST/PUT /api/quizzes`. Les produits doivent appartenir au
-tenant authentifié.
+tenant authentifié et au catalogue du quiz. L'import CSV de produits
+(`/api/catalog/import/parse` et `/api/catalog/import/execute`) accepte un `catalogId` facultatif.
 
 ---
 

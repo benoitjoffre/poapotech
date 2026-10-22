@@ -142,6 +142,8 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         tenantId: clientId,
+        // Le moteur ne classe que les produits du catalogue du quiz (useAllProducts inclus).
+        catalogId: quiz.catalogId,
         profile,
         industry: quiz.industry,
         axes,
@@ -165,7 +167,7 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
       return;
     }
     const product = await prisma.product.findFirst({
-      where: { id: productId, tenantId: clientId, active: true },
+      where: { id: productId, tenantId: clientId, catalogId: quiz.catalogId, active: true },
       select: {
         id: true,
         name: true,

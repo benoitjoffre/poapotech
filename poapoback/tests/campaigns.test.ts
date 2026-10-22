@@ -10,11 +10,19 @@ import { effectiveStatus, effectiveStatusWhere } from "../src/services/campaigns
 
 type Row = Record<string, unknown>;
 
+const catalogNames: Record<string, string> = {
+  "catalog-a": "Catalogue principal",
+  "catalog-voyages": "Voyages",
+  "catalog-b": "Catalogue B",
+};
 const quizzes: Row[] = [
-  { id: "coffee", tenantId: "tenant-a", name: "Mon café", active: true, useAllProducts: false, questions: 3, products: 2 },
-  { id: "sleeping", tenantId: "tenant-a", name: "Quiz inactif", active: false, useAllProducts: true, questions: 1, products: 0 },
-  { id: "foreign-quiz", tenantId: "tenant-b", name: "Quiz B", active: true, useAllProducts: true, questions: 5, products: 0 },
+  { id: "coffee", tenantId: "tenant-a", catalogId: "catalog-a", name: "Mon café", active: true, useAllProducts: false, questions: 3, products: 2 },
+  { id: "sleeping", tenantId: "tenant-a", catalogId: "catalog-voyages", name: "Quiz inactif", active: false, useAllProducts: true, questions: 1, products: 0 },
+  { id: "foreign-quiz", tenantId: "tenant-b", catalogId: "catalog-b", name: "Quiz B", active: true, useAllProducts: true, questions: 5, products: 0 },
 ];
+/** Produits actifs par catalogue, pour les quiz « tous les produits ». */
+const activeProducts: Record<string, number> = { "catalog-a": 7, "catalog-voyages": 4, "catalog-b": 99 };
+let productGroupWhere: Row | undefined;
 const DAY = 24 * 60 * 60 * 1000;
 let campaigns: Row[] = [];
 let sequence = 0;
@@ -35,6 +43,10 @@ function matches(row: Row, where: Row | undefined): boolean {
   return Object.entries(where).every(([key, condition]) => {
     if (key === "AND") return (condition as Row[]).every((part) => matches(row, part));
     if (key === "OR") return (condition as Row[]).some((part) => matches(row, part));
+    if (key === "quiz") {
+      const quiz = quizzes.find((q) => q.id === row.quizId && q.tenantId === row.tenantId);
+      return !!quiz && matches(quiz, condition as Row);
+    }
     const value = row[key];
     if (condition === null) return value === null || value === undefined;
     if (condition instanceof Date || typeof condition !== "object") {
@@ -66,6 +78,7 @@ function withQuiz(row: Row) {
     ...row,
     quiz: {
       id: quiz.id, name: quiz.name, active: quiz.active, useAllProducts: quiz.useAllProducts,
+      catalogId: quiz.catalogId, catalog: { id: quiz.catalogId, name: catalogNames[quiz.catalogId as string] },
       _count: { questions: quiz.questions, products: quiz.products },
     },
   };
@@ -102,7 +115,10 @@ before(async () => {
     const quiz = quizzes.find((q) => q.id === where.id && q.tenantId === where.tenantId);
     return quiz ? { ...quiz, products: [] } : null;
   }) as typeof prisma.quiz.findFirst);
-  stub(prisma.product, "count", (async () => 7) as typeof prisma.product.count);
+  stub(prisma.product, "groupBy", (async ({ where }: { where: Row & { catalogId: { in: string[] } } }) => {
+    productGroupWhere = where;
+    return where.catalogId.in.map((catalogId) => ({ catalogId, _count: { _all: activeProducts[catalogId] ?? 0 } }));
+  }) as unknown as typeof prisma.product.groupBy);
   stub(prisma.campaign, "findFirst", (async ({ where }: { where: Row }) => {
     const row = campaigns.find((c) => matches(c, where));
     return row ? withQuiz(row) : null;
@@ -172,7 +188,10 @@ test("la liste ne contient que les campagnes du tenant, avec statuts calculés e
   assert.deepEqual(byId, { "draft-a": "DRAFT", "live-a": "ACTIVE", "future-a": "SCHEDULED", "ended-a": "COMPLETED", "paused-a": "PAUSED" });
   assert.deepEqual(body.counts, { total: 5, DRAFT: 1, SCHEDULED: 1, ACTIVE: 1, PAUSED: 1, COMPLETED: 1 });
   const live = body.data.find((c: Row) => c.id === "live-a");
-  assert.deepEqual(live.quiz, { id: "coffee", name: "Mon café", active: true, questionCount: 3, productCount: 2 });
+  assert.deepEqual(live.quiz, {
+    id: "coffee", name: "Mon café", active: true, questionCount: 3, productCount: 2,
+    catalog: { id: "catalog-a", name: "Catalogue principal" },
+  });
 });
 
 test("filtres par statut calculé, recherche et paramètres invalides", async () => {
@@ -291,4 +310,19 @@ test("seuls les brouillons peuvent être supprimés", async () => {
   assert.equal((await request("/paused-a", "DELETE")).status, 409);
   assert.equal((await request("/draft-a", "DELETE")).status, 204);
   assert.equal((await request("/draft-a")).status, 404);
+});
+
+test("multi-catalogue : filtre par catalogue, compteurs limités au catalogue et produits comptés par catalogue", async () => {
+  campaigns.push(campaign({ id: "voyage-a", quizId: "sleeping", name: "Évasion" }));
+  const body = await (await request("?catalogId=catalog-voyages")).json();
+  assert.deepEqual(body.data.map((c: Row) => c.id), ["voyage-a"]);
+  assert.deepEqual(body.counts, { total: 1, DRAFT: 1, SCHEDULED: 0, ACTIVE: 0, PAUSED: 0, COMPLETED: 0 });
+  const quiz = body.data[0].quiz;
+  assert.deepEqual(quiz.catalog, { id: "catalog-voyages", name: "Voyages" });
+  assert.equal(quiz.productCount, 4, "« tous les produits » = produits actifs du catalogue du quiz, pas du tenant");
+  assert.deepEqual(productGroupWhere, { tenantId: "tenant-a", active: true, catalogId: { in: ["catalog-voyages"] } });
+
+  const foreign = await (await request("?catalogId=catalog-b")).json();
+  assert.equal(foreign.data.length, 0, "un catalogue d'un autre tenant ne révèle aucune campagne");
+  assert.equal(foreign.counts.total, 0);
 });

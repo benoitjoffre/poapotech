@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken } from "../lib/api";
 import { useQuiz } from "../contexts/QuizContext";
-import { collectAxes } from "../lib/productForm";
+import { catalogAxes, CatalogSelect, useCatalogSelection } from "../lib/catalogs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Step = 1 | 2 | 3;
@@ -69,7 +69,9 @@ function applyMappingToRow(row: Record<string, string>, mapping: FieldMapping[])
 export default function ImportPage() {
   const navigate = useNavigate();
   const { quizzes } = useQuiz();
-  const axes = useMemo(() => collectAxes(quizzes), [quizzes]);
+  const { catalogs, catalog, catalogId, setCatalogId, loading: catalogsLoading } = useCatalogSelection({ allowAll: false });
+  const axes = useMemo(() => catalogAxes(quizzes, catalogId), [quizzes, catalogId]);
+  const catalogPath = catalogId ? `/catalog?catalogId=${encodeURIComponent(catalogId)}` : "/catalog";
   const axisFields = useMemo(
     () => axes.map((axis) => ({ value: `attribute.${axis.key}`, label: `Axe : ${axis.label} [0 – 1]` })),
     [axes],
@@ -93,6 +95,7 @@ export default function ImportPage() {
 
     const formData = new FormData();
     formData.append("file", file);
+    if (catalogId) formData.append("catalogId", catalogId);
 
     try {
       const res = await fetch("/api/catalog/import/parse", {
@@ -125,7 +128,7 @@ export default function ImportPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${getToken() ?? ""}`,
         },
-        body: JSON.stringify({ mapping, rows: parsedData.rows }),
+        body: JSON.stringify({ mapping, rows: parsedData.rows, catalogId }),
       });
       const data = (await res.json()) as ImportResult & { error?: string };
       if (!res.ok) throw new Error(data.error ?? `Erreur ${res.status}`);
@@ -162,7 +165,7 @@ export default function ImportPage() {
           <h1 className="page-title">Import catalogue</h1>
           <p className="page-subtitle">Importez vos produits depuis un fichier CSV</p>
         </div>
-        <button type="button" className="btn-ghost" onClick={() => navigate("/catalog")}>
+        <button type="button" className="btn-ghost" onClick={() => navigate(catalogPath)}>
           Annuler
         </button>
       </div>
@@ -178,6 +181,14 @@ export default function ImportPage() {
       </div>
 
       {error && <div className="form-error">{error}</div>}
+
+      {step === 1 ? (
+        <CatalogSelect catalogs={catalogs} value={catalogId} onChange={setCatalogId} id="import-catalog" label="Catalogue de destination" disabled={catalogsLoading || isLoading} />
+      ) : (
+        <div className="catalog-banner">
+          Catalogue de destination : <strong>{catalog?.name ?? "—"}</strong>
+        </div>
+      )}
 
       {/* ── Step 1 : Upload ── */}
       {step === 1 && (
@@ -224,7 +235,7 @@ export default function ImportPage() {
           </div>
 
           <div className="form-actions">
-            <button type="button" className="btn-primary" disabled={!file || isLoading} onClick={handleParse}>
+            <button type="button" className="btn-primary" disabled={!file || isLoading || !catalogId} onClick={handleParse}>
               {isLoading ? "Analyse en cours..." : "Analyser le fichier"}
             </button>
           </div>
@@ -320,7 +331,7 @@ export default function ImportPage() {
             <div>
               <h2 className="section-title">Aperçu (5 premières lignes)</h2>
               <p className="section-hint">
-                {parsedData.total} produit{parsedData.total !== 1 ? "s" : ""} seront ajoutés à votre catalogue
+                {parsedData.total} produit{parsedData.total !== 1 ? "s" : ""} seront ajoutés au catalogue « {catalog?.name ?? "—"} »
               </p>
             </div>
             <button type="button" className="btn-ghost" onClick={() => setStep(2)}>
@@ -392,8 +403,8 @@ export default function ImportPage() {
           )}
 
           <div className="form-actions">
-            <button type="button" className="btn-primary" onClick={() => navigate("/catalog")}>
-              Voir le catalogue
+            <button type="button" className="btn-primary" onClick={() => navigate(catalogPath)}>
+              Voir les produits du catalogue
             </button>
           </div>
         </section>

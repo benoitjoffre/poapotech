@@ -1,4 +1,4 @@
-import type { Product, ProductAttributes, ProductCreateInput, Quiz, QuizAxis } from "@poapo/types";
+import type { Product, ProductAttributes, ProductCreateInput, QuizAxis } from "@poapo/types";
 
 export interface ProductFormState {
   name: string;
@@ -29,15 +29,6 @@ export const EMPTY_PRODUCT_FORM: ProductFormState = {
   axisValues: {},
   attributes: "{}",
 };
-
-/** Union des axes de tous les quiz : le catalogue est partagé entre quiz. */
-export function collectAxes(quizzes: Quiz[]): QuizAxis[] {
-  const byKey = new Map<string, QuizAxis>();
-  for (const quiz of quizzes) {
-    for (const axis of quiz.axes ?? []) if (!byKey.has(axis.key)) byKey.set(axis.key, axis);
-  }
-  return [...byKey.values()];
-}
 
 function commaToArray(value: string): string[] {
   return value
