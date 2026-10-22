@@ -388,6 +388,103 @@ export type ProductCreateInput = Omit<Product, "id" | "tenantId" | "catalogId" |
 export type ProductUpdateInput = Partial<ProductCreateInput>;
 
 // ─────────────────────────────────────────────
+// Enrichissement des produits par IA — valeurs d'axes proposées puis validées
+// ─────────────────────────────────────────────
+
+export type AxisEstimateStatus = "estimated" | "insufficient_data";
+/** Échelle qualitative : un pourcentage produit par le modèle ne serait pas calibré. */
+export type AxisEstimateConfidence = "low" | "medium" | "high";
+
+export interface EnrichmentQuizOption {
+  id: string;
+  name: string;
+  active: boolean;
+  axes: QuizAxis[];
+}
+
+export interface EnrichmentProduct {
+  id: string;
+  name: string;
+  brand: string | null;
+  active: boolean;
+  /** Valeur actuelle sur chaque axe du quiz choisi ; null si absente. */
+  axisValues: Record<string, number | null>;
+  /** Axes dont la valeur existante n'est pas un nombre entre 0 et 1 (non estimables sans correction manuelle). */
+  invalidAxes: string[];
+  /** Fiche avec description, tags ou caractéristiques libres : sinon aucune estimation n'est demandée à l'IA. */
+  hasData: boolean;
+}
+
+export interface ProductEnrichmentLimits {
+  batchSize: number;
+  hourlyProducts: number;
+  remaining: number;
+}
+
+export interface ProductEnrichmentContext {
+  catalog: CatalogRef;
+  quizzes: EnrichmentQuizOption[];
+  /** Quiz dont les axes sont estimés ; null si le catalogue n'a aucun quiz avec axes. */
+  quiz: EnrichmentQuizOption | null;
+  products: EnrichmentProduct[];
+  /** Pour chaque clé d'axe du quiz : les autres quiz du catalogue qui utilisent la même clé. */
+  sharedAxes: Record<string, string[]>;
+  limits: ProductEnrichmentLimits;
+}
+
+export interface ProductEnrichmentEstimateInput {
+  quizId: string;
+  axisKeys: string[];
+  productIds: string[];
+}
+
+export interface AxisEstimate {
+  axis: string;
+  status: AxisEstimateStatus;
+  /** Entre 0 et 1 si `estimated`, null sinon. */
+  value: number | null;
+  confidence: AxisEstimateConfidence | null;
+  rationale: string;
+  /** Extraits présents dans la fiche produit transmise (les autres sont écartés). */
+  evidence: string[];
+}
+
+export interface ProductEnrichmentResult {
+  productId: string;
+  /** Valeurs en base au moment de l'estimation, pour les axes demandés. */
+  currentValues: Record<string, number | null>;
+  estimates: AxisEstimate[];
+}
+
+export interface ProductEnrichmentEstimateResponse {
+  results: ProductEnrichmentResult[];
+  warnings: string[];
+  generation: { model: string; durationMs: number; attempts: number; aiProducts: number };
+  remaining: number;
+}
+
+export interface ProductEnrichmentUpdate {
+  productId: string;
+  /** Valeurs validées par le commerçant (0–1) pour les axes du quiz. */
+  values: Record<string, number>;
+  /** Valeur vue par le commerçant pour chaque axe de `values` (null = absente) ; tout écart est refusé. */
+  expected: Record<string, number | null>;
+  /** Axes dont le remplacement d'une valeur existante est explicitement confirmé. */
+  overwrite: string[];
+}
+
+export interface ProductEnrichmentApplyInput {
+  quizId: string;
+  updates: ProductEnrichmentUpdate[];
+}
+
+export interface ProductEnrichmentApplyResponse {
+  updatedProducts: number;
+  added: number;
+  replaced: number;
+}
+
+// ─────────────────────────────────────────────
 // Quiz — Questions & Answers
 // ─────────────────────────────────────────────
 export type QuestionType = "single" | "multi" | "scale";

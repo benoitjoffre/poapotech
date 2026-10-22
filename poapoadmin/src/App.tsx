@@ -15,6 +15,7 @@ import CampaignsPage from "./pages/CampaignsPage";
 import CampaignFormPage from "./pages/CampaignFormPage";
 import CampaignDetailPage from "./pages/CampaignDetailPage";
 import CampaignQuizGeneratorPage from "./pages/CampaignQuizGeneratorPage";
+import ProductEnrichmentPage from "./pages/ProductEnrichmentPage";
 import Icon from "./components/Icon";
 import { QuizProvider, useQuiz } from "./contexts/QuizContext";
 
@@ -46,6 +47,7 @@ function AppLayout() {
         <nav className="admin-side-nav" aria-label="Navigation principale">
           <NavLink className={link} to="/catalogs"><Icon name="box" />Catalogues</NavLink>
           <NavLink className={link} to="/catalog" reloadDocument><Icon name="box" />Produits</NavLink>
+          <NavLink className={link} to="/enrichment"><Icon name="sparkles" />Enrichissement IA</NavLink>
           <NavLink className={link} to="/quizzes"><Icon name="quiz" />Quiz</NavLink>
           <NavLink className={link} to={`/quiz-builder${quizQuery}`}><Icon name="builder" />Quiz Builder</NavLink>
           <NavLink className={link} to="/campaigns"><Icon name="megaphone" />Campagnes</NavLink>
@@ -86,6 +88,7 @@ function App() {
             <Route path="/catalog/new" element={<ProductFormPage />} />
             <Route path="/catalog/import" element={<ImportPage />} />
             <Route path="/catalog/:id/edit" element={<ProductFormPage />} />
+            <Route path="/enrichment" element={<ProductEnrichmentPage />} />
             <Route path="/quiz-builder" element={<QuizBuilderPage />} />
             <Route path="/quizzes" element={<QuizzesPage />} />
             <Route path="/quizzes/new" element={<QuizFormPage />} />

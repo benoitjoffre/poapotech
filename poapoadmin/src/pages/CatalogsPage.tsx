@@ -141,6 +141,7 @@ export default function CatalogsPage() {
                           <Link className="btn-ghost btn-sm" to={withCatalog("/catalog/import", catalog.id)}>Importer</Link>
                           <Link className="btn-ghost btn-sm" to={withCatalog("/catalog/new", catalog.id)}>Produit</Link>
                           <Link className="btn-ghost btn-sm" to={withCatalog("/quizzes/new", catalog.id)}>Nouveau quiz</Link>
+                          <Link className="btn-ghost btn-sm" to={withCatalog("/enrichment", catalog.id)}>Enrichir par IA</Link>
                           <button type="button" className="btn-ghost btn-sm" onClick={() => startEdit(catalog)}>Renommer</button>
                           <button
                             type="button"

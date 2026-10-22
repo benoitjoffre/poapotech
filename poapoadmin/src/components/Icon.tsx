@@ -17,6 +17,7 @@ const PATHS = {
   sort: "M7 4v16M3 8l4-4 4 4M17 20V4M13 16l4 4 4-4",
   calendar: "M4 6h16v14H4zM4 10h16M8 3v4M16 3v4",
   pause: "M8 5v14M16 5v14",
+  sparkles: "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3zM19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15z",
 } as const;
 
 export type IconName = keyof typeof PATHS;

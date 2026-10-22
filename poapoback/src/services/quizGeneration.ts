@@ -547,24 +547,52 @@ export function parseDraft(raw: unknown, scope: GenerationScope): { draft: QuizD
 
 // ─── Limitation des appels IA ─────────────────────────────────────────────────
 
+export interface LimiterMessages {
+  busy: string;
+  quota: (maxPerHour: number, remaining: number) => string;
+}
+
+const GENERATION_MESSAGES: LimiterMessages = {
+  busy: "Une génération est déjà en cours pour votre compte",
+  quota: (max) => `Limite de ${max} générations par heure atteinte, réessayez plus tard`,
+};
+
 /**
- * Une génération à la fois par tenant et un quota glissant par heure.
+ * Un appel IA à la fois par tenant et un quota glissant par heure, exprimé en unités
+ * (une génération de quiz, ou un produit estimé).
  * État en mémoire : propre à une instance du backend.
  */
 export class GenerationLimiter {
   private inFlight = new Set<string>();
   private history = new Map<string, number[]>();
 
-  constructor(private maxPerHour: number, private now: () => number = Date.now) {}
+  constructor(
+    private maxPerHour: number,
+    private now: () => number = Date.now,
+    private messages: LimiterMessages = GENERATION_MESSAGES,
+  ) {}
 
-  acquire(tenantId: string): () => void {
-    if (this.inFlight.has(tenantId)) throw new QuizError(409, "Une génération est déjà en cours pour votre compte");
+  private recent(tenantId: string): number[] {
     const since = this.now() - 60 * 60 * 1000;
-    const recent = (this.history.get(tenantId) ?? []).filter((time) => time > since);
-    if (recent.length >= this.maxPerHour) {
-      throw new QuizError(429, `Limite de ${this.maxPerHour} générations par heure atteinte, réessayez plus tard`);
+    return (this.history.get(tenantId) ?? []).filter((time) => time > since);
+  }
+
+  get limit() {
+    return this.maxPerHour;
+  }
+
+  remaining(tenantId: string): number {
+    return Math.max(0, this.maxPerHour - this.recent(tenantId).length);
+  }
+
+  acquire(tenantId: string, units = 1): () => void {
+    if (this.inFlight.has(tenantId)) throw new QuizError(409, this.messages.busy);
+    const recent = this.recent(tenantId);
+    if (recent.length + units > this.maxPerHour) {
+      throw new QuizError(429, this.messages.quota(this.maxPerHour, Math.max(0, this.maxPerHour - recent.length)));
     }
-    recent.push(this.now());
+    const time = this.now();
+    for (let i = 0; i < units; i++) recent.push(time);
     this.history.set(tenantId, recent);
     this.inFlight.add(tenantId);
     let released = false;

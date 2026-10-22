@@ -2353,3 +2353,79 @@ body {
   border: 1px solid #e5e7eb;
   font-size: 14px;
 }
+
+/* ─── Enrichissement IA des produits ─────────────────────────────────────── */
+.enrichment-table-wrap {
+  max-height: 420px;
+  overflow: auto;
+}
+.enrichment-table td .badge {
+  margin-left: 6px;
+}
+.enrichment-badge-nodata {
+  background: #fffbeb;
+  color: #92400e;
+}
+.enrichment-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+.enrichment-progress progress {
+  flex: 1;
+  max-width: 320px;
+}
+.enrichment-success {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: #ecfdf5;
+  border: 1px solid #6ee7b7;
+  color: #065f46;
+  font-size: 14px;
+}
+.enrichment-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.4fr);
+  gap: 16px;
+  padding: 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.enrichment-row.accepted {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+.enrichment-row-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+.enrichment-row-detail p {
+  margin: 0;
+}
+.enrichment-confidence {
+  margin-left: 8px;
+}
+.enrichment-confidence--high {
+  background: #ecfdf5;
+  color: #065f46;
+}
+.enrichment-confidence--medium {
+  background: #eff6ff;
+  color: #1e40af;
+}
+.enrichment-confidence--low {
+  background: #fffbeb;
+  color: #92400e;
+}
+.enrichment-confidence--none {
+  background: #f3f4f6;
+  color: var(--text-muted);
+}
+@media (max-width: 760px) {
+  .enrichment-row {
+    grid-template-columns: 1fr;
+  }
+}

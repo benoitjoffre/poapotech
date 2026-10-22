@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import type { Product } from "@poapo/types";
 import { apiFetch } from "../lib/api";
+import AxisSlider from "../components/AxisSlider";
 import { useQuiz } from "../contexts/QuizContext";
 import { catalogAxes, CatalogSelect, storedCatalogId, useCatalogs } from "../lib/catalogs";
 import {
@@ -216,36 +217,15 @@ export default function ProductFormPage() {
                 sur ces mêmes axes.
               </p>
               <div className="form-grid">
-                {axes.map((axis) => {
-                  const raw = form.axisValues[axis.key] ?? "";
-                  return (
-                    <div className="field-group" key={axis.key}>
-                      <label className="field-label" htmlFor={`axis-${axis.key}`}>
-                        {axis.label}
-                        <span className="field-hint"> {raw === "" ? "non renseigné" : `${Math.round(parseFloat(raw) * 100)}%`}</span>
-                      </label>
-                      <input
-                        id={`axis-${axis.key}`}
-                        className="field-input"
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.01"
-                        value={raw === "" ? 0.5 : raw}
-                        onChange={(e) => setAxisValue(axis.key, e.target.value)}
-                      />
-                      <div className="axis-scale">
-                        <span className="field-hint">{axis.lowLabel || "Faible"}</span>
-                        {raw !== "" && (
-                          <button type="button" className="btn-link" onClick={() => setAxisValue(axis.key, "")}>
-                            Effacer
-                          </button>
-                        )}
-                        <span className="field-hint">{axis.highLabel || "Élevé"}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+                {axes.map((axis) => (
+                  <AxisSlider
+                    key={axis.key}
+                    id={`axis-${axis.key}`}
+                    axis={axis}
+                    value={form.axisValues[axis.key] ?? ""}
+                    onChange={(value) => setAxisValue(axis.key, value)}
+                  />
+                ))}
               </div>
             </>
           )}

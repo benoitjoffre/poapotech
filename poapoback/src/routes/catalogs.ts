@@ -5,10 +5,12 @@ import { prisma } from "../lib/prisma";
 import { verifyToken, AuthRequest } from "../middleware/auth";
 import { ensureDefaultCatalog, parseCatalogInput, resolveAccountTenantId, serializeCatalog } from "../services/catalogs";
 import { asyncRoute, QuizError } from "../services/quizzes";
+import productEnrichmentRouter from "./productEnrichment";
 
 // Gestion des catalogues d'un tenant : chaque produit et chaque quiz appartient à un seul catalogue.
 const router = Router();
 router.use(verifyToken);
+router.use("/:catalogId/enrichment", productEnrichmentRouter);
 
 async function tenantOf(req: AuthRequest): Promise<string> {
   const tenantId = await resolveAccountTenantId(req);

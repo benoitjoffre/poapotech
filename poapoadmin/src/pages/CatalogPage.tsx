@@ -107,6 +107,9 @@ export default function CatalogPage() {
         <Link to={catalogLink("/catalog/import")} className="btn-ghost">
           Importer CSV
         </Link>
+        <Link to={catalogLink("/enrichment")} className="btn-ghost">
+          Enrichir par IA
+        </Link>
       </div>
 
       <div className="toolbar">

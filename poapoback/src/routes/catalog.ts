@@ -5,6 +5,7 @@ import type { ProductCreateInput, ProductUpdateInput } from "@poapo/types";
 import { invalidAxisValue, isProductAttributes } from "../services/axes";
 import { catalogAxes, resolveAccountTenantId, resolveCatalog } from "../services/catalogs";
 import { asyncRoute, QuizError } from "../services/quizzes";
+import { triggerEmbedding } from "../services/embeddings";
 
 const router = Router();
 router.use(verifyToken);
@@ -199,34 +200,3 @@ router.delete("/products/:id", asyncRoute(async (req: AuthRequest, res: Response
 }));
 
 export default router;
-
-// ─── AI embedding (fire & forget) ────────────────────────────────────────────
-async function triggerEmbedding(productId: string, tenantId: string): Promise<void> {
-  const aiUrl = process.env.AI_SERVICE_URL;
-  if (!aiUrl) return;
-
-  const product = await prisma.product.findUnique({ where: { id: productId } });
-  if (!product) return;
-
-  const response = await fetch(`${aiUrl}/embed/product`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      id: product.id,
-      name: product.name,
-      brand: product.brand,
-      description: product.description,
-      tags: product.tags,
-      attributes: product.attributes,
-      axes: await catalogAxes(tenantId, product.catalogId),
-    }),
-  });
-
-  if (response.ok) {
-    const { embedding } = (await response.json()) as { embedding: number[] };
-    await prisma.product.update({
-      where: { id: productId },
-      data: { embedding },
-    });
-  }
-}

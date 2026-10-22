@@ -310,7 +310,7 @@ Depuis la racine, sans connexion à une base et sans appel à un modèle externe
 
 ```bash
 npm run test:back
-cd poapoai && .venv/bin/python -m unittest test_recommend test_generate -v
+cd poapoai && .venv/bin/python -m unittest test_recommend test_generate test_enrich -v
 ```
 
 Les tests API exécutent les routes HTTP avec une persistance simulée. Les tests IA
@@ -490,6 +490,34 @@ Génération de quiz par IA (Campaign Studio, sprint 2) :
 - Variables du service IA : `OPENAI_API_KEY`, `GENERATION_MODEL` (défaut
   `gpt-4o-mini`), `GENERATION_TIMEOUT_S` (défaut 30). Le backend utilise
   `AI_SERVICE_URL`.
+
+Enrichissement des axes produits par IA (page admin « Enrichissement IA ») :
+
+```
+GET  /api/catalogs/:catalogId/enrichment/context?quizId=   Axes du quiz + produits du catalogue
+POST /api/catalogs/:catalogId/enrichment/estimate          Estimer un lot (≤ 10 produits)
+POST /api/catalogs/:catalogId/enrichment/apply             Enregistrer les valeurs validées
+POST /enrich/axes                                          (service IA, interne)
+```
+
+- Le quiz doit appartenir au catalogue et au tenant authentifié ; les axes estimés
+  sont uniquement ceux du quiz choisi. Le moteur de scoring n'est pas modifié.
+- L'IA reçoit des références locales (`p1`…), la description, les tags et les
+  attributs non-axes du produit, jamais les valeurs d'axes existantes ni les
+  identifiants. Chaque estimation contient une valeur 0–1, une justification, un
+  niveau de confiance (`low`/`medium`/`high`) et des extraits ; un axe peut être
+  marqué `insufficient_data`. Les extraits absents du texte source sont écartés et
+  la confiance est alors plafonnée à `low`. Les produits sans aucune donnée sont
+  marqués « données insuffisantes » sans appel IA.
+- Les valeurs sont écrites dans `Product.attributes.<axe>` seulement après
+  validation. Une valeur existante n'est remplacée qu'avec `overwrite: true`
+  (case « Remplacer la valeur existante ») ; si le produit a changé entre-temps,
+  l'API répond 409. Les embeddings sont recalculés après enregistrement.
+- Limitation : une estimation à la fois par tenant et
+  `ENRICHMENT_HOURLY_PRODUCT_LIMIT` produits envoyés à l'IA par heure (200 par
+  défaut, compteur en mémoire par instance, non remboursé en cas d'erreur IA).
+- Variables du service IA : `ENRICH_MODEL` (défaut `GENERATION_MODEL`),
+  `ENRICH_TIMEOUT_S` (défaut 30).
 
 Le paramètre `quizId` est facultatif pour la rétrocompatibilité : son absence
 cible le quiz par défaut. Toutes les mutations du builder acceptent `?quizId=`,
