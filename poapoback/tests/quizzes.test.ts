@@ -11,12 +11,13 @@ import embedRouter from "../src/routes/embed";
 import { quizErrorHandler } from "../src/services/quizzes";
 
 const defaultQuiz = {
-  id: "default_tenant-a", tenantId: "tenant-a", name: "Historique", industry: "perfume",
-  quizTitle: "Mon parfum", ctaText: "Acheter", active: true, isDefault: true, useAllProducts: true,
+  id: "default_tenant-a", tenantId: "tenant-a", name: "Historique", industry: "",
+  axes: [] as unknown[], quizTitle: "Mon quiz", ctaText: "Acheter", active: true, isDefault: true, useAllProducts: true,
   products: [], createdAt: new Date(), updatedAt: new Date(),
 };
 const coffeeQuiz = {
-  ...defaultQuiz, id: "coffee", name: "Mon café", industry: "coffee", quizTitle: "Mon café",
+  ...defaultQuiz, id: "coffee", name: "Mon café", industry: "Café", quizTitle: "Mon café",
+  axes: [{ key: "body", label: "Corps", lowLabel: "Léger", highLabel: "Corsé" }] as unknown[],
   isDefault: false, useAllProducts: false, products: [{ productId: "coffee-product" }],
 };
 let server: Server;
@@ -40,7 +41,7 @@ before(async () => {
   process.env.JWT_SECRET = "multi-quiz-tests-only";
   process.env.AI_SERVICE_URL = "http://ai.test";
   stub(prisma.tenant, "findUnique", (async () => ({
-    id: "tenant-a", industry: "perfume", active: true, quizTitle: "Mon parfum", ctaText: "Acheter",
+    id: "tenant-a", industry: "", active: true, quizTitle: "Mon quiz", ctaText: "Acheter",
   })) as typeof prisma.tenant.findUnique);
   stub(prisma.quiz, "upsert", (async () => defaultQuiz) as typeof prisma.quiz.upsert);
   stub(prisma.quiz, "findFirst", (async ({ where }: { where: { id: string; tenantId: string } }) =>
@@ -65,7 +66,7 @@ before(async () => {
   stub(prisma.question, "findFirst", (async () => null) as typeof prisma.question.findFirst);
   stub(prisma.answer, "findFirst", (async () => null) as typeof prisma.answer.findFirst);
   stub(prisma.answer, "findMany", (async () => [{
-    id: "answer-coffee", questionId: "question-coffee", impacts: { body: 0.2 },
+    id: "answer-coffee", questionId: "question-coffee", impacts: { body: 0.2, removedAxis: 0.4 },
     question: { type: "single" },
   }]) as typeof prisma.answer.findMany);
   stub(prisma.product, "findMany", (async ({ where }: { where: { id: { in: string[] } } }) =>
@@ -120,12 +121,12 @@ after(async () => {
   await prisma.$disconnect();
 });
 
-async function request(path: string, method = "GET", body?: unknown) {
+async function request(path: string, method = "GET", body?: unknown, token: Record<string, unknown> = { tenantId: "tenant-a", email: "test@example.test" }) {
   return originalFetch(`${base}${path}`, {
     method,
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${jwt.sign({ tenantId: "tenant-a", email: "test@example.test" }, process.env.JWT_SECRET!)}`,
+      Authorization: `Bearer ${jwt.sign(token, process.env.JWT_SECRET!)}`,
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
@@ -140,7 +141,9 @@ test("legacy clientId resolves the historical default quiz", async () => {
 test("explicit quiz controls configuration and question scope", async () => {
   const res = await request("/api/embed/config?clientId=tenant-a&quizId=coffee");
   assert.equal(res.status, 200);
-  assert.equal((await res.json()).industry, "coffee");
+  const config = await res.json();
+  assert.equal(config.industry, "Café");
+  assert.deepEqual(config.axes, coffeeQuiz.axes);
   assert.equal((await request("/api/quiz/questions?clientId=tenant-a&quizId=coffee")).status, 200);
   assert.deepEqual(lastQuestionWhere, { tenantId: "tenant-a", quizId: "coffee", active: true });
 });
@@ -189,7 +192,7 @@ test("submit validates answer/question association and duplicate answers", async
   }
 });
 
-test("coffee recommendation passes selected product IDs to AI", async () => {
+test("recommendation sends the quiz axes, selected products and an axis-only profile to AI", async () => {
   const res = await request("/api/quiz/submit", "POST", {
     clientId: "tenant-a", quizId: "coffee",
     answers: [{ questionId: "question-coffee", answerId: "answer-coffee" }],
@@ -197,23 +200,36 @@ test("coffee recommendation passes selected product IDs to AI", async () => {
   assert.equal(res.status, 200);
   assert.equal((await res.json()).quizId, "coffee");
   assert.deepEqual(aiPayload.productIds, ["coffee-product"]);
-  assert.equal(aiPayload.industry, "coffee");
+  assert.equal(aiPayload.industry, "Café");
+  assert.deepEqual(aiPayload.axes, coffeeQuiz.axes);
+  assert.deepEqual(aiPayload.profile, { body: 0.7 });
 });
 
-test("quiz settings reject invalid sectors and foreign product selections", async () => {
-  assert.equal((await request("/api/quizzes", "POST", { name: "X", industry: "invalid" })).status, 400);
+test("quiz settings reject invalid activities, axes and foreign product selections", async () => {
+  assert.equal((await request("/api/quizzes", "POST", { name: "X", industry: 42 })).status, 400);
+  for (const axes of [
+    [{ key: "1bad", label: "Mauvaise clé" }],
+    [{ key: "body", label: "Corps" }, { key: "body", label: "Doublon" }],
+    [{ key: "body", label: " " }],
+    "body",
+  ]) {
+    assert.equal((await request("/api/quizzes", "POST", { name: "X", axes })).status, 400);
+  }
   assert.equal((await request("/api/quizzes", "POST", {
-    name: "X", industry: "coffee", useAllProducts: false, productIds: ["foreign-product"],
+    name: "X", industry: "Café", useAllProducts: false, productIds: ["foreign-product"],
   })).status, 400);
 });
 
 test("create, read and disable a quiz without modifying the default", async () => {
   const created = await request("/api/quizzes", "POST", {
-    name: "Campagne café", industry: "coffee", useAllProducts: false, productIds: ["coffee-product"],
+    name: "Campagne café", industry: " Café ", useAllProducts: false, productIds: ["coffee-product"],
+    axes: [{ key: "acidity", label: " Acidité ", highLabel: "Vive" }],
   });
   assert.equal(created.status, 201);
   const data = await created.json();
-  assert.equal(data.quizTitle, "Trouve ton café idéal");
+  assert.equal(data.quizTitle, "Trouve ton produit idéal");
+  assert.equal(data.industry, "Café");
+  assert.deepEqual(data.axes, [{ key: "acidity", label: "Acidité", lowLabel: null, highLabel: "Vive" }]);
   assert.equal(data.useAllProducts, false);
   assert.deepEqual(data.products.create, [{ productId: "coffee-product" }]);
   assert.equal((await request("/api/quizzes/coffee")).status, 200);
@@ -221,6 +237,14 @@ test("create, read and disable a quiz without modifying the default", async () =
   assert.equal(updated.status, 200);
   assert.equal((await updated.json()).active, false);
   assert.equal(defaultQuiz.active, true);
+});
+
+test("super-admin creates quizzes for the tenant sharing its email", async () => {
+  const created = await request("/api/quizzes", "POST", { name: "Campagne admin" }, {
+    tenantId: "super-admin", email: "test@example.test", isSuperAdmin: true,
+  });
+  assert.equal(created.status, 201);
+  assert.equal((await created.json()).tenantId, "tenant-a");
 });
 
 test("disabled quiz cannot be opened or tracked", async () => {

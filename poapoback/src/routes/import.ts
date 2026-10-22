@@ -4,6 +4,7 @@ import csvParser from "csv-parser";
 import { Readable } from "stream";
 import { verifyToken, AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
+import { tenantAxes } from "../services/axes";
 
 const router = Router();
 
@@ -44,12 +45,28 @@ function parseCSVBuffer(buffer: Buffer): Promise<{ headers: string[]; rows: Reco
   });
 }
 
-const ARRAY_FIELDS = new Set(["topNotes", "heartNotes", "baseNotes", "tags", "seasons", "occasions", "timeOfDay"]);
-const NUMBER_FIELDS = new Set(["price", "freshness", "intensity", "sweetness"]);
+const ARRAY_FIELDS = new Set(["tags"]);
+const NUMBER_FIELDS = new Set(["price"]);
 const BOOL_FIELDS = new Set(["active", "featured"]);
-const SCORING_ATTRIBUTE_FIELDS = new Set(["roastLevel", "acidity", "body", "sweetness"]);
+const ATTRIBUTE_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
 
-function applyMapping(row: Record<string, string>, mapping: FieldMapping[]): Record<string, unknown> {
+function parseNumber(raw: string): number | null {
+  const normalized = raw.replace(",", ".");
+  if (!/^-?\d+(\.\d+)?$/.test(normalized)) return null;
+  const value = Number(normalized);
+  return Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Convertit une ligne CSV selon le mapping. Les colonnes mappées sur
+ * `attribute.<clé>` alimentent `attributes` ; les clés correspondant à un axe
+ * de recommandation doivent valoir un nombre entre 0 et 1.
+ */
+export function applyMapping(
+  row: Record<string, string>,
+  mapping: FieldMapping[],
+  axisKeys: ReadonlySet<string> = new Set(),
+): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   const attributes: Record<string, unknown> = {};
   let hasAttributes = false;
@@ -64,8 +81,8 @@ function applyMapping(row: Record<string, string>, mapping: FieldMapping[]): Rec
         .map((s) => s.trim())
         .filter(Boolean);
     } else if (NUMBER_FIELDS.has(targetField)) {
-      const n = parseFloat(raw.replace(",", "."));
-      if (!isNaN(n)) result[targetField] = n;
+      const n = parseNumber(raw);
+      if (n !== null) result[targetField] = n;
     } else if (BOOL_FIELDS.has(targetField)) {
       result[targetField] = ["true", "1", "oui", "yes"].includes(raw.toLowerCase());
     } else if (targetField === "attributes") {
@@ -77,24 +94,17 @@ function applyMapping(row: Record<string, string>, mapping: FieldMapping[]): Rec
       hasAttributes = true;
     } else if (targetField.startsWith("attribute.")) {
       const key = targetField.slice("attribute.".length);
-      if (key === "origin") {
-        attributes[key] = raw;
-        hasAttributes = true;
-      } else if (SCORING_ATTRIBUTE_FIELDS.has(key)) {
-        const value = Number(raw.replace(",", "."));
-        if (!Number.isFinite(value) || value < 0 || value > 1) {
-          throw new Error(`L’attribut '${key}' doit être un nombre entre 0 et 1`);
-        }
-        attributes[key] = value;
-        hasAttributes = true;
-      }
+      if (!ATTRIBUTE_KEY_PATTERN.test(key)) throw new Error(`Nom d’attribut invalide : '${key}'`);
+      const value = parseNumber(raw);
+      attributes[key] = value ?? raw;
+      hasAttributes = true;
     } else {
       result[targetField] = raw;
     }
   }
   for (const [key, value] of Object.entries(attributes)) {
-    if (SCORING_ATTRIBUTE_FIELDS.has(key) && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)) {
-      throw new Error(`L’attribut '${key}' doit être un nombre entre 0 et 1`);
+    if (axisKeys.has(key) && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1)) {
+      throw new Error(`L’axe '${key}' doit être un nombre entre 0 et 1`);
     }
   }
   if (hasAttributes) result.attributes = attributes;
@@ -129,7 +139,7 @@ router.post("/parse", verifyToken, upload.single("file"), async (req: AuthReques
         const aiRes = await fetch(`${aiUrl}/map-catalog`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ headers, sampleRows }),
+          body: JSON.stringify({ headers, sampleRows, axes: await tenantAxes(req.tenant!.tenantId) }),
         });
         if (aiRes.ok) {
           const aiData = (await aiRes.json()) as { mappings?: FieldMapping[] };
@@ -186,13 +196,14 @@ router.post("/execute", verifyToken, async (req: AuthRequest, res: Response) => 
 
     tenantId = tenantByEmail.id;
   }
+  const axisKeys = new Set((await tenantAxes(tenantId)).map((axis) => axis.key));
   let created = 0;
   let skipped = 0;
   const errors: string[] = [];
 
   for (const row of rows) {
     try {
-      const data = applyMapping(row, mapping);
+      const data = applyMapping(row, mapping, axisKeys);
       const name = typeof data.name === "string" ? data.name.trim() : "";
       if (!name) {
         skipped++;
@@ -208,27 +219,7 @@ router.post("/execute", verifyToken, async (req: AuthRequest, res: Response) => 
           price: typeof data.price === "number" ? data.price : null,
           imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : null,
           purchaseUrl: typeof data.purchaseUrl === "string" ? data.purchaseUrl : null,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          concentration: (data.concentration as any) ?? null,
-          olfactoryFamily: typeof data.olfactoryFamily === "string" ? data.olfactoryFamily : null,
-          subFamily: typeof data.subFamily === "string" ? data.subFamily : null,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          genderTarget: (data.genderTarget as any) ?? null,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          priceTier: (data.priceTier as any) ?? null,
-          topNotes: Array.isArray(data.topNotes) ? (data.topNotes as string[]) : [],
-          heartNotes: Array.isArray(data.heartNotes) ? (data.heartNotes as string[]) : [],
-          baseNotes: Array.isArray(data.baseNotes) ? (data.baseNotes as string[]) : [],
           tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
-          freshness: typeof data.freshness === "number" ? data.freshness : null,
-          intensity: typeof data.intensity === "number" ? data.intensity : null,
-          sweetness: typeof data.sweetness === "number" ? data.sweetness : null,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          seasons: Array.isArray(data.seasons) ? (data.seasons as any[]) : [],
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          occasions: Array.isArray(data.occasions) ? (data.occasions as any[]) : [],
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          timeOfDay: Array.isArray(data.timeOfDay) ? (data.timeOfDay as any[]) : [],
           attributes:
             typeof data.attributes === "object" && data.attributes !== null && !Array.isArray(data.attributes)
               ? (data.attributes as object)

@@ -3,92 +3,17 @@ import { prisma } from "../lib/prisma";
 import { verifyToken, AuthRequest } from "../middleware/auth";
 import type { QuizSubmitPayload, MetricType } from "@poapo/types";
 import { publicQuizScope, adminQuizScope, getQuiz, asyncRoute } from "../services/quizzes";
+import { parseAxes } from "../services/axes";
+import { localInsightsFromSnapshot, type MetricsSnapshot } from "../services/quizInsights";
 
 const router = Router();
-
-type MetricsSnapshot = {
-  started: number;
-  completed: number;
-  abandoned: number;
-  completionRate: number;
-  ctaClicks: number;
-  ctaRate: number;
-  feedbackPositive: number;
-  feedbackNegative: number;
-  topProducts: { name: string; count: number }[];
-  topDropOffSteps: { step: string; dropOffRate: number; views: number }[];
-};
-
-function localInsightsFromSnapshot(snapshot: MetricsSnapshot) {
-  const insights: { title: string; insight: string; priority: "high" | "medium" | "low"; actions: string[] }[] = [];
-
-  if (snapshot.completionRate < 35) {
-    insights.push({
-      title: "Complétion faible",
-      insight: `Le taux de complétion est de ${snapshot.completionRate}%, ce qui indique un fort abandon en cours de quiz.`,
-      priority: "high",
-      actions: [
-        "Réduire le nombre de questions ou regrouper des étapes",
-        "Raccourcir les intitulés de questions",
-        "Ajouter une estimation de temps plus visible",
-      ],
-    });
-  }
-
-  if (snapshot.ctaRate < 20 && snapshot.completed > 10) {
-    insights.push({
-      title: "Conversion CTA sous-exploitée",
-      insight: `Le CTR post-résultat est de ${snapshot.ctaRate}% malgré ${snapshot.completed} quiz complétés.`,
-      priority: "high",
-      actions: [
-        "Tester un CTA plus orienté bénéfice",
-        "Mettre un visuel produit plus grand dans le résultat",
-        "Ajouter une preuve sociale sous le CTA",
-      ],
-    });
-  }
-
-  if (snapshot.feedbackNegative > snapshot.feedbackPositive) {
-    insights.push({
-      title: "Satisfaction en baisse",
-      insight: `Les feedbacks négatifs (${snapshot.feedbackNegative}) dépassent les positifs (${snapshot.feedbackPositive}).`,
-      priority: "medium",
-      actions: [
-        "Analyser les produits les plus souvent recommandés",
-        "Ajuster les impacts de scoring des réponses",
-        "Tester une variante de quiz plus guidée",
-      ],
-    });
-  }
-
-  if (snapshot.topDropOffSteps.length > 0) {
-    const step = snapshot.topDropOffSteps[0];
-    insights.push({
-      title: "Étape à fort drop-off",
-      insight: `L'étape ${step.step} a un drop-off de ${step.dropOffRate}% sur ${step.views} vues.`,
-      priority: "medium",
-      actions: ["Simplifier les options de cette étape", "Vérifier la lisibilité mobile", "Tester une formulation plus directe"],
-    });
-  }
-
-  if (insights.length === 0) {
-    insights.push({
-      title: "Traction saine",
-      insight: "Les indicateurs clés sont équilibrés, aucune alerte critique détectée.",
-      priority: "low",
-      actions: ["Lancer un A/B test sur le texte CTA", "Suivre l'évolution hebdomadaire des steps", "Créer un segment nouveaux vs récurrents"],
-    });
-  }
-
-  return insights.slice(0, 3);
-}
 
 async function generateOpenAIInsights(snapshot: MetricsSnapshot, industry: string) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return null;
 
   const prompt = [
-    `Tu es analyste CRO senior pour un quiz e-commerce du secteur ${industry}.`,
+    `Tu es analyste CRO senior pour un quiz de recommandation e-commerce${industry ? ` (activité : ${industry})` : ""}.`,
     "Analyse ces métriques et retourne uniquement un JSON valide avec la forme:",
     '{"insights":[{"title":"...","insight":"...","priority":"high|medium|low","actions":["...","..."]}]}',
     "3 insights maximum, concis, orientés action.",
@@ -169,7 +94,7 @@ router.get("/questions", publicQuizScope, asyncRoute(async (req: Request, res: R
 // POST /api/quiz/submit
 router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
   const body = req.body as QuizSubmitPayload;
-  const { clientId, gender, mood, answers, decisionTime, abVariant } = body as QuizSubmitPayload & { abVariant?: string };
+  const { clientId, answers, decisionTime, abVariant } = body as QuizSubmitPayload & { abVariant?: string };
 
   if (!clientId) {
     res.status(400).json({ error: "clientId manquant" });
@@ -196,7 +121,6 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
       return;
     }
 
-    // Les impacts sont des axes configurables ; les trois axes historiques restent le profil parfum par défaut.
     const answerDocs = await prisma.answer.findMany({
       where: { id: { in: answers.map((a) => a.answerId) }, active: true, question: { tenantId: clientId, quizId: quiz.id, active: true } },
       include: { question: { select: { type: true } } },
@@ -208,16 +132,15 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
       return;
     }
 
-    const profile: Record<string, number> = {};
+    // Chaque axe du quiz part du milieu (0.5) puis est ajusté par les impacts des réponses.
+    const axes = parseAxes(quiz.axes);
+    const profile: Record<string, number> = Object.fromEntries(axes.map((axis) => [axis.key, 0.5]));
     for (const ans of answerDocs) {
       const impacts = ans.impacts as Record<string, unknown>;
       for (const [axis, impact] of Object.entries(impacts)) {
-        if (typeof impact !== "number" || !Number.isFinite(impact)) continue;
-        profile[axis] = Math.max(0, Math.min(1, (profile[axis] ?? 0.5) + impact));
+        if (!(axis in profile) || typeof impact !== "number" || !Number.isFinite(impact)) continue;
+        profile[axis] = Math.max(0, Math.min(1, profile[axis] + impact));
       }
-    }
-    if (quiz.industry === "perfume") {
-      for (const axis of ["freshness", "intensity", "sweetness"]) profile[axis] ??= 0.5;
     }
 
     // Appel au service IA pour la recommandation
@@ -228,9 +151,8 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
         tenantId: clientId,
         profile,
         industry: quiz.industry,
+        axes,
         productIds,
-        gender: gender ?? null,
-        mood: mood ?? null,
       }),
       signal: AbortSignal.timeout(10_000),
     });
@@ -257,19 +179,9 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
         brand: true,
         description: true,
         price: true,
-        priceTier: true,
         imageUrl: true,
         purchaseUrl: true,
-        concentration: true,
-        freshness: true,
-        intensity: true,
-        sweetness: true,
-        olfactoryFamily: true,
         tags: true,
-        topNotes: true,
-        heartNotes: true,
-        baseNotes: true,
-        genderTarget: true,
         attributes: true,
       },
     });
@@ -283,8 +195,6 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
       data: {
         tenantId: clientId,
         quizId: quiz.id,
-        gender: gender ?? null,
-        mood: mood ?? null,
         answers: answers as unknown as object,
         resultProductId: productId,
         decisionTime: decisionTime ?? null,
@@ -375,7 +285,7 @@ router.get("/metrics", verifyToken, adminQuizScope, asyncRoute(async (req: AuthR
     return;
   }
 
-  const [totalStarted, totalCompleted, totalAbandoned, totalBuyClicks, feedbackStats, topProducts, genderStats, stepViews, stepAnswers, abEvents] =
+  const [totalStarted, totalCompleted, totalAbandoned, totalBuyClicks, feedbackStats, topProducts, stepViews, stepAnswers, abEvents] =
     await Promise.all([
       prisma.metric.count({ where: { tenantId, quizId, type: "quiz_start", createdAt: { gte: since } } }),
       prisma.metric.count({ where: { tenantId, quizId, type: "quiz_complete", createdAt: { gte: since } } }),
@@ -392,11 +302,6 @@ router.get("/metrics", verifyToken, adminQuizScope, asyncRoute(async (req: AuthR
         _count: true,
         orderBy: { _count: { resultProductId: "desc" } },
         take: 5,
-      }),
-      prisma.quizSession.groupBy({
-        by: ["gender"],
-        where: { tenantId, quizId, createdAt: { gte: since } },
-        _count: true,
       }),
       prisma.metric.findMany({
         where: { tenantId, quizId, type: "step_view", createdAt: { gte: since } },
@@ -416,7 +321,6 @@ router.get("/metrics", verifyToken, adminQuizScope, asyncRoute(async (req: AuthR
 
   type FeedbackRow = { feedback: string | null; _count: number };
   type TopProductRow = { resultProductId: string | null; _count: number };
-  type GenderRow = { gender: string | null; _count: number };
 
   const thumbsUp = (feedbackStats as FeedbackRow[]).find((f) => f.feedback === "positive")?._count ?? 0;
   const thumbsDown = (feedbackStats as FeedbackRow[]).find((f) => f.feedback === "negative")?._count ?? 0;
@@ -502,7 +406,6 @@ router.get("/metrics", verifyToken, adminQuizScope, asyncRoute(async (req: AuthR
       product: productMap[p.resultProductId ?? ""] ?? { id: p.resultProductId, name: "Inconnu" },
       count: p._count,
     })),
-    genders: (genderStats as GenderRow[]).map((g) => ({ gender: g.gender ?? "unknown", count: g._count })),
   });
 }));
 

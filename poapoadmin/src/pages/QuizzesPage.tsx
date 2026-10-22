@@ -16,12 +16,13 @@ export default function QuizzesPage() {
       {error && <div className="form-error">{error}</div>}
       <div className="step-table-wrap">
         <table className="table">
-          <thead><tr><th>Quiz</th><th>Secteur</th><th>État</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Quiz</th><th>Activité</th><th>Axes</th><th>État</th><th>Actions</th></tr></thead>
           <tbody>
             {quizzes.map((quiz) => (
               <tr key={quiz.id}>
                 <td>{quiz.name}{quiz.isDefault ? " (par défaut)" : ""}</td>
-                <td>{({ perfume: "Parfum", coffee: "Café", fashion: "Mode", food: "Alimentaire", custom: "Autre" })[quiz.industry]}</td>
+                <td>{quiz.industry || "—"}</td>
+                <td>{quiz.axes.length > 0 ? quiz.axes.map((axis) => axis.label).join(", ") : "—"}</td>
                 <td>{quiz.active ? "Actif" : "Désactivé"}</td>
                 <td>
                   <Link className="btn-ghost" to={`/quizzes/${quiz.id}`}>Configurer / intégrer</Link>

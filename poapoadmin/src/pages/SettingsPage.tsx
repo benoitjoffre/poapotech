@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
-import type { ProductIndustry, TenantBranding } from "@poapo/types";
+import type { TenantBranding } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 
 interface BrandingForm {
   name: string;
-  industry: ProductIndustry;
+  industry: string;
   primaryColor: string;
   logoUrl: string;
   quizTitle: string;
@@ -13,28 +13,17 @@ interface BrandingForm {
   embedDomain: string;
 }
 
-function industryCopy(industry: ProductIndustry) {
-  switch (industry) {
-    case "coffee":
-      return { quizTitle: "Trouve ton café idéal", ctaText: "Découvrir ma sélection", widgetLabel: "Trouve ton café" };
-    case "fashion":
-      return { quizTitle: "Trouve ton article de mode idéal", ctaText: "Découvrir ma sélection", widgetLabel: "Trouve ton style" };
-    case "food":
-      return { quizTitle: "Trouve ton produit alimentaire idéal", ctaText: "Découvrir ma sélection", widgetLabel: "Trouve ton produit" };
-    case "custom":
-      return { quizTitle: "Trouve ton produit idéal", ctaText: "Découvrir ma sélection", widgetLabel: "Trouve ton produit" };
-    default:
-      return { quizTitle: "Trouve ton parfum idéal", ctaText: "Voir ce parfum", widgetLabel: "Trouve ton parfum" };
-  }
-}
+const DEFAULT_QUIZ_TITLE = "Trouve ton produit idéal";
+const DEFAULT_CTA_TEXT = "Découvrir ma sélection";
+const WIDGET_LABEL = "Trouve ton produit";
 
 const EMPTY: BrandingForm = {
   name: "",
-  industry: "perfume",
+  industry: "",
   primaryColor: "#6c47ff",
   logoUrl: "",
-  quizTitle: "Trouve ton parfum idéal",
-  ctaText: "Voir ce parfum",
+  quizTitle: DEFAULT_QUIZ_TITLE,
+  ctaText: DEFAULT_CTA_TEXT,
   embedDomain: "",
 };
 
@@ -60,18 +49,13 @@ export default function SettingsPage() {
     apiFetch<BrandingForm & { id: string; tenantId: string }>("/api/auth/me")
       .then((data) => {
         setTenantId(data.tenantId ?? data.id ?? "");
-        const defaults = industryCopy(data.industry ?? "perfume");
         setForm({
           name: data.name ?? "",
-          industry: data.industry ?? "perfume",
+          industry: data.industry ?? "",
           primaryColor: data.primaryColor ?? "#6c47ff",
           logoUrl: data.logoUrl ?? "",
-          quizTitle:
-            !data.quizTitle || data.quizTitle === "Trouve ton parfum idéal" ? defaults.quizTitle : data.quizTitle,
-          ctaText:
-            !data.ctaText || data.ctaText === "Voir ce parfum" || data.ctaText === "Commencer le quiz"
-              ? defaults.ctaText
-              : data.ctaText,
+          quizTitle: data.quizTitle || DEFAULT_QUIZ_TITLE,
+          ctaText: data.ctaText || DEFAULT_CTA_TEXT,
           embedDomain: data.embedDomain ?? "",
         });
       })
@@ -140,12 +124,11 @@ export default function SettingsPage() {
   };
 
   const clientId = tenantId || user?.tenantId || "";
-  const copy = industryCopy(form.industry);
   const embedSnippet = `<script
   src="${widgetBaseUrl}/poapo-widget.js"
   data-client-id="${clientId}"
   data-url="${widgetBaseUrl}"
-  data-label="${copy.widgetLabel}"
+  data-label="${WIDGET_LABEL}"
   data-color="${form.primaryColor || "#6c47ff"}"
   async
 ></script>`;
@@ -169,35 +152,20 @@ export default function SettingsPage() {
               <label className="field-label" htmlFor="name">
                 Nom de votre marque
               </label>
-              <input id="name" className="field-input" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Ma Parfumerie" />
+              <input id="name" className="field-input" value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="Ma Boutique" />
             </div>
             <div className="field-group">
               <label className="field-label" htmlFor="industry">
-                Secteur d’activité
+                Activité
               </label>
-              <select
+              <input
                 id="industry"
-                className="field-select"
+                className="field-input"
+                maxLength={80}
                 value={form.industry}
-                onChange={(e) => {
-                  const nextIndustry = e.target.value as ProductIndustry;
-                  const nextCopy = industryCopy(nextIndustry);
-                  set("industry", nextIndustry);
-                  const previousCopy = industryCopy(form.industry);
-                  if (form.quizTitle === previousCopy.quizTitle) {
-                    set("quizTitle", nextCopy.quizTitle);
-                  }
-                  if (form.ctaText === previousCopy.ctaText) {
-                    set("ctaText", nextCopy.ctaText);
-                  }
-                }}
-              >
-                <option value="perfume">Parfum</option>
-                <option value="coffee">Café</option>
-                <option value="fashion">Mode</option>
-                <option value="food">Alimentaire</option>
-                <option value="custom">Autre secteur</option>
-              </select>
+                onChange={(e) => set("industry", e.target.value)}
+                placeholder="ex. Café de spécialité, Cosmétique, Vin…"
+              />
             </div>
             <div className="field-group">
               <label className="field-label" htmlFor="embedDomain">

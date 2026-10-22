@@ -87,13 +87,10 @@
   var fab = document.createElement("button");
   fab.id = "poapo-fab";
   fab.setAttribute("aria-label", "Ouvrir le quiz Poapo");
-  // Icône flacon de parfum
   fab.innerHTML = [
     '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">',
-    '<rect x="7" y="8" width="10" height="13" rx="2"/>',
-    '<path d="M9 8V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/>',
-    '<line x1="10" y1="4" x2="8" y2="2"/>',
-    '<circle cx="12" cy="14" r="2" fill="currentColor" stroke="none" opacity=".5"/>',
+    '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/>',
+    '<path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
     "</svg>",
     "<span>" + label + "</span>",
   ].join("");

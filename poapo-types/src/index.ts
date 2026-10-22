@@ -17,7 +17,7 @@ export interface Tenant {
 
 export interface TenantBranding {
   name?: string;
-  industry?: ProductIndustry;
+  industry?: string;
   primaryColor?: string;
   logoUrl?: string;
   quizTitle?: string;
@@ -28,7 +28,8 @@ export interface TenantBranding {
 export interface EmbedConfig {
   tenantId: string;
   quizId: string;
-  industry: ProductIndustry;
+  industry: string;
+  axes: QuizAxis[];
   primaryColor: string;
   logoUrl: string | null;
   quizTitle: string;
@@ -36,11 +37,24 @@ export interface EmbedConfig {
   active: boolean;
 }
 
+/**
+ * Axe numérique de recommandation défini par quiz. Les valeurs vont de 0 à 1 :
+ * les produits les portent dans `attributes[key]`, les réponses les modifient via `impacts[key]`.
+ */
+export interface QuizAxis {
+  key: string;
+  label: string;
+  lowLabel?: string | null;
+  highLabel?: string | null;
+}
+
 export interface Quiz {
   id: string;
   tenantId: string;
   name: string;
-  industry: ProductIndustry;
+  /** Libellé libre de l'activité (ex. « Café de spécialité »). */
+  industry: string;
+  axes: QuizAxis[];
   quizTitle: string;
   ctaText: string;
   active: boolean;
@@ -53,7 +67,8 @@ export interface Quiz {
 
 export interface QuizInput {
   name?: string;
-  industry?: ProductIndustry;
+  industry?: string;
+  axes?: QuizAxis[];
   quizTitle?: string;
   ctaText?: string;
   active?: boolean;
@@ -107,49 +122,23 @@ export interface TenantAdminUpdateInput {
 // ─────────────────────────────────────────────
 // Product
 // ─────────────────────────────────────────────
-export type GenderTarget = "male" | "female" | "unisex";
-export type PriceTier = "entry" | "mid" | "luxury" | "niche";
-export type Concentration = "EDT" | "EDP" | "Parfum" | "EDC" | "other";
-export type Season = "spring" | "summer" | "autumn" | "winter";
-export type Occasion = "daily" | "evening" | "office" | "sport" | "special";
-export type TimeOfDay = "morning" | "afternoon" | "evening" | "night";
-export type ProductIndustry = "perfume" | "coffee" | "fashion" | "food" | "custom";
 export type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+/** Caractéristiques propres à l'activité : valeurs des axes (0–1) et attributs libres. */
 export type ProductAttributes = { [key: string]: JsonValue };
 
 export interface Product {
   id: string;
   tenantId: string;
-  // Identity
   name: string;
   brand: string | null;
   description: string | null;
   price: number | null;
-  priceTier: PriceTier | null;
   imageUrl: string | null;
   purchaseUrl: string | null;
-  concentration: Concentration | null;
   active: boolean;
   featured: boolean;
-  // Olfactory pyramid
-  topNotes: string[];
-  heartNotes: string[];
-  baseNotes: string[];
-  // Classification
-  olfactoryFamily: string | null;
-  subFamily: string | null;
-  genderTarget: GenderTarget | null;
   tags: string[];
-  // Numeric axes [0–1]
-  freshness: number | null;
-  intensity: number | null;
-  sweetness: number | null;
-  // Usage context
-  seasons: Season[];
-  occasions: Occasion[];
-  timeOfDay: TimeOfDay[];
   attributes: ProductAttributes;
-  // AI
   embedding: number[] | null;
   createdAt: Date;
   updatedAt: Date;
@@ -236,8 +225,6 @@ export interface QuizSession {
   id: string;
   tenantId: string;
   quizId: string;
-  gender: GenderTarget | null;
-  mood: string | null;
   answers: SessionAnswer[];
   resultProductId: string | null;
   feedback: FeedbackType | null;
@@ -251,36 +238,17 @@ export interface QuizSubmitPayload {
   clientId: string;
   quizId?: string;
   abVariant?: string;
-  gender: GenderTarget | null;
-  mood: string | null;
   answers: SessionAnswer[];
   decisionTime?: number;
 }
 
 export interface QuizResult {
   quizId: string;
-  industry: ProductIndustry;
+  industry: string;
   product: Pick<
     Product,
-    | "id"
-    | "name"
-    | "brand"
-    | "imageUrl"
-    | "purchaseUrl"
-    | "freshness"
-    | "intensity"
-    | "sweetness"
-    | "olfactoryFamily"
-    | "tags"
-    | "topNotes"
-    | "heartNotes"
-    | "baseNotes"
-    | "price"
-    | "priceTier"
-    | "concentration"
-    | "description"
-    | "genderTarget"
-  > & Pick<Product, "attributes">;
+    "id" | "name" | "brand" | "imageUrl" | "purchaseUrl" | "price" | "description" | "tags" | "attributes"
+  >;
   explanation: string[];
   profileSummary: ProfileSummary;
 }
@@ -288,18 +256,19 @@ export interface QuizResult {
 // ─────────────────────────────────────────────
 // AI — User Profile
 // ─────────────────────────────────────────────
-export interface OlfactoryProfile {
-  freshness: number;
-  intensity: number;
-  sweetness: number;
+export type ProfileLevel = "faible" | "modéré" | "élevé";
+
+export interface ProfileAxisSummary {
+  key: string;
+  label: string;
+  value: number;
+  level: ProfileLevel;
+  /** Libellé du pôle correspondant (lowLabel / highLabel), si défini. */
+  description: string | null;
 }
 
 export interface ProfileSummary {
-  freshnessLevel: "faible" | "modéré" | "élevé";
-  intensityLevel: "faible" | "modéré" | "élevé";
-  sensualityLevel: "peu doux" | "doux" | "très doux";
-  usageMoment: "quotidien" | "soirée" | "occasion";
-  univers: string[];
+  axes: ProfileAxisSummary[];
 }
 
 // ─────────────────────────────────────────────
@@ -355,7 +324,6 @@ export interface QuizMetricsResponse {
   cta: MetricsCTA;
   feedback: { positive: number; negative: number };
   topProducts: MetricsTopProduct[];
-  genders: { gender: string; count: number }[];
   steps: MetricsStep[];
   variants: MetricsVariant[];
 }
@@ -376,7 +344,8 @@ export interface QuizMetricsAIResponse {
 // ─────────────────────────────────────────────
 // Catalog import
 // ─────────────────────────────────────────────
-export type CatalogField = keyof ProductCreateInput;
+/** Champ produit, ou `attribute.<clé>` pour une caractéristique propre à l'activité. */
+export type CatalogField = Exclude<keyof ProductCreateInput, "attributes"> | `attribute.${string}`;
 
 export interface ColumnMapping {
   sourceColumn: string;

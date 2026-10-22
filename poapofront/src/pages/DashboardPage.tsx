@@ -6,7 +6,7 @@ interface VerbatimItem {
   [key: string]: unknown;
 }
 
-interface TopPerfumeItem {
+interface TopProductItem {
   name?: string;
   count?: number;
 }
@@ -17,15 +17,9 @@ interface DashboardMetrics {
   counts?: Record<string, number>;
   rates?: Record<string, number>;
   verbatims?: (string | VerbatimItem)[];
-  topPerfumes?: TopPerfumeItem[];
-  genderStats?: {
-    counts?: Record<string, number>;
-    percents?: Record<string, number>;
-  };
+  topProducts?: TopProductItem[];
   decisionTime?: StatEntry;
   decision_time?: StatEntry;
-  profileUnivers?: StatEntry;
-  families?: StatEntry;
   variants?: StatEntry;
 }
 
@@ -34,19 +28,6 @@ function DashboardPage() {
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
   const [metricsError, setMetricsError] = useState("");
-  const genderOrder = ["male", "female", "any", "unknown"];
-  const genderLabels: Record<string, string> = {
-    male: "Homme",
-    female: "Femme",
-    any: "Unisexe",
-    unknown: "Inconnu",
-  };
-
-  const formatPercent = (value: number | unknown): string => {
-    if (typeof value !== "number" || Number.isNaN(value)) return "0";
-    return value.toFixed(1).replace(/\.0$/, "");
-  };
-
   const formatValue = (value: unknown): string => {
     if (typeof value === "number") return value.toString();
     if (typeof value === "string") return value;
@@ -226,47 +207,21 @@ function DashboardPage() {
             <div className="dashboard-extra">
               <div className="dashboard-panel">
                 <div className="dashboard-label">
-                  Stats genres
+                  Top 5 produits
                   <span
                     className="info-pill"
-                    data-tooltip="Répartition des genres déclarés au début du quiz."
-                    aria-label="Répartition des genres déclarés au début du quiz."
+                    data-tooltip="Produits les plus recommandés par /submit."
+                    aria-label="Produits les plus recommandés par /submit."
                   >
                     i
                   </span>
                 </div>
-                <ul className="stat-list">
-                  {genderOrder.map((key) => {
-                    const count = metrics.genderStats?.counts?.[key] ?? 0;
-                    const percent = metrics.genderStats?.percents?.[key] ?? 0;
-                    return (
-                      <li className="stat-item" key={key}>
-                        <span>{genderLabels[key]}</span>
-                        <span className="stat-value">
-                          {count} · {formatPercent(percent)}%
-                        </span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-              <div className="dashboard-panel">
-                <div className="dashboard-label">
-                  Top 5 parfums
-                  <span
-                    className="info-pill"
-                    data-tooltip="Parfums les plus recommandés par /submit."
-                    aria-label="Parfums les plus recommandés par /submit."
-                  >
-                    i
-                  </span>
-                </div>
-                {(metrics.topPerfumes || []).length === 0 ? (
+                {(metrics.topProducts || []).length === 0 ? (
                   <div className="dashboard-empty">Aucune reco pour l’instant.</div>
                 ) : (
                   <ul className="stat-list">
-                    {(metrics.topPerfumes || []).slice(0, 5).map((item) => (
-                      <li className="stat-item" key={item?.name || "perfume"}>
+                    {(metrics.topProducts || []).slice(0, 5).map((item) => (
+                      <li className="stat-item" key={item?.name || "product"}>
                         <span>{item?.name || "—"}</span>
                         <span className="stat-value">{item?.count ?? 0}</span>
                       </li>
@@ -294,58 +249,6 @@ function DashboardPage() {
                         <li className="stat-item" key={item.label}>
                           <span>{item.label}</span>
                           <span className="stat-value">{formatDurationMs(item.value)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-              {metrics.profileUnivers && (
-                <div className="dashboard-panel">
-                  <div className="dashboard-label">
-                    Profils olfactifs
-                    <span
-                      className="info-pill"
-                      data-tooltip="Répartition des profils olfactifs associés aux recommandations."
-                      aria-label="Répartition des profils olfactifs associés aux recommandations."
-                    >
-                      i
-                    </span>
-                  </div>
-                  {toEntries(metrics.profileUnivers).length === 0 ? (
-                    <div className="dashboard-empty">Aucune donnée pour l’instant.</div>
-                  ) : (
-                    <ul className="stat-list">
-                      {toEntries(metrics.profileUnivers).map((item) => (
-                        <li className="stat-item" key={item.label}>
-                          <span>{item.label}</span>
-                          <span className="stat-value">{formatValue(item.value)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-              {metrics.families && (
-                <div className="dashboard-panel">
-                  <div className="dashboard-label">
-                    Familles
-                    <span
-                      className="info-pill"
-                      data-tooltip="Répartition des familles de parfums recommandées."
-                      aria-label="Répartition des familles de parfums recommandées."
-                    >
-                      i
-                    </span>
-                  </div>
-                  {toEntries(metrics.families).length === 0 ? (
-                    <div className="dashboard-empty">Aucune donnée pour l’instant.</div>
-                  ) : (
-                    <ul className="stat-list">
-                      {toEntries(metrics.families).map((item) => (
-                        <li className="stat-item" key={item.label}>
-                          <span>{item.label}</span>
-                          <span className="stat-value">{formatValue(item.value)}</span>
                         </li>
                       ))}
                     </ul>

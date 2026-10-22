@@ -23,6 +23,8 @@ PostgreSQL is started locally with Docker Compose.
 
 See [SETUP.md](./SETUP.md) for prerequisites, environment variables, database
 setup, migrations, service startup, integration details and troubleshooting.
+To understand the application flow and learn where to read the code, start with
+the [code walkthrough](./docs/guide-de-lecture.md).
 
 Install the JavaScript dependencies from the repository root:
 

@@ -1,12 +1,12 @@
 import { Router, Request, Response } from "express";
 import { sendMagicLink, verifyMagicToken, loginWithPassword, setPassword } from "../services/auth";
-import { verifyToken, AuthRequest } from "../middleware/auth";
+import { verifyToken, AuthRequest, SUPER_ADMIN_TENANT_ID } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import type { TenantBranding } from "@poapo/types";
 import { ensureDefaultQuiz, asyncRoute } from "../services/quizzes";
 
 const router = Router();
-const PRODUCT_INDUSTRIES = ["perfume", "coffee", "fashion", "food", "custom"] as const;
+const MAX_INDUSTRY_LENGTH = 80;
 
 // POST /api/auth/magic-link
 router.post("/magic-link", async (req: Request, res: Response) => {
@@ -46,10 +46,10 @@ router.get("/me", verifyToken, asyncRoute(async (req: AuthRequest, res: Response
   const superAdminEmail = process.env.SUPER_ADMIN_EMAIL?.toLowerCase().trim();
   const isSuperAdmin = !!req.tenant?.isSuperAdmin || (!!superAdminEmail && req.tenant?.email?.toLowerCase().trim() === superAdminEmail);
 
-  if (isSuperAdmin) {
+  if (isSuperAdmin && req.tenant!.tenantId === SUPER_ADMIN_TENANT_ID) {
     res.json({
-      tenantId: "super-admin",
-      id: "super-admin",
+      tenantId: SUPER_ADMIN_TENANT_ID,
+      id: SUPER_ADMIN_TENANT_ID,
       email: req.tenant!.email,
       name: "Super Admin",
       active: true,
@@ -80,7 +80,14 @@ router.get("/me", verifyToken, asyncRoute(async (req: AuthRequest, res: Response
   }
   // Expose tenantId alias so AuthToken shape is satisfied client-side
   const quiz = await ensureDefaultQuiz(tenant.id);
-  res.json({ ...tenant, industry: quiz.industry, quizTitle: quiz.quizTitle, ctaText: quiz.ctaText, tenantId: tenant.id });
+  res.json({
+    ...tenant,
+    industry: quiz.industry,
+    quizTitle: quiz.quizTitle,
+    ctaText: quiz.ctaText,
+    tenantId: tenant.id,
+    ...(isSuperAdmin && { isSuperAdmin: true }),
+  });
 }));
 
 // PUT /api/auth/me/branding
@@ -91,9 +98,12 @@ router.put("/me/branding", verifyToken, asyncRoute(async (req: AuthRequest, res:
     const val = (req.body as Record<string, unknown>)[key];
     if (val !== undefined) (data as Record<string, unknown>)[key] = val;
   }
-  if (data.industry !== undefined && !PRODUCT_INDUSTRIES.includes(data.industry)) {
-    res.status(400).json({ error: "Secteur d’activité invalide" });
-    return;
+  if (data.industry !== undefined) {
+    if (typeof data.industry !== "string" || data.industry.trim().length > MAX_INDUSTRY_LENGTH) {
+      res.status(400).json({ error: `L’activité doit être un texte de ${MAX_INDUSTRY_LENGTH} caractères maximum` });
+      return;
+    }
+    data.industry = data.industry.trim();
   }
 
   const quiz = await ensureDefaultQuiz(req.tenant!.tenantId);

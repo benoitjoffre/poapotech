@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { asyncRoute, publicQuizScope, getQuiz } from "../services/quizzes";
+import { parseAxes } from "../services/axes";
 
 const router = Router();
 
@@ -57,6 +58,7 @@ router.get("/config", publicQuizScope, asyncRoute(async (req: Request, res: Resp
     tenantId: tenant.id,
     quizId: quiz.id,
     industry: quiz.industry,
+    axes: parseAxes(quiz.axes),
     primaryColor: tenant.primaryColor ?? "#0d9488",
     logoUrl: tenant.logoUrl,
     quizTitle: quiz.quizTitle,

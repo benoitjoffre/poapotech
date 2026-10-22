@@ -5,6 +5,7 @@ import multer from "multer";
 import csvParser from "csv-parser";
 import { Readable } from "stream";
 import { adminQuizScope, getQuiz, resolveQuiz, asyncRoute } from "../services/quizzes";
+import { parseAxes } from "../services/axes";
 
 const router = Router();
 const upload = multer({
@@ -30,12 +31,14 @@ router.use((req, res, next) => {
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function parseScoringImpacts(raw: unknown): Record<string, number> {
+/** Ne conserve que les impacts portant sur un axe du quiz, bornés entre -1 et 1. */
+function parseScoringImpacts(raw: unknown, quizAxes: unknown): Record<string, number> {
   if (typeof raw === "object" && raw !== null) {
+    const axisKeys = new Set(parseAxes(quizAxes).map((axis) => axis.key));
     const obj = raw as Record<string, unknown>;
     return Object.fromEntries(
       Object.entries(obj)
-        .filter(([, value]) => value !== null && value !== undefined && Number.isFinite(Number(value)))
+        .filter(([key, value]) => axisKeys.has(key) && value !== null && value !== undefined && value !== "" && Number.isFinite(Number(value)) && Number(value) !== 0)
         .map(([key, value]) => [key, clamp(Number(value))]),
     );
   }
@@ -88,7 +91,8 @@ async function resolveTenantId(req: AuthRequest, preferredTenantEmail?: string):
 
 // POST /api/quiz/builder/questions/import-csv
 // Colonnes attendues: question, answer
-// Colonnes optionnelles: helpText, type, questionActive, abVariant, emoji, freshness, intensity, sweetness, answerActive
+// Colonnes optionnelles: helpText, type, questionActive, abVariant, emoji, answerActive,
+// ainsi qu'une colonne par axe du quiz (`<clé>` ou `impact_<clé>`) contenant l'impact entre -1 et 1.
 router.post("/questions/import-csv", upload.single("file"), async (req: AuthRequest, res: Response) => {
   if (!req.file) {
     res.status(400).json({ error: "Fichier CSV requis" });
@@ -187,9 +191,9 @@ router.post("/questions/import-csv", upload.single("file"), async (req: AuthRequ
               impacts: parseScoringImpacts(
                 Object.fromEntries(
                   Object.entries(answerRow)
-                    .filter(([key]) => ["freshness", "intensity", "sweetness", "roastLevel", "acidity", "body"].includes(key) || key.startsWith("impact_"))
-                    .map(([key, value]) => [key.startsWith("impact_") ? key.slice(7) : key, Number(String(value ?? "0").replace(",", "."))]),
+                    .map(([key, value]) => [key.startsWith("impact_") ? key.slice(7) : key, String(value ?? "").trim().replace(",", ".")]),
                 ),
+                quiz.axes,
               ),
             },
           });
@@ -392,7 +396,7 @@ router.post("/questions/:questionId/answers", asyncRoute(async (req: AuthRequest
     text?: string;
     emoji?: string | null;
     imageUrl?: string | null;
-    impacts?: { freshness?: number; intensity?: number; sweetness?: number };
+    impacts?: Record<string, number>;
   };
 
   if (!text?.trim()) {
@@ -411,7 +415,7 @@ router.post("/questions/:questionId/answers", asyncRoute(async (req: AuthRequest
       text: text.trim(),
       emoji: emoji?.trim() ?? null,
       imageUrl: imageUrl?.trim() ?? null,
-      impacts: parseScoringImpacts(impacts ?? {}),
+      impacts: parseScoringImpacts(impacts ?? {}, getQuiz(res).axes),
       order: (maxOrder._max.order ?? 0) + 1,
     },
   });
@@ -464,7 +468,7 @@ router.put("/answers/:id", asyncRoute(async (req: AuthRequest, res: Response) =>
     emoji?: string | null;
     imageUrl?: string | null;
     active?: boolean;
-    impacts?: { freshness?: number; intensity?: number; sweetness?: number };
+    impacts?: Record<string, number>;
   };
 
   const updated = await prisma.answer.update({
@@ -474,7 +478,7 @@ router.put("/answers/:id", asyncRoute(async (req: AuthRequest, res: Response) =>
       ...(emoji !== undefined ? { emoji: emoji?.trim() ?? null } : {}),
       ...(imageUrl !== undefined ? { imageUrl: imageUrl?.trim() ?? null } : {}),
       ...(active !== undefined ? { active } : {}),
-      ...(impacts !== undefined ? { impacts: parseScoringImpacts(impacts) } : {}),
+      ...(impacts !== undefined ? { impacts: parseScoringImpacts(impacts, getQuiz(res).axes) } : {}),
     },
   });
 

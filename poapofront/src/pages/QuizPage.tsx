@@ -1,80 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { GenderTarget, Question, QuizResult, SessionAnswer, MetricType } from "@poapo/types";
+import type { Question, QuizResult, SessionAnswer, MetricType } from "@poapo/types";
 import { useTenant } from "../contexts/TenantContext";
+import { filterVisibleQuestions, pickAbVariant } from "../lib/quiz";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
 
-const moodOptions = [
-  { value: "frais", label: "Frais" },
-  { value: "boise", label: "Boisé" },
-  { value: "floral", label: "Floral" },
-  { value: "gourmand", label: "Gourmand" },
-] as const;
-
-type MoodValue = (typeof moodOptions)[number]["value"];
-
-const genderOptions: { value: GenderTarget; label: string }[] = [
-  { value: "female", label: "Femme" },
-  { value: "male", label: "Homme" },
-  { value: "unisex", label: "Unisex" },
-];
-
-// ── A/B variant helpers ────────────────────────────────────────────────────────
-
-const AB_STORAGE_KEY = "poapo_ab_variant";
-
-function pickAbVariant(questions: Question[], quizId: string): string | null {
-  const variants = [...new Set(questions.map((q) => q.abVariant).filter(Boolean))] as string[];
-  if (variants.length === 0) return null;
-  // Assign deterministically per session (or randomly on first visit)
-  const storageKey = `${AB_STORAGE_KEY}:${quizId}`;
-  let stored = sessionStorage.getItem(storageKey);
-  if (!stored || !variants.includes(stored)) {
-    stored = variants[Math.floor(Math.random() * variants.length)];
-    sessionStorage.setItem(storageKey, stored);
-  }
-  return stored;
-}
-
-// ── Conditional question filtering ────────────────────────────────────────────
-
-/**
- * Returns the questions that should be displayed given the current set of
- * selected answer IDs and the A/B variant.
- */
-function filterVisibleQuestions(allQuestions: Question[], selectedAnswerIds: Set<string>, abVariant: string | null): Question[] {
-  return allQuestions.filter((q) => {
-    // A/B: hide if assigned to a different variant
-    if (q.abVariant && abVariant && q.abVariant !== abVariant) return false;
-    // Conditional: show only if the required answer has been selected
-    if (q.conditionAnswerId && !selectedAnswerIds.has(q.conditionAnswerId)) return false;
-    return true;
-  });
-}
-
 function QuizContent() {
   const { clientId, quizId, config } = useTenant();
-  const industry = config?.industry ?? "perfume";
-  const isPerfume = industry === "perfume";
-  const industryLabel = industry === "coffee" ? "café" : industry === "fashion" ? "mode" : industry === "food" ? "produit alimentaire" : "produit";
-  const defaultQuizTitle =
-    industry === "perfume"
-      ? "Trouve ton parfum idéal"
-      : industry === "coffee"
-        ? "Trouve ton café idéal"
-        : industry === "fashion"
-          ? "Trouve ton article de mode idéal"
-          : industry === "food"
-            ? "Trouve ton produit alimentaire idéal"
-            : "Trouve ton produit idéal";
 
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
   const [abVariant, setAbVariant] = useState<string | null>(null);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
-  const [gender, setGender] = useState<GenderTarget | "">("");
   const [stepIndex, setStepIndex] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
-  const [selectedMood, setSelectedMood] = useState<MoodValue | "">("");
 
   // answers is keyed by questionId for stable conditional logic
   const [answersByQuestionId, setAnswersByQuestionId] = useState<Record<string, number | number[]>>({});
@@ -116,18 +54,16 @@ function QuizContent() {
 
   const questionsCount = questions.length;
   const answeredCount = answers.filter((value) => (Array.isArray(value) ? value.length > 0 : value !== null)).length;
-  const requiresGender = isPerfume;
-  const totalSteps = questionsCount + (requiresGender ? 1 : 0);
-  const completedSteps = (requiresGender && gender ? 1 : 0) + answeredCount;
+  const totalSteps = questionsCount;
+  const completedSteps = answeredCount;
   const progressPercent = totalSteps === 0 ? 0 : Math.round((completedSteps / totalSteps) * 100);
-  const isGenderStep = requiresGender && stepIndex === 0;
-  const currentQuestionIndex = stepIndex - (requiresGender ? 1 : 0);
+  const currentQuestionIndex = stepIndex;
   const isLastStep = stepIndex === totalSteps - 1;
-  const currentQuestion = !isGenderStep ? questions[currentQuestionIndex] : null;
-  const nextQuestion = !isGenderStep ? questions[currentQuestionIndex + 1] ?? null : questions[0] ?? null;
+  const currentQuestion = questions[currentQuestionIndex] ?? null;
+  const nextQuestion = questions[currentQuestionIndex + 1] ?? null;
 
-  const quizTitle = config?.quizTitle ?? defaultQuizTitle;
-  const ctaText = config?.ctaText ?? (isPerfume ? "Voir ce parfum" : "Découvrir ma sélection");
+  const quizTitle = config?.quizTitle || "Trouve ton produit idéal";
+  const ctaText = config?.ctaText || "Découvrir ma sélection";
 
   const trackEvent = async (type: MetricType, payload: Record<string, unknown> = {}, { timeoutMs = 6000 } = {}): Promise<{ ok: boolean }> => {
     if (!clientId) return { ok: false };
@@ -201,21 +137,6 @@ function QuizContent() {
     };
   }, [clientId, quizId]);
 
-  useEffect(() => {
-    if (isLoadingQuestions || !isPerfume) return;
-    const moodParam = new URLSearchParams(window.location.search).get("mood") ?? "";
-    const valid = moodOptions.find((o) => o.value === moodParam);
-    if (valid) {
-      setSelectedMood(valid.value);
-      setHasStarted(true);
-      startTimeRef.current = Date.now();
-      if (!hasTrackedStart) {
-        setHasTrackedStart(true);
-        void trackEvent("quiz_start", { mood: valid.value, abVariant: abVariant ?? "standard" });
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoadingQuestions]);
 
   const handleAnswer = (questionIndex: number, optionIndex: number) => {
     const question = questions[questionIndex];
@@ -258,10 +179,6 @@ function QuizContent() {
     event.preventDefault();
     setError("");
     setResult(null);
-    if (requiresGender && !gender) {
-      setError("Merci de selectionner un genre avant de valider.");
-      return;
-    }
     if (answeredCount !== questionsCount) {
       setError("Merci de repondre a toutes les questions avant de valider.");
       return;
@@ -278,8 +195,6 @@ function QuizContent() {
         body: JSON.stringify({
           clientId,
           quizId,
-          gender: gender || null,
-          mood: selectedMood || null,
           answers: buildSessionAnswers(),
           decisionTime: startTimeRef.current ? Date.now() - startTimeRef.current : undefined,
           abVariant: abVariant ?? undefined,
@@ -303,7 +218,6 @@ function QuizContent() {
   const handleRestart = () => {
     setResult(null);
     setError("");
-    setGender("");
     setAnswersByQuestionId({});
     setStepIndex(0);
     setIsProfileOpen(false);
@@ -319,31 +233,24 @@ function QuizContent() {
     if (!startTimeRef.current) startTimeRef.current = Date.now();
     if (!hasTrackedStart) {
       setHasTrackedStart(true);
-      void trackEvent("quiz_start", { mood: selectedMood || undefined, abVariant: abVariant ?? "standard" });
+      void trackEvent("quiz_start", { abVariant: abVariant ?? "standard" });
     }
   };
 
-  const handleMoodContinue = () => {
-    if (!selectedMood || !requiresGender) return;
-    const params = new URLSearchParams(window.location.search);
-    params.set("mood", selectedMood);
-    window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}${window.location.hash}`);
-    handleStart();
-  };
 
   useEffect(() => {
     if (!hasStarted || isLoadingQuestions || result) return;
 
-    const step = isGenderStep ? "gender" : questions[currentQuestionIndex]?.id;
+    const step = questions[currentQuestionIndex]?.id;
     if (!step || lastTrackedStepRef.current === step) return;
 
     lastTrackedStepRef.current = step;
     trackEventNoBlock("step_view", {
       step,
       stepIndex,
-      questionId: isGenderStep ? null : questions[currentQuestionIndex]?.id,
+      questionId: questions[currentQuestionIndex]?.id,
     });
-  }, [hasStarted, isLoadingQuestions, result, isGenderStep, questions, currentQuestionIndex, stepIndex]);
+  }, [hasStarted, isLoadingQuestions, result, questions, currentQuestionIndex, stepIndex]);
 
   useEffect(() => {
     if (!hasStarted) return;
@@ -354,24 +261,12 @@ function QuizContent() {
     };
   }, [hasStarted, hasTrackedComplete, stepIndex, clientId]);
 
-  const priceTierLabel: Record<string, string> = {
-    entry: "Accessible",
-    mid: "Milieu de gamme",
-    luxury: "Luxe",
-    niche: "Niche",
-  };
-  const genderLabel: Record<string, string> = {
-    male: "Homme",
-    female: "Femme",
-    unisex: "Unisex",
-  };
-  const concentrationLabel: Record<string, string> = {
-    EDT: "Eau de Toilette",
-    EDP: "Eau de Parfum",
-    Parfum: "Parfum Extrait",
-    EDC: "Eau de Cologne",
-    other: "Autre",
-  };
+  const profileAxes = result?.profileSummary?.axes ?? [];
+  const productAttributes = result?.product?.attributes ?? {};
+  const axisKeys = new Set(profileAxes.map((axis) => axis.key));
+  const extraAttributes = Object.entries(productAttributes).filter(
+    ([key, value]) => !axisKeys.has(key) && value !== null && typeof value !== "object",
+  );
 
   return (
     <div className="app">
@@ -386,40 +281,8 @@ function QuizContent() {
               <h1 className="title">
                 {quizTitle.split(" ").slice(0, -1).join(" ")} <span className="title-accent">{quizTitle.split(" ").slice(-1)[0]}</span>
               </h1>
-              <p>
-                {isPerfume
-                  ? "poapo recommande un parfum qui colle à ta peau, ton style de vie et tes émotions. Un quiz rapide, une reco ultra-personnalisée."
-                  : `Répondez à quelques questions et découvrez le ${industryLabel} adapté à vos préférences.`}
-              </p>
+              <p>Réponds à quelques questions et découvre la recommandation adaptée à tes préférences.</p>
             </div>
-            {!hasStarted && isPerfume && (
-              <div className="glass-card">
-                <div className="glass-title">Signature olfactive</div>
-                <div className="glass-subtitle">Un voyage sensoriel, en 11 questions.</div>
-                <div className="glass-tags">
-                  {moodOptions.map((mood) => {
-                    const isSelected = selectedMood === mood.value;
-                    return (
-                      <button
-                        key={mood.value}
-                        type="button"
-                        className={`glass-tag ${isSelected ? "selected" : ""}`}
-                        onClick={() => setSelectedMood(mood.value)}
-                        aria-pressed={isSelected}
-                      >
-                        {mood.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="glass-tags-actions">
-                  <button className="secondary glass-continue" type="button" disabled={!selectedMood} onClick={handleMoodContinue}>
-                    Continuer
-                  </button>
-                </div>
-                <div className="glass-foot">Selectionne tes moods, on s'occupe du reste.</div>
-              </div>
-            )}
           </div>
           {!hasStarted ? (
             <div className="hero-actions">
@@ -448,33 +311,7 @@ function QuizContent() {
         <form className="quiz" onSubmit={handleSubmit}>
           {isLoadingQuestions && <div className="question-card">Chargement des questions...</div>}
 
-          {!isLoadingQuestions && isGenderStep && (
-            <div className="question-card animate">
-              <div className="question-title">Quel genre te correspond ?</div>
-              <div className="options">
-                {genderOptions.map((option) => {
-                  const checked = gender === option.value;
-                  return (
-                    <label key={option.value} className={`option ${checked ? "selected" : ""}`}>
-                      <input
-                        type="radio"
-                        name="gender"
-                        value={option.value}
-                        checked={checked}
-                        onChange={() => {
-                          setGender(option.value);
-                          setStepIndex((prev) => Math.min(prev + 1, totalSteps - 1));
-                        }}
-                      />
-                      <span>{option.label}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {!isLoadingQuestions && !isGenderStep && currentQuestion && (
+          {!isLoadingQuestions && currentQuestion && (
             <div className="question-card animate" key={currentQuestion.id}>
               <div className="question-title">
                 {currentQuestionIndex + 1}. {currentQuestion.text}
@@ -555,11 +392,9 @@ function QuizContent() {
                 disabled={
                   isLoadingQuestions ||
                   questionsCount === 0 ||
-                  (isGenderStep
-                    ? !gender
-                    : Array.isArray(answers[currentQuestionIndex])
-                      ? answers[currentQuestionIndex].length === 0
-                      : answers[currentQuestionIndex] === null)
+                  (Array.isArray(answers[currentQuestionIndex])
+                    ? answers[currentQuestionIndex].length === 0
+                    : answers[currentQuestionIndex] === null)
                 }
                 onClick={() => setStepIndex((prev) => Math.min(prev + 1, totalSteps - 1))}
               >
@@ -569,7 +404,7 @@ function QuizContent() {
               <button
                 className="submit"
                 type="submit"
-                disabled={isSubmitting || isLoadingQuestions || questionsCount === 0 || answeredCount !== questionsCount || (requiresGender && !gender)}
+                disabled={isSubmitting || isLoadingQuestions || questionsCount === 0 || answeredCount !== questionsCount}
               >
                 {isSubmitting ? "Envoi en cours..." : "Envoyer mes reponses"}
               </button>
@@ -590,19 +425,15 @@ function QuizContent() {
               </div>
             )}
             <div className="result-hero-overlay">
-              <div className="result-hero-badge">✦ Votre sélection {industryLabel}</div>
+              <div className="result-hero-badge">✦ Votre sélection</div>
               {result.product?.brand && <div className="result-hero-brand">{result.product.brand}</div>}
               <h2 className="result-hero-name">{result.product?.name}</h2>
               <div className="result-hero-meta">
-                {isPerfume && result.product?.concentration && (
-                  <span className="result-pill">{concentrationLabel[result.product.concentration] ?? result.product.concentration}</span>
-                )}
-                {isPerfume && result.product?.priceTier && (
-                  <span className="result-pill">{priceTierLabel[result.product.priceTier] ?? result.product.priceTier}</span>
-                )}
-                {isPerfume && result.product?.genderTarget && (
-                  <span className="result-pill">{genderLabel[result.product.genderTarget] ?? result.product.genderTarget}</span>
-                )}
+                {(result.product?.tags ?? []).slice(0, 3).map((tag) => (
+                  <span className="result-pill" key={tag}>
+                    {tag}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
@@ -618,88 +449,30 @@ function QuizContent() {
           {/* ── Explication ── */}
           {result.explanation.length > 0 && <p className="result-explanation">{result.explanation.join(" ")}</p>}
 
-          {/* ── Notes olfactives ── */}
-          {isPerfume && ((result.product?.topNotes?.length ?? 0) > 0 ||
-            (result.product?.heartNotes?.length ?? 0) > 0 ||
-            (result.product?.baseNotes?.length ?? 0) > 0) && (
-            <div className="result-notes">
-              {(
-                [
-                  { label: "Tête", notes: result.product?.topNotes ?? [] },
-                  { label: "Cœur", notes: result.product?.heartNotes ?? [] },
-                  { label: "Fond", notes: result.product?.baseNotes ?? [] },
-                ] as { label: string; notes: string[] }[]
-              )
-                .filter(({ notes }) => notes.length > 0)
-                .map(({ label, notes }) => (
-                  <div className="result-notes-col" key={label}>
-                    <div className="result-notes-title">{label}</div>
-                    <div className="chip-row">
-                      {notes.map((note) => (
-                        <span className="result-notes-chip" key={note}>
-                          {note}
-                        </span>
-                      ))}
+          {/* ── Profil sur les axes du quiz ── */}
+          {profileAxes.length > 0 && (
+            <div className="result-metrics">
+              {profileAxes.map((axis) => {
+                const productValue = productAttributes[axis.key];
+                return (
+                  <div className="metric" key={axis.key}>
+                    <div className="metric-label-row">
+                      <span className="metric-label">{axis.label}</span>
+                      <span className="metric-word">{axis.description ?? axis.level}</span>
+                    </div>
+                    <div className="metric-bar">
+                      <span style={{ width: `${Math.round((typeof productValue === "number" ? productValue : axis.value) * 100)}%` }} />
                     </div>
                   </div>
-                ))}
+                );
+              })}
             </div>
           )}
 
-          {/* ── Métriques ── */}
-          {isPerfume && result.product && (
-            <div className="result-metrics">
-              <div className="metric">
-                <div className="metric-label-row">
-                  <span className="metric-label">Fraîcheur</span>
-                  <span className="metric-word">{result.profileSummary?.freshnessLevel ?? "modérée"}</span>
-                </div>
-                <div className="metric-bar">
-                  <span style={{ width: `${Math.round((result.product.freshness ?? 0) * 100)}%` }} />
-                </div>
-              </div>
-              <div className="metric">
-                <div className="metric-label-row">
-                  <span className="metric-label">Intensité</span>
-                  <span className="metric-word">{result.profileSummary?.intensityLevel ?? "élevée"}</span>
-                </div>
-                <div className="metric-bar">
-                  <span style={{ width: `${Math.round((result.product.intensity ?? 0) * 100)}%` }} />
-                </div>
-              </div>
-              <div className="metric">
-                <div className="metric-label-row">
-                  <span className="metric-label">Douceur</span>
-                  <span className="metric-word">{result.profileSummary?.sensualityLevel ?? "très douce"}</span>
-                </div>
-                <div className="metric-bar">
-                  <span style={{ width: `${Math.round((result.product.sweetness ?? 0) * 100)}%` }} />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── Famille + Tags ── */}
-          {isPerfume ? (
+          {/* ── Caractéristiques ── */}
+          {extraAttributes.length > 0 && (
             <div className="result-grid">
-              <div>
-                <div className="result-subtitle">Famille</div>
-                <div className="chip-row">{result.product?.olfactoryFamily && <span className="chip">{result.product.olfactoryFamily}</span>}</div>
-              </div>
-              <div>
-                <div className="result-subtitle">Tags</div>
-                <div className="chip-row">
-                  {(result.product?.tags ?? []).map((tag, i) => (
-                    <span className={`chip ${i === 0 ? "chip-primary" : ""}`} key={tag}>
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          ) : Object.keys(result.product?.attributes ?? {}).length > 0 ? (
-            <div className="result-grid">
-              {Object.entries(result.product.attributes).map(([key, value]) => (
+              {extraAttributes.map(([key, value]) => (
                 <div key={key}>
                   <div className="result-subtitle">{key}</div>
                   <div className="chip-row">
@@ -708,45 +481,26 @@ function QuizContent() {
                 </div>
               ))}
             </div>
-          ) : null}
+          )}
 
-          {/* ── Profil olfactif ── */}
-          {isPerfume && result.profileSummary && (
+          {/* ── Profil du visiteur ── */}
+          {profileAxes.length > 0 && (
             <div className="result-summary">
               <button type="button" className="accordion-toggle" onClick={() => setIsProfileOpen((prev) => !prev)} aria-expanded={isProfileOpen}>
-                <span>Ton profil olfactif</span>
+                <span>Ton profil</span>
                 <span className="accordion-icon">{isProfileOpen ? "−" : "+"}</span>
               </button>
               {isProfileOpen && (
                 <div className="accordion-body">
-                  <div className="result-caption">Voilà comment ton parfum s'exprime sur ta peau</div>
+                  <div className="result-caption">Ce que tes réponses disent de tes préférences</div>
                   <div className="summary-grid">
-                    <div className="summary-item">
-                      <span className="summary-label">Fraîcheur</span>
-                      <span className="summary-value">{result.profileSummary.freshnessLevel}</span>
-                    </div>
-                    <div className="summary-item">
-                      <span className="summary-label">Intensité</span>
-                      <span className="summary-value">{result.profileSummary.intensityLevel}</span>
-                    </div>
-                    <div className="summary-item">
-                      <span className="summary-label">Sensualité</span>
-                      <span className="summary-value">{result.profileSummary.sensualityLevel}</span>
-                    </div>
-                    <div className="summary-item">
-                      <span className="summary-label">Moment</span>
-                      <span className="summary-value">{result.profileSummary.usageMoment}</span>
-                    </div>
+                    {profileAxes.map((axis) => (
+                      <div className="summary-item" key={axis.key}>
+                        <span className="summary-label">{axis.label}</span>
+                        <span className="summary-value">{axis.description ?? axis.level}</span>
+                      </div>
+                    ))}
                   </div>
-                  {(result.profileSummary.univers ?? []).length > 0 && (
-                    <div className="chip-row">
-                      {result.profileSummary.univers.map((tag) => (
-                        <span className="chip" key={tag}>
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
             </div>

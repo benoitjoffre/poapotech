@@ -8,7 +8,6 @@ import type {
   QuestionType,
   QuestionUpdateInput,
   ReorderPayload,
-  ProductIndustry,
   Quiz,
 } from "@poapo/types";
 import { apiFetch, getToken } from "../lib/api";
@@ -20,17 +19,7 @@ interface QuestionWithAnswers extends Question {
   answers: Answer[];
 }
 
-const PERFUME_IMPACT_LABELS: { key: string; label: string; color: string }[] = [
-  { key: "freshness", label: "Fraîcheur", color: "#0ea5e9" },
-  { key: "intensity", label: "Intensité", color: "#f97316" },
-  { key: "sweetness", label: "Douceur", color: "#ec4899" },
-];
-const COFFEE_IMPACT_LABELS: { key: string; label: string; color: string }[] = [
-  { key: "roastLevel", label: "Torréfaction", color: "#92400e" },
-  { key: "acidity", label: "Acidité", color: "#16a34a" },
-  { key: "body", label: "Corps", color: "#2563eb" },
-  { key: "sweetness", label: "Douceur", color: "#ec4899" },
-];
+const AXIS_COLORS = ["#0ea5e9", "#f97316", "#ec4899", "#16a34a", "#8b5cf6", "#92400e", "#2563eb", "#ca8a04"];
 
 const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
   { value: "single", label: "Choix unique" },
@@ -134,6 +123,9 @@ function AnswerRow({
         </label>
       </div>
       <div className="impact-sliders">
+        {impactLabels.length === 0 && (
+          <p className="field-hint">Aucun axe de recommandation : définissez-en dans la configuration du quiz pour pondérer les réponses.</p>
+        )}
         {impactLabels.map(({ key, label, color }) => (
           <div key={key} className="impact-slider-row">
             <label style={{ color, minWidth: 80 }}>{label}</label>
@@ -467,7 +459,6 @@ export default function QuizBuilderPage() {
 
 function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
   const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
-  const industry: ProductIndustry = quiz.industry;
   const scope = useCallback((path: string) => `${path}?quizId=${encodeURIComponent(quiz.id)}`, [quiz.id]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -476,7 +467,11 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
   const [importTenantEmail, setImportTenantEmail] = useState("demo@poapo-tech.com");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string>("");
-  const impactLabels = industry === "coffee" ? COFFEE_IMPACT_LABELS : PERFUME_IMPACT_LABELS;
+  const impactLabels = quiz.axes.map((axis, index) => ({
+    key: axis.key,
+    label: axis.label,
+    color: AXIS_COLORS[index % AXIS_COLORS.length],
+  }));
 
   // New question form
   const [showNewForm, setShowNewForm] = useState(false);
@@ -726,8 +721,8 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
           <input className="input" type="file" accept=".csv,text/csv" onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
         </div>
         <p className="page-subtitle" style={{ marginTop: "0.25rem" }}>
-          Colonnes requises: question, answer. Optionnelles: helpText, type, questionActive, abVariant, emoji, freshness, intensity, sweetness,
-          answerActive.
+          Colonnes requises: question, answer. Optionnelles: helpText, type, questionActive, abVariant, emoji, answerActive
+          {impactLabels.length > 0 && <>, et une colonne d'impact (-1 à 1) par axe : {impactLabels.map((axis) => axis.key).join(", ")}</>}.
         </p>
         <div className="new-question-actions">
           <button type="button" className="btn-primary" onClick={() => void handleImportCsv()} disabled={!importFile || importing}>

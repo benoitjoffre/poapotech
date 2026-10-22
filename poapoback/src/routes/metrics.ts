@@ -24,7 +24,7 @@ const router = Router();
 router.post("/cleanup", verifyToken, async (req: AuthRequest, res: Response) => {
   try {
     // Vérifier que l'utilisateur est super-admin
-    if (req.tenant?.tenantId !== "super-admin") {
+    if (!req.tenant?.isSuperAdmin) {
       return res.status(403).json({ error: "Accès refusé. Super-admin requis." });
     }
 

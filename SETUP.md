@@ -37,7 +37,9 @@ docker ps
 # → poapo_postgres doit afficher "healthy"
 ```
 
-Base de données disponible sur `localhost:5432`
+Base de données disponible sur `localhost:5433` (port interne du conteneur : `5432`).
+Le port hôte `5433` évite les conflits avec les autres instances PostgreSQL locales.
+Les `DATABASE_URL` du backend et du service IA doivent utiliser ce port.
 
 - user : `poapo`
 - password : `poapo_secret`
@@ -161,15 +163,39 @@ open http://localhost:5173
 
 Dans **Mes quiz**, créez un quiz puis configurez :
 
-- son nom interne, son secteur, son titre public et son CTA ;
+- son nom interne, son activité (libellé libre : « Café », « Vins », « Cosmétique »…),
+  son titre public et son CTA ;
+- ses **axes de recommandation** (voir ci-dessous) ;
 - les produits recommandables : tout le catalogue, ou une sélection explicite ;
 - son état actif/désactivé. La désactivation conserve les questions et les statistiques.
 
 Le catalogue, le logo, la couleur et le domaine autorisé restent partagés au niveau
-du tenant. Le « profil de saisie » du formulaire produit permet de renseigner des
-produits de plusieurs secteurs dans le même catalogue. Pour éviter de recommander
-un produit d'un autre secteur, utilisez une sélection explicite dans chaque quiz.
-Une sélection vide ne retombe jamais sur tout le catalogue.
+du tenant. Pour éviter de recommander un produit d'une autre activité, utilisez une
+sélection explicite dans chaque quiz. Une sélection vide ne retombe jamais sur tout
+le catalogue.
+
+### Axes de recommandation (vecteurs numériques)
+
+Poapo n'est lié à aucun secteur : chaque quiz définit ses propres axes numériques,
+par exemple `body` (« Corps », léger → corsé) et `acidity` pour un quiz café, ou
+`budget` et `sportiness` pour un quiz vélo. Un axe possède :
+
+- une clé technique (`^[A-Za-z][A-Za-z0-9_]{0,39}$`, figée après création) ;
+- un libellé et, facultativement, les libellés des extrémités basse et haute.
+
+Un quiz accepte au maximum 12 axes. Ils sont utilisés à trois endroits :
+
+1. **Produit** : la valeur de chaque axe (0 à 1) est stockée dans
+   `attributes.<clé>`. Le formulaire produit affiche un curseur par axe, tous quiz
+   du tenant confondus ; les autres caractéristiques restent libres en JSON.
+2. **Réponse** : dans le Quiz Builder, chaque réponse déplace le profil sur les
+   axes du quiz (impacts de -1 à 1). Le profil part de 0,5 sur chaque axe.
+3. **Recommandation** : le service IA combine 60 % de similarité sémantique et
+   40 % de proximité entre le profil et `attributes` sur les axes du quiz.
+
+Import CSV : le catalogue accepte les colonnes `attribute.<clé>` (le mapping propose
+les axes existants et des « caractéristiques libres ») ; l'import de questions
+accepte les impacts dans des colonnes `<clé>` ou `impact_<clé>`.
 
 Le Quiz Builder et Analytics disposent d'un sélecteur de quiz. Les questions,
 conditions, variantes A/B, sessions et métriques sont isolées par quiz. Une variante
@@ -205,7 +231,8 @@ repli vers un autre quiz.
    **incrémentales**, elles ne constituent pas un schéma initial pour une base vide.
 3. Appliquer dans l'ordre les migrations non encore appliquées :
    - `20261015110000_add_sector_product_attributes` ;
-   - `20261015150000_add_multiple_quizzes`.
+   - `20261015150000_add_multiple_quizzes` ;
+   - `20261022100000_generic_recommendation_axes`.
 4. Régénérer le client Prisma, reconstruire et redéployer ensemble le backend,
    le service IA, l'administration et le front.
 5. Vérifier l'ancien lien `clientId` seul, puis un nouveau lien avec `quizId`.
@@ -219,6 +246,13 @@ Ne pas remplacer cette migration par `db:push` sur une base contenant des donné
 le rattachement des lignes historiques fait partie du SQL de migration. Si les
 colonnes secteur/attributs existent déjà via `db:push`, réconcilier cet état avec
 l'historique avant d'appliquer la première migration, qui ajoute ces colonnes.
+
+La migration `generic_recommendation_axes` retire le modèle spécifique au parfum
+sans perte de données : les anciennes colonnes produit (notes, famille,
+concentration, axes…) sont fusionnées dans `attributes`, les axes de chaque quiz
+sont déduits des clés d'impact de ses réponses, et les codes d'activité deviennent
+des libellés. Les axes ainsi créés reprennent leur clé comme libellé ; renommez-les
+depuis la fiche quiz.
 
 ### Tests ciblés multi-quiz
 
@@ -278,7 +312,7 @@ uvicorn main:app --port 8000            # Production
 | Service IA        | 8000 | http://localhost:8000 |
 | Widget quiz       | 5173 | http://localhost:5173 |
 | Back-office admin | 5174 | http://localhost:5174 |
-| PostgreSQL        | 5432 | localhost:5432        |
+| PostgreSQL        | 5433 | localhost:5433        |
 | Prisma Studio     | 5555 | http://localhost:5555 |
 
 ---
@@ -316,7 +350,7 @@ poapotech/
     │   ├── POST /embed/product     Embedding d'un produit
     │   ├── POST /embed/batch       Embedding batch
     │   ├── POST /recommend         Recommandation par profil utilisateur
-    │   ├── POST /infer/impacts     Impacts olfactifs d'une réponse (GPT-4o-mini)
+    │   ├── POST /infer/impacts     Impacts d'une réponse sur les axes (GPT-4o-mini)
     │   └── POST /map-catalog       Mapping colonnes CSV → champs Poapo (GPT-4o-mini)
     └── requirements.txt
 ```

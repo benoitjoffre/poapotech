@@ -1,6 +1,8 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken } from "../lib/api";
+import { useQuiz } from "../contexts/QuizContext";
+import { collectAxes } from "../lib/productForm";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Step = 1 | 2 | 3;
@@ -31,30 +33,27 @@ const TARGET_FIELDS = [
   { value: "price", label: "Prix" },
   { value: "imageUrl", label: "URL image" },
   { value: "purchaseUrl", label: "URL achat" },
-  { value: "concentration", label: "Concentration (EDT, EDP...)" },
-  { value: "olfactoryFamily", label: "Famille olfactive" },
-  { value: "subFamily", label: "Sous-famille" },
-  { value: "genderTarget", label: "Genre  (male / female / unisex)" },
-  { value: "priceTier", label: "Gamme (entry / mid / luxury / niche)" },
-  { value: "topNotes", label: "Notes de tête (séparées par virgules)" },
-  { value: "heartNotes", label: "Notes de cœur (séparées par virgules)" },
-  { value: "baseNotes", label: "Notes de fond (séparées par virgules)" },
   { value: "tags", label: "Tags (séparés par virgules)" },
-  { value: "freshness", label: "Fraîcheur [0 – 1]" },
-  { value: "intensity", label: "Intensité [0 – 1]" },
-  { value: "sweetness", label: "Douceur [0 – 1]" },
-  { value: "attribute.roastLevel", label: "Café : torréfaction [0 – 1]" },
-  { value: "attribute.acidity", label: "Café : acidité [0 – 1]" },
-  { value: "attribute.body", label: "Café : corps [0 – 1]" },
-  { value: "attribute.sweetness", label: "Café : douceur [0 – 1]" },
-  { value: "attribute.origin", label: "Café : origine" },
-  { value: "seasons", label: "Saisons (virgules)" },
-  { value: "occasions", label: "Occasions (virgules)" },
-  { value: "timeOfDay", label: "Moment (virgules)" },
   { value: "active", label: "Actif (true / false)" },
   { value: "featured", label: "Mis en avant (true / false)" },
-  { value: "attributes", label: "Attributs métier (objet JSON)" },
+  { value: "attributes", label: "Caractéristiques (objet JSON)" },
 ];
+
+/** « Pays d'origine » → « paysDOrigine » : nom d'attribut dérivé de la colonne CSV. */
+function attributeKeyFromColumn(column: string): string {
+  const words = column
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const key = words
+    .map((word, index) => (index === 0 ? word.toLowerCase() : word[0].toUpperCase() + word.slice(1).toLowerCase()))
+    .join("")
+    .replace(/^[0-9]+/, "");
+  return (key || "attribut").slice(0, 40);
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function applyMappingToRow(row: Record<string, string>, mapping: FieldMapping[]): Record<string, string> {
@@ -69,6 +68,12 @@ function applyMappingToRow(row: Record<string, string>, mapping: FieldMapping[])
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function ImportPage() {
   const navigate = useNavigate();
+  const { quizzes } = useQuiz();
+  const axes = useMemo(() => collectAxes(quizzes), [quizzes]);
+  const axisFields = useMemo(
+    () => axes.map((axis) => ({ value: `attribute.${axis.key}`, label: `Axe : ${axis.label} [0 – 1]` })),
+    [axes],
+  );
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [step, setStep] = useState<Step>(1);
@@ -268,6 +273,24 @@ export default function ImportPage() {
                             {f.label}
                           </option>
                         ))}
+                        {axisFields.length > 0 && (
+                          <optgroup label="Axes de recommandation">
+                            {axisFields.map((f) => (
+                              <option key={f.value} value={f.value}>
+                                {f.label}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        <optgroup label="Caractéristique libre">
+                          {[...new Set([`attribute.${attributeKeyFromColumn(sourceColumn)}`, targetField ?? ""])]
+                            .filter((value) => value.startsWith("attribute.") && !axisFields.some((f) => f.value === value))
+                            .map((value) => (
+                              <option key={value} value={value}>
+                                Caractéristique « {value.slice("attribute.".length)} »
+                              </option>
+                            ))}
+                        </optgroup>
                       </select>
                     </td>
                   </tr>

@@ -1,6 +1,7 @@
 """
 poapoai — Service IA de Poapo
-Recommandation par embeddings sémantiques + mapping catalogue via GPT-4o-mini
+Recommandation générique par embeddings sémantiques et axes numériques par quiz
++ mapping catalogue via GPT-4o-mini
 """
 from __future__ import annotations
 
@@ -54,64 +55,55 @@ def get_connection():
     return psycopg2.connect(dsn)
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
-def product_to_text(product: dict) -> str:
+def level_of(value: float) -> str:
+    return "élevé" if value >= 0.65 else "modéré" if value >= 0.4 else "faible"
+
+
+def axis_value_text(axis: dict, value: float) -> str:
+    """Traduit une valeur d'axe [0-1] en texte, via les libellés bas/haut s'ils existent."""
+    label = axis.get("label") or axis["key"]
+    low, high = axis.get("lowLabel"), axis.get("highLabel")
+    if value >= 0.65 and high:
+        return high
+    if value < 0.4 and low:
+        return low
+    return f"{label} {level_of(value)}"
+
+
+def product_to_text(product: dict, axes: list[dict] | None = None) -> str:
     """Convertit un produit en texte sémantique pour l'embedding."""
     parts = []
     if product.get("name"):
         parts.append(product["name"])
     if product.get("brand"):
         parts.append(f"de {product['brand']}")
-    if product.get("olfactoryFamily"):
-        parts.append(f"famille {product['olfactoryFamily']}")
-    if product.get("subFamily"):
-        parts.append(product["subFamily"])
-    notes = []
-    for key in ("topNotes", "heartNotes", "baseNotes"):
-        if product.get(key):
-            notes.extend(product[key])
-    if notes:
-        parts.append(f"notes: {', '.join(notes)}")
     if product.get("tags"):
         parts.append(f"tags: {', '.join(product['tags'])}")
     if product.get("description"):
         parts.append(product["description"][:200])
     attributes = product.get("attributes")
     if isinstance(attributes, dict) and attributes:
-        parts.append("attributs: " + ", ".join(f"{key} {value}" for key, value in attributes.items()))
-    # Axes numériques → mots
-    axes = []
-    if product.get("freshness") is not None:
-        f = float(product["freshness"])
-        axes.append("très frais" if f > 0.7 else "frais" if f > 0.45 else "peu frais")
-    if product.get("intensity") is not None:
-        i = float(product["intensity"])
-        axes.append("très intense" if i > 0.7 else "modéré" if i > 0.45 else "discret")
-    if product.get("sweetness") is not None:
-        s = float(product["sweetness"])
-        axes.append("très doux" if s > 0.7 else "doux" if s > 0.45 else "peu doux")
-    if axes:
-        parts.append(", ".join(axes))
+        axes_by_key = {axis["key"]: axis for axis in axes or []}
+        described = []
+        for key, value in attributes.items():
+            axis = axes_by_key.get(key)
+            if axis and isinstance(value, (int, float)) and not isinstance(value, bool):
+                described.append(axis_value_text(axis, float(value)))
+            else:
+                described.append(f"{key} {value}")
+        parts.append("caractéristiques: " + ", ".join(described))
     return ". ".join(parts)
 
 
-def profile_to_text(profile: dict, gender: str | None, mood: str | None, industry: str = "perfume") -> str:
-    """Convertit un profil utilisateur en texte sémantique."""
-    if industry != "perfume":
-        preferences = ", ".join(f"{key}: {value:.2f}" for key, value in profile.items())
-        return f"Préférences {industry}: {preferences}" if preferences else f"Préférences {industry}"
-
-    parts = []
-    f, i, s = profile.get("freshness", 0.5), profile.get("intensity", 0.5), profile.get("sweetness", 0.5)
-    parts.append("très frais" if f > 0.7 else "frais" if f > 0.45 else "peu frais")
-    parts.append("très intense" if i > 0.7 else "d'intensité modérée" if i > 0.45 else "discret")
-    parts.append("très doux et gourmand" if s > 0.7 else "doux" if s > 0.45 else "peu sucré")
-    if gender == "male":
-        parts.append("masculin")
-    elif gender == "female":
-        parts.append("féminin")
-    if mood:
-        parts.append(f"ambiance {mood}")
-    return "Parfum " + ", ".join(parts)
+def profile_to_text(profile: dict, axes: list[dict], industry: str = "") -> str:
+    """Convertit un profil utilisateur (valeurs par axe) en texte sémantique."""
+    axes_by_key = {axis["key"]: axis for axis in axes}
+    parts = [
+        axis_value_text(axes_by_key.get(key, {"key": key}), float(value))
+        for key, value in profile.items()
+    ]
+    prefix = f"Préférences {industry}".strip() if industry else "Préférences"
+    return f"{prefix}: {', '.join(parts)}" if parts else prefix
 
 
 def cosine_similarity(a: list[float], b: list[float]) -> float:
@@ -123,22 +115,12 @@ def cosine_similarity(a: list[float], b: list[float]) -> float:
     return float(np.dot(arr_a, arr_b) / denom)
 
 
-def euclidean_score(profile: dict, product: dict) -> float:
-    """Score de similarité axiale [0-1] basé sur distance euclidienne."""
-    axes = ["freshness", "intensity", "sweetness"]
-    dist = math.sqrt(sum(
-        (float(profile.get(ax, 0.5)) - float(product.get(ax) or 0.5)) ** 2
-        for ax in axes
-    ))
-    max_dist = math.sqrt(3)
-    return 1 - (dist / max_dist)
-
-
 def generic_attribute_score(profile: dict, attributes: dict) -> float:
+    """Similarité [0-1] entre le profil et les valeurs d'axes du produit (distance euclidienne normalisée)."""
     shared_axes = [
         (float(profile[key]), float(value))
         for key, value in attributes.items()
-        if key in profile and isinstance(value, (int, float))
+        if key in profile and isinstance(value, (int, float)) and not isinstance(value, bool)
     ]
     if not shared_axes:
         return 0.0
@@ -146,68 +128,77 @@ def generic_attribute_score(profile: dict, attributes: dict) -> float:
     return 1 - distance / math.sqrt(len(shared_axes))
 
 
-def build_explanation(profile: dict, product: dict) -> list[str]:
-    bullets = []
-    f = profile.get("freshness", 0.5)
-    i = profile.get("intensity", 0.5)
-    s = profile.get("sweetness", 0.5)
-    if f >= 0.6 and i >= 0.55:
-        bullets.append("Frais mais avec du caractère")
-    elif f >= 0.6:
-        bullets.append("Frais et facile à porter")
-    elif i >= 0.65:
-        bullets.append("Une présence qui se remarque")
-    elif s >= 0.65:
-        bullets.append("Doux et enveloppant")
-    else:
-        bullets.append("Équilibré et agréable au quotidien")
-    if i < 0.45 and s < 0.55:
-        bullets.append("Idéal pour ton rythme quotidien")
-    elif i >= 0.65 or s >= 0.65:
-        bullets.append("Parfait pour les soirées")
-    else:
-        bullets.append("Un bon choix pour les occasions")
-    if i >= 0.6 or s >= 0.6:
-        bullets.append("Un parfum qui évolue bien sur la peau")
-    return bullets[:3]
+def build_explanation(profile: dict, attributes: dict, axes: list[dict]) -> list[str]:
+    """Explique la recommandation par les axes où le produit colle le mieux au profil."""
+    matches = []
+    for axis in axes:
+        key = axis["key"]
+        value = attributes.get(key)
+        if key not in profile or not isinstance(value, (int, float)) or isinstance(value, bool):
+            continue
+        matches.append((abs(float(profile[key]) - float(value)), axis, float(profile[key])))
+    matches.sort(key=lambda item: item[0])
+    bullets = [
+        f"Correspond à ta préférence : {axis_value_text(axis, wanted)}"
+        for gap, axis, wanted in matches[:3]
+        if gap <= 0.25
+    ]
+    return bullets or ["Le produit le plus proche de tes réponses dans notre sélection"]
+
+
+def build_profile_summary(profile: dict, axes: list[dict]) -> dict:
+    return {
+        "axes": [
+            {
+                "key": axis["key"],
+                "label": axis.get("label") or axis["key"],
+                "value": round(float(profile.get(axis["key"], 0.5)), 3),
+                "level": level_of(float(profile.get(axis["key"], 0.5))),
+                "description": axis_value_text(axis, float(profile.get(axis["key"], 0.5))),
+            }
+            for axis in axes
+        ]
+    }
 
 
 # ─── Schémas Pydantic ──────────────────────────────────────────────────────────
+class AxisInput(BaseModel):
+    key: str
+    label: str = ""
+    lowLabel: str | None = None
+    highLabel: str | None = None
+
+
 class ProductInput(BaseModel):
     id: str | None = None
     name: str
     brand: str | None = None
     description: str | None = None
-    olfactoryFamily: str | None = None
-    subFamily: str | None = None
-    topNotes: list[str] = []
-    heartNotes: list[str] = []
-    baseNotes: list[str] = []
     tags: list[str] = []
-    freshness: float | None = None
-    intensity: float | None = None
-    sweetness: float | None = None
     attributes: dict[str, Any] = Field(default_factory=dict)
+    axes: list[AxisInput] = Field(default_factory=list)
 
 
 class RecommendRequest(BaseModel):
     tenantId: str
     profile: dict[str, float] = Field(default_factory=dict)
-    industry: str = "perfume"
+    industry: str = ""
+    axes: list[AxisInput] = Field(default_factory=list)
     productIds: list[str] | None = None
-    gender: str | None = None
-    mood: str | None = None
     topN: int = Field(1, ge=1, le=10)
 
 
 class InferImpactsRequest(BaseModel):
     questionText: str
     answerText: str
+    axes: list[AxisInput]
+    industry: str = ""
 
 
 class MapCatalogRequest(BaseModel):
     headers: list[str]
     sampleRows: list[dict[str, str]]
+    axes: list[AxisInput] = Field(default_factory=list)
 
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
@@ -220,7 +211,8 @@ def health():
 @app.post("/embed/product")
 def embed_product(product: ProductInput):
     """Génère l'embedding d'un produit à partir de son texte sémantique."""
-    text = product_to_text(product.model_dump())
+    data = product.model_dump()
+    text = product_to_text(data, data["axes"])
     model = get_model()
     embedding: list[float] = model.encode(text).tolist()
     return {"embedding": embedding, "text": text, "dims": len(embedding)}
@@ -230,7 +222,7 @@ def embed_product(product: ProductInput):
 def embed_batch(products: list[ProductInput]):
     """Génère les embeddings pour une liste de produits."""
     model = get_model()
-    texts = [product_to_text(p.model_dump()) for p in products]
+    texts = [product_to_text(data, data["axes"]) for data in (p.model_dump() for p in products)]
     embeddings = model.encode(texts).tolist()
     return {
         "results": [
@@ -244,11 +236,17 @@ def embed_batch(products: list[ProductInput]):
 def recommend(req: RecommendRequest):
     """
     Recommande le meilleur produit pour un profil utilisateur.
-    Algorithme : embedding sémantique (cosine) + reranking axial (euclidien) + filtre genre.
+    Algorithme : embedding sémantique (cosine) + proximité sur les axes du quiz (euclidien).
     """
+    axes = [axis.model_dump() for axis in req.axes]
+    # Le profil se limite aux axes définis par le quiz (s'il en a).
+    axis_keys = {axis["key"] for axis in axes}
+    profile_dict = {k: v for k, v in req.profile.items() if not axis_keys or k in axis_keys}
+    if not axes:
+        axes = [{"key": key, "label": key, "lowLabel": None, "highLabel": None} for key in profile_dict]
+
     # 1. Construire le texte profil et l'embedder
-    profile_dict = req.profile
-    profile_text = profile_to_text(profile_dict, req.gender, req.mood, req.industry)
+    profile_text = profile_to_text(profile_dict, axes, req.industry)
     model = get_model()
     profile_emb: list[float] = model.encode(profile_text).tolist()
 
@@ -260,9 +258,7 @@ def recommend(req: RecommendRequest):
         params = (req.tenantId, req.productIds) if req.productIds is not None else (req.tenantId,)
         cur.execute(
             """
-            SELECT id, name, brand, "genderTarget", "olfactoryFamily",
-                   freshness, intensity, sweetness, embedding, attributes,
-                   "topNotes", "heartNotes", "baseNotes", tags
+            SELECT id, embedding, attributes
             FROM "Product"
             WHERE "tenantId" = %s AND active = true
             """ + product_filter,
@@ -275,74 +271,29 @@ def recommend(req: RecommendRequest):
         raise HTTPException(status_code=503, detail=f"DB error: {e}")
 
     if not rows:
-        raise HTTPException(status_code=404, detail="Aucun produit avec embedding trouvé")
+        raise HTTPException(status_code=404, detail="Aucun produit trouvé")
 
-    # 3. Scorer chaque produit
+    # 3. Scorer chaque produit : 60% sémantique + 40% axes
     scored = []
-    for row in rows:
-        pid, name, brand, gender_target, olfactory_family, freshness, intensity, sweetness, emb_json, attributes_json, top_n, heart_n, base_n, tags = row
-
-        # Filtre genre
-        if req.gender and gender_target and gender_target != req.gender and gender_target != "unisex":
-            continue
-
-        product_dict = {
-            "freshness": freshness,
-            "intensity": intensity,
-            "sweetness": sweetness,
-        }
+    for pid, emb_json, attributes_json in rows:
         attributes = json.loads(attributes_json) if isinstance(attributes_json, str) else attributes_json or {}
-
-        # Score sémantique (cosine similarity)
         emb = json.loads(emb_json) if isinstance(emb_json, str) else emb_json
         semantic_score = cosine_similarity(profile_emb, emb) if emb else 0.0
-
-        # Score axial (euclidien)
-        axial_score = (
-            euclidean_score(profile_dict, product_dict)
-            if req.industry == "perfume"
-            else generic_attribute_score(profile_dict, attributes)
-        )
-
-        # Score final : 60% sémantique + 40% axial
-        final_score = 0.6 * semantic_score + 0.4 * axial_score
-
+        axial_score = generic_attribute_score(profile_dict, attributes)
         scored.append({
             "id": pid,
-            "score": final_score,
-            "product": product_dict,
+            "score": 0.6 * semantic_score + 0.4 * axial_score,
             "attributes": attributes,
         })
-
-    if not scored:
-        raise HTTPException(status_code=404, detail="Aucun produit compatible trouvé")
 
     scored.sort(key=lambda x: x["score"], reverse=True)
     best = scored[0]
 
-    # 4. Générer l'explication
-    if req.industry == "perfume":
-        explanation = build_explanation(profile_dict, best["product"])
-    else:
-        explanation = [f"Ce produit correspond le mieux à vos préférences de {req.industry}."]
-
-    # 5. Résumé du profil
-    if req.industry == "perfume":
-        f, i, s = (profile_dict.get(axis, 0.5) for axis in ("freshness", "intensity", "sweetness"))
-        profile_summary = {
-            "freshnessLevel": "élevé" if f >= 0.65 else "modéré" if f >= 0.4 else "faible",
-            "intensityLevel": "élevé" if i >= 0.65 else "modéré" if i >= 0.4 else "faible",
-            "sensualityLevel": "très doux" if s >= 0.65 else "doux" if s >= 0.4 else "peu doux",
-            "usageMoment": "soirée" if i >= 0.65 or s >= 0.65 else "quotidien" if i < 0.45 and s < 0.55 else "occasion",
-        }
-    else:
-        profile_summary = {"preferences": profile_dict}
-
     return {
         "productId": best["id"],
         "score": best["score"],
-        "explanation": explanation,
-        "profileSummary": profile_summary,
+        "explanation": build_explanation(profile_dict, best["attributes"], axes),
+        "profileSummary": build_profile_summary(profile_dict, axes),
         "topN": [{"id": p["id"], "score": p["score"]} for p in scored[: req.topN]],
     }
 
@@ -350,22 +301,27 @@ def recommend(req: RecommendRequest):
 @app.post("/infer/impacts")
 def infer_impacts(req: InferImpactsRequest):
     """
-    Utilise GPT-4o-mini pour inférer les impacts olfactifs d'une réponse de quiz.
-    Retourne { freshness, intensity, sweetness } dans [-0.15, +0.15].
+    Utilise GPT-4o-mini pour inférer l'impact d'une réponse de quiz sur chacun des axes du quiz.
+    Retourne {<clé d'axe>: <float dans [-0.15, +0.15]>}.
     """
     if not openai_client:
         raise HTTPException(status_code=503, detail="OpenAI non configuré")
+    if not req.axes:
+        return {}
 
-    system = """Tu es un expert en parfumerie. 
-On te donne une question et une réponse d'un quiz de recommandation de parfum.
-Tu dois déduire l'impact de cette réponse sur 3 axes olfactifs :
-- freshness : tendance vers le frais/léger vs chaud/lourd
-- intensity : tendance vers le discret vs le sillage marqué
-- sweetness : tendance vers le sec/boisé vs le doux/gourmand
+    axes_desc = "\n".join(
+        f"- {axis.key} : {axis.label or axis.key}"
+        + (f" (de « {axis.lowLabel or 'faible'} » à « {axis.highLabel or 'élevé'} »)" if axis.lowLabel or axis.highLabel else "")
+        for axis in req.axes
+    )
+    activity = f" pour l'activité « {req.industry} »" if req.industry else ""
+    system = f"""Tu es un expert en recommandation produit{activity}.
+On te donne une question et une réponse d'un quiz de recommandation.
+Tu dois déduire l'impact de cette réponse sur les axes suivants :
+{axes_desc}
 
-Réponds UNIQUEMENT avec un JSON valide de la forme :
-{"freshness": <float entre -0.15 et 0.15>, "intensity": <float>, "sweetness": <float>}
-Sois précis et cohérent. 0.0 = neutre."""
+Réponds UNIQUEMENT avec un JSON valide associant chaque clé d'axe à un float entre -0.15 et 0.15.
+0.0 = neutre."""
 
     user = f'Question : "{req.questionText}"\nRéponse : "{req.answerText}"'
 
@@ -376,22 +332,20 @@ Sois précis et cohérent. 0.0 = neutre."""
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        max_tokens=60,
+        max_tokens=40 + 20 * len(req.axes),
         temperature=0.2,
     )
 
     content = response.choices[0].message.content or "{}"
     impacts = json.loads(content)
 
-    # Clamp dans [-0.15, 0.15]
     def clamp(v: Any) -> float:
-        return max(-0.15, min(0.15, float(v or 0)))
+        try:
+            return max(-0.15, min(0.15, float(v or 0)))
+        except (TypeError, ValueError):
+            return 0.0
 
-    return {
-        "freshness": clamp(impacts.get("freshness")),
-        "intensity": clamp(impacts.get("intensity")),
-        "sweetness": clamp(impacts.get("sweetness")),
-    }
+    return {axis.key: clamp(impacts.get(axis.key)) for axis in req.axes}
 
 
 @app.post("/map-catalog")
@@ -404,21 +358,19 @@ def map_catalog(req: MapCatalogRequest):
 
     target_fields = [
         "name", "brand", "description", "price", "imageUrl", "purchaseUrl",
-        "concentration", "olfactoryFamily", "subFamily", "genderTarget",
-        "topNotes", "heartNotes", "baseNotes", "tags",
-        "freshness", "intensity", "sweetness",
-        "attribute.roastLevel", "attribute.acidity", "attribute.body",
-        "attribute.sweetness", "attribute.origin",
-        "seasons", "occasions", "timeOfDay",
-        "priceTier", "featured",
+        "tags", "active", "featured", "attributes",
+        *(f"attribute.{axis.key}" for axis in req.axes),
     ]
+    axes_desc = ", ".join(f"attribute.{axis.key} = {axis.label or axis.key}" for axis in req.axes) or "aucun"
 
     sample_str = json.dumps(req.sampleRows[:5], ensure_ascii=False, indent=2)
 
     system = f"""Tu es un expert en import de catalogues produits multi-secteurs.
 Tu reçois les colonnes d'un fichier CSV et quelques lignes d'exemple.
 Tu dois mapper chaque colonne source vers un champ cible Poapo (ou null si pas de correspondance).
-Le champ attributes reçoit un objet JSON pour les caractéristiques propres au secteur.
+Le champ attributes reçoit un objet JSON de caractéristiques libres.
+Les champs attribute.<clé> sont les axes de recommandation (valeurs numériques entre 0 et 1) : {axes_desc}.
+Une autre caractéristique utile peut être mappée vers attribute.<nomEnCamelCase>.
 
 Champs cibles disponibles : {json.dumps(target_fields)}
 

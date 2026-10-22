@@ -1,4 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import type { Quiz } from "@poapo/types";
 import { apiFetch } from "../lib/api";
@@ -14,6 +21,19 @@ interface QuizContextValue {
 }
 
 const QuizContext = createContext<QuizContextValue | null>(null);
+const MISSING_QUIZ_MESSAGE = "Quiz introuvable pour ce compte.";
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Impossible de charger les quiz.";
+}
+
+function findSelectedQuiz(quizzes: Quiz[], requestedId: string | null): Quiz | null {
+  if (requestedId === null) {
+    return quizzes.find((quiz) => quiz.isDefault) ?? null;
+  }
+
+  return quizzes.find((quiz) => quiz.id === requestedId) ?? null;
+}
 
 export function QuizProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -21,56 +41,89 @@ export function QuizProvider({ children }: { children: ReactNode }) {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const hasTenant = !!user && user.tenantId !== "super-admin";
+
   const reload = useCallback(async () => {
-    if (user?.isSuperAdmin) {
+    if (!hasTenant) {
       setLoading(false);
       return;
     }
+
     setLoading(true);
     setError("");
+
     try {
-      setQuizzes(await apiFetch<Quiz[]>("/api/quizzes"));
-    } catch (err) {
-      setError((err as Error).message);
+      const items = await apiFetch<Quiz[]>("/api/quizzes");
+      setQuizzes(items);
+    } catch (loadError) {
+      setError(getErrorMessage(loadError));
     } finally {
       setLoading(false);
     }
-  }, [user?.isSuperAdmin]);
-  useEffect(() => { void reload(); }, [reload]);
+  }, [hasTenant]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
   const requestedId = params.get("quizId");
-  const quiz = (requestedId === null ? quizzes.find((q) => q.isDefault) : quizzes.find((q) => q.id === requestedId)) ?? null;
-  const selectQuiz = (id: string) => setParams((previous) => {
-    const next = new URLSearchParams(previous);
-    next.set("quizId", id);
-    return next;
-  });
+  const quiz = findSelectedQuiz(quizzes, requestedId);
+  const displayedError = error || (!loading && !quiz ? MISSING_QUIZ_MESSAGE : "");
+
+  const selectQuiz = (id: string) => {
+    setParams((previous) => {
+      const next = new URLSearchParams(previous);
+      next.set("quizId", id);
+      return next;
+    });
+  };
+
   return (
-    <QuizContext.Provider value={{
-      quizzes, quiz, loading,
-      error: error || (!loading && !quiz ? "Quiz introuvable pour ce compte." : ""),
-      selectQuiz, reload,
-    }}>
+    <QuizContext.Provider
+      value={{
+        quizzes,
+        quiz,
+        loading,
+        error: displayedError,
+        selectQuiz,
+        reload,
+      }}
+    >
       {children}
     </QuizContext.Provider>
   );
 }
 
-export function useQuiz() {
+export function useQuiz(): QuizContextValue {
   const context = useContext(QuizContext);
-  if (!context) throw new Error("QuizProvider manquant");
+  if (!context) {
+    throw new Error("QuizProvider manquant");
+  }
+
   return context;
 }
 
 export function QuizSelector() {
   const { quizzes, quiz, selectQuiz } = useQuiz();
+
   return (
     <div className="field-group" style={{ marginBottom: "1rem" }}>
-      <label className="field-label" htmlFor="quiz-selector">Quiz</label>
-      <select id="quiz-selector" className="field-select" value={quiz?.id ?? ""} onChange={(e) => selectQuiz(e.target.value)}>
+      <label className="field-label" htmlFor="quiz-selector">
+        Quiz
+      </label>
+      <select
+        id="quiz-selector"
+        className="field-select"
+        value={quiz?.id ?? ""}
+        onChange={(event) => selectQuiz(event.target.value)}
+      >
         {!quiz && <option value="">Choisir un quiz</option>}
         {quizzes.map((item) => (
           <option key={item.id} value={item.id}>
-            {item.name}{item.isDefault ? " (par défaut)" : ""}{!item.active ? " — désactivé" : ""}
+            {item.name}
+            {item.isDefault ? " (par défaut)" : ""}
+            {!item.active ? " — désactivé" : ""}
           </option>
         ))}
       </select>

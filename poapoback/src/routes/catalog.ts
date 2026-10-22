@@ -2,21 +2,18 @@ import { Router, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { verifyToken, AuthRequest } from "../middleware/auth";
 import type { ProductCreateInput, ProductUpdateInput } from "@poapo/types";
+import { invalidAxisValue, isProductAttributes, tenantAxes } from "../services/axes";
 
 const router = Router();
 router.use(verifyToken);
 
-const SCORING_ATTRIBUTE_KEYS = new Set(["roastLevel", "acidity", "body", "sweetness"]);
-
-function isProductAttributes(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function hasInvalidScoringAttribute(attributes: Record<string, unknown>): boolean {
-  return Object.entries(attributes).some(
-    ([key, value]) =>
-      SCORING_ATTRIBUTE_KEYS.has(key) && (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1),
-  );
+/** Vérifie la forme des attributs et que les valeurs des axes du tenant restent entre 0 et 1. */
+async function attributesError(tenantId: string, attributes: unknown): Promise<string | null> {
+  if (attributes === undefined) return null;
+  if (!isProductAttributes(attributes)) return "Le champ 'attributes' doit être un objet JSON";
+  const axes = await tenantAxes(tenantId);
+  const invalid = invalidAxisValue(attributes, axes.map((axis) => axis.key));
+  return invalid ? `L'axe « ${invalid} » doit être un nombre entre 0 et 1` : null;
 }
 
 async function resolveTenantId(req: AuthRequest): Promise<string> {
@@ -67,13 +64,9 @@ router.get("/products", async (req: AuthRequest, res: Response) => {
         name: true,
         brand: true,
         price: true,
-        priceTier: true,
         imageUrl: true,
-        olfactoryFamily: true,
-        genderTarget: true,
-        freshness: true,
-        intensity: true,
-        sweetness: true,
+        tags: true,
+        attributes: true,
         active: true,
         featured: true,
         createdAt: true,
@@ -107,12 +100,9 @@ router.post("/products", async (req: AuthRequest, res: Response) => {
     res.status(400).json({ error: "Le champ 'name' est obligatoire" });
     return;
   }
-  if (body.attributes !== undefined && !isProductAttributes(body.attributes)) {
-    res.status(400).json({ error: "Le champ 'attributes' doit être un objet JSON" });
-    return;
-  }
-  if (body.attributes && hasInvalidScoringAttribute(body.attributes)) {
-    res.status(400).json({ error: "Les axes de recommandation dans 'attributes' doivent être numériques entre 0 et 1" });
+  const createError = await attributesError(tenantId, body.attributes);
+  if (createError) {
+    res.status(400).json({ error: createError });
     return;
   }
 
@@ -123,25 +113,11 @@ router.post("/products", async (req: AuthRequest, res: Response) => {
       brand: body.brand ?? null,
       description: body.description ?? null,
       price: body.price ?? null,
-      priceTier: body.priceTier ?? null,
       imageUrl: body.imageUrl ?? null,
       purchaseUrl: body.purchaseUrl ?? null,
-      concentration: body.concentration ?? null,
       active: body.active ?? true,
       featured: body.featured ?? false,
-      topNotes: body.topNotes ?? [],
-      heartNotes: body.heartNotes ?? [],
-      baseNotes: body.baseNotes ?? [],
-      olfactoryFamily: body.olfactoryFamily ?? null,
-      subFamily: body.subFamily ?? null,
-      genderTarget: body.genderTarget ?? null,
       tags: body.tags ?? [],
-      freshness: body.freshness ?? null,
-      intensity: body.intensity ?? null,
-      sweetness: body.sweetness ?? null,
-      seasons: body.seasons ?? [],
-      occasions: body.occasions ?? [],
-      timeOfDay: body.timeOfDay ?? [],
       attributes: body.attributes ?? {},
     },
   });
@@ -165,12 +141,9 @@ router.put("/products/:id", async (req: AuthRequest, res: Response) => {
   }
 
   const body = req.body as ProductUpdateInput;
-  if (body.attributes !== undefined && !isProductAttributes(body.attributes)) {
-    res.status(400).json({ error: "Le champ 'attributes' doit être un objet JSON" });
-    return;
-  }
-  if (body.attributes && hasInvalidScoringAttribute(body.attributes)) {
-    res.status(400).json({ error: "Les axes de recommandation dans 'attributes' doivent être numériques entre 0 et 1" });
+  const updateError = await attributesError(tenantId, body.attributes);
+  if (updateError) {
+    res.status(400).json({ error: updateError });
     return;
   }
   const updated = await prisma.product.update({
@@ -180,47 +153,18 @@ router.put("/products/:id", async (req: AuthRequest, res: Response) => {
       ...(body.brand !== undefined && { brand: body.brand }),
       ...(body.description !== undefined && { description: body.description }),
       ...(body.price !== undefined && { price: body.price }),
-      ...(body.priceTier !== undefined && { priceTier: body.priceTier }),
       ...(body.imageUrl !== undefined && { imageUrl: body.imageUrl }),
       ...(body.purchaseUrl !== undefined && { purchaseUrl: body.purchaseUrl }),
-      ...(body.concentration !== undefined && { concentration: body.concentration }),
       ...(body.active !== undefined && { active: body.active }),
       ...(body.featured !== undefined && { featured: body.featured }),
-      ...(body.topNotes !== undefined && { topNotes: body.topNotes }),
-      ...(body.heartNotes !== undefined && { heartNotes: body.heartNotes }),
-      ...(body.baseNotes !== undefined && { baseNotes: body.baseNotes }),
-      ...(body.olfactoryFamily !== undefined && { olfactoryFamily: body.olfactoryFamily }),
-      ...(body.subFamily !== undefined && { subFamily: body.subFamily }),
-      ...(body.genderTarget !== undefined && { genderTarget: body.genderTarget }),
       ...(body.tags !== undefined && { tags: body.tags }),
-      ...(body.freshness !== undefined && { freshness: body.freshness }),
-      ...(body.intensity !== undefined && { intensity: body.intensity }),
-      ...(body.sweetness !== undefined && { sweetness: body.sweetness }),
-      ...(body.seasons !== undefined && { seasons: body.seasons }),
-      ...(body.occasions !== undefined && { occasions: body.occasions }),
-      ...(body.timeOfDay !== undefined && { timeOfDay: body.timeOfDay }),
       ...(body.attributes !== undefined && { attributes: body.attributes }),
     },
   });
 
-  // Re-embed si les données olfactives ont changé
-  const olfactoryChanged = [
-    "name",
-    "brand",
-    "description",
-    "olfactoryFamily",
-    "subFamily",
-    "topNotes",
-    "heartNotes",
-    "baseNotes",
-    "tags",
-    "freshness",
-    "intensity",
-    "sweetness",
-    "attributes",
-  ].some((k) => k in body);
-
-  if (olfactoryChanged) {
+  // Re-embed si le contenu décrivant le produit a changé
+  const descriptionChanged = ["name", "brand", "description", "tags", "attributes"].some((k) => k in body);
+  if (descriptionChanged) {
     triggerEmbedding(updated.id, tenantId).catch(console.error);
   }
 
@@ -258,16 +202,9 @@ async function triggerEmbedding(productId: string, tenantId: string): Promise<vo
       name: product.name,
       brand: product.brand,
       description: product.description,
-      olfactoryFamily: product.olfactoryFamily,
-      subFamily: product.subFamily,
-      topNotes: product.topNotes,
-      heartNotes: product.heartNotes,
-      baseNotes: product.baseNotes,
       tags: product.tags,
       attributes: product.attributes,
-      freshness: product.freshness,
-      intensity: product.intensity,
-      sweetness: product.sweetness,
+      axes: await tenantAxes(tenantId),
     }),
   });
 

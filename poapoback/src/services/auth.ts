@@ -5,13 +5,18 @@ import nodemailer from "nodemailer";
 import { prisma } from "../lib/prisma";
 
 const MAGIC_LINK_EXPIRES_MIN = Number(process.env.MAGIC_LINK_EXPIRES_MIN ?? 15);
+const MAGIC_LINK_EXPIRES_MS = MAGIC_LINK_EXPIRES_MIN * 60 * 1000;
 
-// ─── Mailer ───────────────────────────────────────────────────────────────────
+type AccessTokenPayload = {
+  tenantId: string;
+  email: string;
+  isSuperAdmin?: boolean;
+};
+
 const smtpPort = Number(process.env.SMTP_PORT ?? 587);
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: smtpPort,
-  // 465 = TLS implicite, 587 = STARTTLS
   secure: smtpPort === 465,
   auth: {
     user: process.env.SMTP_USER,
@@ -22,48 +27,45 @@ const transporter = nodemailer.createTransport({
   socketTimeout: 10000,
 });
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+function normalizeEmail(email: string): string {
+  return email.toLowerCase().trim();
+}
+
 function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 
-function signAccessToken(payload: { tenantId: string; email: string; isSuperAdmin?: boolean }): string {
+function signAccessToken(payload: AccessTokenPayload): string {
   return jwt.sign(payload, process.env.JWT_SECRET!, {
     expiresIn: process.env.JWT_EXPIRES_IN ?? "7d",
   } as jwt.SignOptions);
 }
 
-// ─── Service ──────────────────────────────────────────────────────────────────
-export async function sendMagicLink(email: string): Promise<void> {
-  const normalizedEmail = email.toLowerCase().trim();
-
-  // Upsert tenant — première connexion = création du compte
-  const tenant = await prisma.tenant.upsert({
-    where: { email: normalizedEmail },
-    create: { email: normalizedEmail },
-    update: {},
-  });
-
-  // Invalider les tokens précédents non utilisés
+async function createMagicLinkToken(tenantId: string): Promise<string> {
   await prisma.magicToken.updateMany({
-    where: { tenantId: tenant.id, used: false },
+    where: { tenantId, used: false },
     data: { used: true },
   });
 
-  // Générer un token sécurisé
   const rawToken = crypto.randomBytes(32).toString("hex");
-  const tokenHash = hashToken(rawToken);
-  const expiresAt = new Date(Date.now() + MAGIC_LINK_EXPIRES_MIN * 60 * 1000);
 
   await prisma.magicToken.create({
-    data: { tenantId: tenant.id, tokenHash, expiresAt },
+    data: {
+      tenantId,
+      tokenHash: hashToken(rawToken),
+      expiresAt: new Date(Date.now() + MAGIC_LINK_EXPIRES_MS),
+    },
   });
 
+  return rawToken;
+}
+
+async function sendMagicLinkEmail(email: string, rawToken: string): Promise<void> {
   const verifyUrl = `${process.env.ADMIN_URL}/auth/verify?token=${rawToken}`;
 
   await transporter.sendMail({
     from: process.env.EMAIL_FROM,
-    to: normalizedEmail,
+    to: email,
     subject: "Votre lien de connexion Poapo",
     html: `
       <p>Bonjour,</p>
@@ -73,6 +75,20 @@ export async function sendMagicLink(email: string): Promise<void> {
       <p>Si vous n'avez pas demandé ce lien, ignorez cet email.</p>
     `,
   });
+}
+
+export async function sendMagicLink(email: string): Promise<void> {
+  const normalizedEmail = normalizeEmail(email);
+
+  const tenant = await prisma.tenant.upsert({
+    where: { email: normalizedEmail },
+    create: { email: normalizedEmail },
+    update: {},
+  });
+
+  // Seul le hash est stocké en base ; le token brut est transmis par email.
+  const rawToken = await createMagicLinkToken(tenant.id);
+  await sendMagicLinkEmail(normalizedEmail, rawToken);
 }
 
 export async function verifyMagicToken(rawToken: string): Promise<{ accessToken: string }> {
@@ -88,7 +104,6 @@ export async function verifyMagicToken(rawToken: string): Promise<{ accessToken:
   if (new Date() > magicToken.expiresAt) throw new Error("Token expiré");
   if (!magicToken.tenant.active) throw new Error("Compte désactivé");
 
-  // Marquer comme utilisé
   await prisma.magicToken.update({
     where: { id: magicToken.id },
     data: { used: true },
@@ -99,13 +114,15 @@ export async function verifyMagicToken(rawToken: string): Promise<{ accessToken:
   return { accessToken };
 }
 
-// ─── Password-based auth ──────────────────────────────────────────────────────
 export async function loginWithPassword(email: string, password: string): Promise<{ accessToken: string }> {
-  const normalizedEmail = email.toLowerCase().trim();
+  const normalizedEmail = normalizeEmail(email);
 
   const superAdminEmail = process.env.SUPER_ADMIN_EMAIL?.toLowerCase().trim();
   const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD;
-  if (superAdminEmail && superAdminPassword && normalizedEmail === superAdminEmail && password === superAdminPassword) {
+  const isSuperAdmin =
+    superAdminEmail && superAdminPassword && normalizedEmail === superAdminEmail && password === superAdminPassword;
+
+  if (isSuperAdmin) {
     return {
       accessToken: signAccessToken({
         tenantId: "super-admin",
@@ -130,7 +147,10 @@ export async function loginWithPassword(email: string, password: string): Promis
 }
 
 export async function setPassword(tenantId: string, password: string): Promise<void> {
-  if (password.length < 8) throw new Error("Le mot de passe doit contenir au moins 8 caractères");
+  if (password.length < 8) {
+    throw new Error("Le mot de passe doit contenir au moins 8 caractères");
+  }
+
   const passwordHash = await bcrypt.hash(password, 12);
   await prisma.tenant.update({ where: { id: tenantId }, data: { passwordHash } });
 }

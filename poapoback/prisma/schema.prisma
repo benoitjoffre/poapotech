@@ -17,11 +17,12 @@ model Tenant {
   email        String   @unique
   passwordHash String?
   name         String?
-  industry     String   @default("perfume")
+  // Libellé libre de l'activité
+  industry     String   @default("")
   primaryColor String?  @default("#0d9488")
   logoUrl      String?
-  quizTitle    String?  @default("Trouve ton parfum idéal")
-  ctaText      String?  @default("Commencer le quiz")
+  quizTitle    String?  @default("Trouve ton produit idéal")
+  ctaText      String?  @default("Découvrir ma sélection")
   embedDomain  String?
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
@@ -39,7 +40,10 @@ model Quiz {
   id             String   @id @default(cuid())
   tenantId       String
   name           String
-  industry       String   @default("perfume")
+  // Libellé libre de l'activité
+  industry       String   @default("")
+  // Axes numériques de recommandation : [{ key, label, lowLabel?, highLabel? }], valeurs 0–1
+  axes           Json     @default("[]")
   quizTitle      String
   ctaText        String
   active         Boolean  @default(true)
@@ -90,35 +94,16 @@ model MagicToken {
 model Product {
   id            String    @id @default(cuid())
   tenantId      String
-  // Identity
   name          String
   brand         String?
   description   String?
   price         Float?
-  priceTier     PriceTier?
   imageUrl      String?
   purchaseUrl   String?
-  concentration Concentration?
   active        Boolean   @default(true)
   featured      Boolean   @default(false)
-  // Olfactory pyramid
-  topNotes      String[]
-  heartNotes    String[]
-  baseNotes     String[]
-  // Classification
-  olfactoryFamily String?
-  subFamily       String?
-  genderTarget    GenderTarget?
-  tags            String[]
-  // Numeric axes [0–1]
-  freshness     Float?
-  intensity     Float?
-  sweetness     Float?
-  // Usage context
-  seasons       Season[]
-  occasions     Occasion[]
-  timeOfDay     TimeOfDay[]
-  // Sector-specific attributes (for example roast level, acidity and body for coffee)
+  tags          String[]
+  // Caractéristiques propres à l'activité : valeurs des axes du quiz (0–1) et attributs libres
   attributes    Json      @default("{}")
   // AI embedding stored as JSON array (pgvector via raw SQL for queries)
   embedding     Json?
@@ -171,8 +156,8 @@ model Answer {
   imageUrl   String?    // image illustrant la réponse
   order      Int        @default(0)
   active     Boolean    @default(true)
-  // Olfactory axis impacts (stored as JSON: { freshness, intensity, sweetness })
-  impacts    Json       @default("{\"freshness\":0,\"intensity\":0,\"sweetness\":0}")
+  // Impacts sur les axes du quiz : { <clé d'axe>: delta }
+  impacts    Json       @default("{}")
   createdAt  DateTime   @default(now())
   updatedAt  DateTime   @updatedAt
 
@@ -189,8 +174,6 @@ model QuizSession {
   id              String    @id @default(cuid())
   tenantId        String
   quizId          String
-  gender          GenderTarget?
-  mood            String?
   // Stored as JSON: [{ questionId, answerId }]
   answers         Json      @default("[]")
   resultProductId String?
@@ -232,49 +215,6 @@ model Metric {
 // ─────────────────────────────────────────────
 // Enums
 // ─────────────────────────────────────────────
-enum GenderTarget {
-  male
-  female
-  unisex
-}
-
-enum PriceTier {
-  entry
-  mid
-  luxury
-  niche
-}
-
-enum Concentration {
-  EDT
-  EDP
-  Parfum
-  EDC
-  other
-}
-
-enum Season {
-  spring
-  summer
-  autumn
-  winter
-}
-
-enum Occasion {
-  daily
-  evening
-  office
-  sport
-  special
-}
-
-enum TimeOfDay {
-  morning
-  afternoon
-  evening
-  night
-}
-
 enum QuestionType {
   single
   multi

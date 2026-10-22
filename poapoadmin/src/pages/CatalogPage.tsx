@@ -1,19 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import type { PaginatedResponse } from "@poapo/types";
+import type { PaginatedResponse, ProductAttributes } from "@poapo/types";
 import { apiFetch } from "../lib/api";
+import { useQuiz } from "../contexts/QuizContext";
+import { collectAxes } from "../lib/productForm";
 
 interface ProductRow {
   id: string;
   name: string;
   brand: string | null;
   price: number | null;
-  priceTier: string | null;
-  olfactoryFamily: string | null;
-  genderTarget: string | null;
-  freshness: number | null;
-  intensity: number | null;
-  sweetness: number | null;
+  tags: string[];
+  attributes: ProductAttributes;
   active: boolean;
   featured: boolean;
   createdAt: string;
@@ -23,6 +21,8 @@ const PAGE_SIZE = 20;
 
 export default function CatalogPage() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { quizzes } = useQuiz();
+  const axes = useMemo(() => collectAxes(quizzes), [quizzes]);
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
   const search = searchParams.get("search") ?? "";
   const activeFilter = searchParams.get("active") ?? "";
@@ -131,10 +131,9 @@ export default function CatalogPage() {
               <tr>
                 <th>Nom</th>
                 <th>Marque</th>
-                <th>Famille</th>
-                <th>Genre</th>
-                <th>Fraîcheur</th>
-                <th>Intensité</th>
+                <th>Prix</th>
+                <th>Tags</th>
+                <th>Axes</th>
                 <th>Statut</th>
                 <th></th>
               </tr>
@@ -153,10 +152,14 @@ export default function CatalogPage() {
                     </Link>
                   </td>
                   <td>{p.brand ?? "—"}</td>
-                  <td>{p.olfactoryFamily ?? "—"}</td>
-                  <td>{p.genderTarget ?? "—"}</td>
-                  <td>{p.freshness != null ? `${Math.round(p.freshness * 100)}%` : "—"}</td>
-                  <td>{p.intensity != null ? `${Math.round(p.intensity * 100)}%` : "—"}</td>
+                  <td>{p.price != null ? `${p.price.toFixed(2)} €` : "—"}</td>
+                  <td>{p.tags.length > 0 ? p.tags.slice(0, 3).join(", ") : "—"}</td>
+                  <td>
+                    {axes
+                      .filter((axis) => typeof p.attributes?.[axis.key] === "number")
+                      .map((axis) => `${axis.label} ${Math.round((p.attributes[axis.key] as number) * 100)}%`)
+                      .join(" · ") || "—"}
+                  </td>
                   <td>
                     <span className={`badge ${p.active ? "badge-active" : "badge-inactive"}`}>{p.active ? "Actif" : "Inactif"}</span>
                   </td>
