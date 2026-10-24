@@ -1,6 +1,5 @@
 import { Router } from "express";
 import type { QuizAxis, QuizInput } from "@poapo/types";
-import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
 import type { AuthRequest } from "../middleware/auth";
@@ -14,11 +13,44 @@ import {
 } from "../services/quizzes";
 import { resolveCatalog, validateCatalogProducts } from "../services/catalogs";
 import { AxisValidationError, validateAxes } from "../services/axes";
+import { discardQuizEditorDraft, readQuizEditorDraft, saveQuizEditorDraft } from "../services/quizEditorDrafts";
+import { prepareQuizPreview, recommendQuizPreview } from "../services/quizPreview";
+import { checkQuizPublication, lockQuiz, publishQuizDraft } from "../services/quizPublication";
+import { assertPublishedQuizValid } from "../services/quizPublicationDiagnostic";
 
 const router = Router();
 const MAX_INDUSTRY_LENGTH = 80;
 
 router.use(verifyToken);
+
+router.post("/:id/publication/check", asyncRoute(async (req: AuthRequest, res) => {
+  res.json(await checkQuizPublication(req.tenant!.tenantId, req.params.id, req.body?.revision));
+}));
+
+router.post("/:id/publication/publish", asyncRoute(async (req: AuthRequest, res) => {
+  if (req.body?.confirm !== true) throw new QuizError(400, "Confirmation explicite de publication requise");
+  res.json(await publishQuizDraft(req.tenant!.tenantId, req.params.id, req.body?.revision, req.body?.confirmedCampaignIds));
+}));
+
+router.post("/:id/preview", asyncRoute(async (req: AuthRequest, res) => {
+  res.json(await prepareQuizPreview(req.tenant!.tenantId, req.params.id, req.body?.draft));
+}));
+
+router.post("/:id/preview/recommendations", asyncRoute(async (req: AuthRequest, res) => {
+  res.json(await recommendQuizPreview(req.tenant!.tenantId, req.params.id, req.body?.draft, req.body?.answers, req.body?.abVariant));
+}));
+
+router.get("/:id/draft", asyncRoute(async (req: AuthRequest, res) => {
+  res.json(await readQuizEditorDraft(req.tenant!.tenantId, req.params.id));
+}));
+
+router.put("/:id/draft", asyncRoute(async (req: AuthRequest, res) => {
+  res.json(await saveQuizEditorDraft(req.tenant!.tenantId, req.params.id, req.body?.revision, req.body?.draft));
+}));
+
+router.delete("/:id/draft", asyncRoute(async (req: AuthRequest, res) => {
+  res.json(await discardQuizEditorDraft(req.tenant!.tenantId, req.params.id, req.body?.revision));
+}));
 
 function validateInput(raw: unknown, creating: boolean): asserts raw is Partial<QuizInput> & { axes?: QuizAxis[] } {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
@@ -97,6 +129,7 @@ router.post(
 
     const body = req.body;
     const tenantId = req.tenant!.tenantId;
+    if (body.active === true) throw new QuizError(422, "Un nouveau quiz vide doit être créé inactif, puis complété et publié avant activation");
 
     await ensureDefaultQuiz(tenantId);
 
@@ -110,7 +143,8 @@ router.post(
       axes: body.axes,
       quizTitle: body.quizTitle,
       ctaText: body.ctaText,
-      active: body.active,
+      // An empty new quiz cannot be activated before its content is published and checked.
+      active: false,
       useAllProducts: body.useAllProducts,
       productIds,
     });
@@ -130,55 +164,22 @@ router.get(
 router.put(
   "/:id",
   asyncRoute(async (req: AuthRequest, res) => {
+    if (Object.keys(req.body ?? {}).some((key) => key !== "active")) {
+      await resolveQuiz(req.tenant!.tenantId, req.params.id);
+      throw new QuizError(409, "Le contenu du quiz se modifie uniquement via son brouillon avec une révision");
+    }
     validateInput(req.body, false);
 
     const body = req.body;
     const tenantId = req.tenant!.tenantId;
-    const quiz = await resolveQuiz(tenantId, req.params.id);
-    const catalogId = body.catalogId === undefined ? quiz.catalogId : (await resolveCatalog(tenantId, body.catalogId)).id;
-    const catalogChanged = catalogId !== quiz.catalogId;
-    if (catalogChanged && body.productIds === undefined && quiz.products.length > 0) {
-      throw new QuizError(
-        409,
-        "Ce quiz a une sélection de produits de son catalogue actuel : fournissez une nouvelle sélection (éventuellement vide) pour changer de catalogue",
-      );
-    }
-    const productIds = await validateCatalogProducts(tenantId, catalogId, body.productIds);
-
-    const updatedQuiz = await prisma.$transaction(async (tx) => {
-      // La sélection est remplacée avant le changement de catalogue : les clés composites
-      // de QuizProduct refuseraient sinon des produits de l'ancien catalogue.
-      if (productIds !== undefined) await tx.quizProduct.deleteMany({ where: { quizId: quiz.id } });
-
-      const updated = await tx.quiz.update({
+    const updatedQuiz = await prisma.$transaction(async (db) => {
+      const quiz = await lockQuiz(db, tenantId, req.params.id);
+      if (body.active === true) await assertPublishedQuizValid(quiz, db);
+      return db.quiz.update({
         where: { id: quiz.id },
-        data: {
-          ...(catalogChanged && { catalogId }),
-          ...(body.name !== undefined && { name: body.name.trim() }),
-          ...(body.industry !== undefined && { industry: body.industry.trim() }),
-          ...(body.axes !== undefined && { axes: body.axes as unknown as Prisma.InputJsonValue }),
-          ...(body.quizTitle !== undefined && { quizTitle: body.quizTitle.trim() }),
-          ...(body.ctaText !== undefined && { ctaText: body.ctaText.trim() }),
-          ...(body.active !== undefined && { active: body.active }),
-          ...(body.useAllProducts !== undefined && { useAllProducts: body.useAllProducts }),
-          ...(productIds !== undefined && {
-            products: { create: productIds.map((productId) => ({ productId })) },
-          }),
-        },
+        data: { ...(body.active !== undefined && { active: body.active }) },
         include: quizInclude,
       });
-
-      if (quiz.isDefault) {
-        await tx.tenant.update({
-          where: { id: tenantId },
-          data: {
-            industry: body.industry?.trim(),
-            quizTitle: body.quizTitle?.trim(),
-            ctaText: body.ctaText?.trim(),
-          },
-        });
-      }
-      return updated;
     });
 
     res.json(updatedQuiz);

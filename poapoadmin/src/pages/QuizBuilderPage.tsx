@@ -1,17 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import type {
-  Answer,
+  QuizEditorAnswer as Answer,
   AnswerCreateInput,
   AnswerUpdateInput,
-  Question,
-  QuestionCreateInput,
+  QuizEditorQuestion as Question,
+  QuizEditorDraftResponse,
   QuestionType,
   QuestionUpdateInput,
   ReorderPayload,
   Quiz,
 } from "@poapo/types";
-import { apiFetch, getToken } from "../lib/api";
+import { ApiError, getToken } from "../lib/api";
+import { parseQuizTheme } from "@poapo/types";
 import { QuizSelector, useQuiz } from "../contexts/QuizContext";
+import { useQuizEditorDraft, type QuizEditorSession } from "../hooks/useQuizEditorDraft";
+import { useLeaveGuard } from "../hooks/useLeaveGuard";
+import QuizDraftStatus from "../components/QuizDraftStatus";
 
 // ─── Types locaux ─────────────────────────────────────────────────────────────
 
@@ -38,6 +42,8 @@ function AnswerRow({
   onSave,
   onDelete,
   dragHandleProps,
+  onPendingChange,
+  reorderControls,
 }: {
   answer: Answer;
   impactLabels: { key: string; label: string; color: string }[];
@@ -45,6 +51,8 @@ function AnswerRow({
   onSave: (id: string, data: AnswerUpdateInput) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   dragHandleProps?: React.HTMLAttributes<HTMLSpanElement>;
+  onPendingChange: (key: string, pending: boolean) => void;
+  reorderControls?: ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -54,6 +62,12 @@ function AnswerRow({
     impacts: { ...answer.impacts },
     active: answer.active,
   });
+  useEffect(() => {
+    const key = `answer:${answer.id}`;
+    const original = { text: answer.text, emoji: answer.emoji ?? "", impacts: answer.impacts, active: answer.active };
+    onPendingChange(key, editing && JSON.stringify(fields) !== JSON.stringify(original));
+    return () => onPendingChange(key, false);
+  }, [answer, fields, editing, onPendingChange]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -90,7 +104,11 @@ function AnswerRow({
           ))}
         </span>
         <div className="answer-actions">
-          <button type="button" className="btn-icon" title="Modifier" onClick={() => setEditing(true)}>
+          {reorderControls}
+          <button type="button" className="btn-icon" title="Modifier" onClick={() => {
+            setFields({ text: answer.text, emoji: answer.emoji ?? "", impacts: { ...answer.impacts }, active: answer.active });
+            setEditing(true);
+          }}>
             ✏️
           </button>
           <button type="button" className="btn-icon btn-icon--danger" title="Supprimer" onClick={() => onDelete(answer.id)}>
@@ -188,6 +206,9 @@ function QuestionCard({
   onDeleteAnswer,
   onReorderAnswers,
   dragHandleProps,
+  onPendingChange,
+  reorderControls,
+  showReorderControls = false,
 }: {
   question: QuestionWithAnswers;
   impactLabels: { key: string; label: string; color: string }[];
@@ -199,6 +220,9 @@ function QuestionCard({
   onDeleteAnswer: (questionId: string, id: string) => Promise<void>;
   onReorderAnswers: (questionId: string, payload: ReorderPayload) => Promise<void>;
   dragHandleProps?: React.HTMLAttributes<HTMLSpanElement>;
+  onPendingChange: (key: string, pending: boolean) => void;
+  reorderControls?: ReactNode;
+  showReorderControls?: boolean;
 }) {
   const [expanded, setExpanded] = useState(true);
   const [editingMeta, setEditingMeta] = useState(false);
@@ -214,6 +238,16 @@ function QuestionCard({
     abVariant: question.abVariant ?? "",
     active: question.active,
   });
+  useEffect(() => {
+    const key = `question:${question.id}`;
+    const original = {
+      text: question.text, helpText: question.helpText ?? "", type: question.type,
+      conditionAnswerId: question.conditionAnswerId ?? "", abVariant: question.abVariant ?? "", active: question.active,
+    };
+    onPendingChange(key, (editingMeta && JSON.stringify(meta) !== JSON.stringify(original)) ||
+      (addingAnswer && !!(newAnswerText || newAnswerEmoji)));
+    return () => onPendingChange(key, false);
+  }, [question, meta, editingMeta, addingAnswer, newAnswerText, newAnswerEmoji, onPendingChange]);
 
   // Drag state for answers
   const dragAnswerRef = useRef<string | null>(null);
@@ -277,6 +311,7 @@ function QuestionCard({
           ⠿
         </span>
         <span className="question-order">Q{question.order + 1}</span>
+        {reorderControls}
 
         <div className="question-badges">
           <span className="badge badge--type">{question.type}</span>
@@ -290,7 +325,13 @@ function QuestionCard({
             Annuler
           </button>
         ) : (
-          <button type="button" className="btn-ghost btn-sm" onClick={() => setEditingMeta(true)}>
+          <button type="button" className="btn-ghost btn-sm" onClick={() => {
+            setMeta({
+              text: question.text, helpText: question.helpText ?? "", type: question.type,
+              conditionAnswerId: question.conditionAnswerId ?? "", abVariant: question.abVariant ?? "", active: question.active,
+            });
+            setEditingMeta(true);
+          }}>
             ✏️ Modifier
           </button>
         )}
@@ -387,7 +428,7 @@ function QuestionCard({
       {/* Answers */}
       {expanded && (
         <div className="question-answers">
-          {question.answers.map((answer) => (
+          {question.answers.map((answer, index) => (
             <div key={answer.id} onDragOver={(e) => e.preventDefault()} onDrop={() => handleAnswerDrop(answer.id)}>
               <AnswerRow
                 answer={answer}
@@ -401,6 +442,13 @@ function QuestionCard({
                   onMouseDown: (e) => e.stopPropagation(),
                   onTouchStart: (e) => e.stopPropagation(),
                 }}
+                onPendingChange={onPendingChange}
+                reorderControls={showReorderControls && <span className="editor-reorder-controls">
+                  <button type="button" className="btn-icon" aria-label="Monter la réponse" disabled={index === 0}
+                    onClick={() => { handleAnswerDragStart(answer.id); void handleAnswerDrop(question.answers[index - 1].id); }}>↑</button>
+                  <button type="button" className="btn-icon" aria-label="Descendre la réponse" disabled={index === question.answers.length - 1}
+                    onClick={() => { handleAnswerDragStart(answer.id); void handleAnswerDrop(question.answers[index + 1].id); }}>↓</button>
+                </span>}
               />
             </div>
           ))}
@@ -457,17 +505,31 @@ export default function QuizBuilderPage() {
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 
-function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
-  const [questions, setQuestions] = useState<QuestionWithAnswers[]>([]);
-  const scope = useCallback((path: string) => `${path}?quizId=${encodeURIComponent(quiz.id)}`, [quiz.id]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
+export function QuizBuilderContent({ quiz, embedded = false, visible = true, renderAppearance, renderPreview, renderPublication }: {
+  quiz: Quiz;
+  embedded?: boolean;
+  visible?: boolean;
+  renderAppearance?: (editor: QuizEditorSession, disabled: boolean, themeError: string) => ReactNode;
+  renderPreview?: (editor: QuizEditorSession, pending: boolean) => ReactNode;
+  renderPublication?: (editor: QuizEditorSession, pending: boolean, onBusyChange: (busy: boolean) => void) => ReactNode;
+}) {
+  const editor = useQuizEditorDraft(quiz.id);
+  const questions = editor.draft?.questions ?? [];
+  const { loading } = editor;
+  const [publicationBusy, setPublicationBusy] = useState(false);
+  const saving = editor.saving || publicationBusy;
+  const [pending, setPending] = useState<Record<string, boolean>>({});
+  const onPendingChange = useCallback((key: string, value: boolean) => {
+    setPending((previous) => previous[key] === value ? previous : { ...previous, [key]: value });
+  }, []);
+  const setQuestions = (update: (questions: QuestionWithAnswers[]) => QuestionWithAnswers[]) => {
+    if (loading || saving || importing) return;
+    editor.setDraft((current) => current ? { ...current, questions: update(current.questions) } : current);
+  };
   const [importFile, setImportFile] = useState<File | null>(null);
-  const [importTenantEmail, setImportTenantEmail] = useState("demo@poapo-tech.com");
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<string>("");
-  const impactLabels = quiz.axes.map((axis, index) => ({
+  const impactLabels = (editor.draft?.config.axes ?? quiz.axes).map((axis, index) => ({
     key: axis.key,
     label: axis.label,
     color: AXIS_COLORS[index % AXIS_COLORS.length],
@@ -480,6 +542,12 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
     helpText: "",
     type: "single",
   });
+  const hasPending = Object.values(pending).some(Boolean) || (showNewForm && !!(newQuestion.text || newQuestion.helpText));
+  const unsaved = editor.dirty || hasPending;
+  let themeError = "";
+  try { parseQuizTheme(editor.draft?.theme); }
+  catch (err) { themeError = err instanceof Error ? err.message : "Thème invalide"; }
+  useLeaveGuard(unsaved, "Des modifications locales ne sont pas enregistrées dans le brouillon. Quitter sans les enregistrer ?");
 
   // Drag state for questions
   const dragQuestionRef = useRef<string | null>(null);
@@ -491,56 +559,36 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
     return acc;
   }, {});
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await apiFetch<QuestionWithAnswers[]>(scope("/api/quiz/builder/questions"));
-      setQuestions(data);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [scope]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   const handleImportCsv = async () => {
-    if (!importFile) return;
+    if (!importFile || !editor.state || unsaved) return;
     setImporting(true);
     setImportResult("");
     try {
       const formData = new FormData();
       formData.append("file", importFile);
-      if (importTenantEmail.trim()) formData.append("tenantEmail", importTenantEmail.trim());
+      formData.append("revision", String(editor.state.revision));
 
       const token = getToken();
-      const res = await fetch(scope("/api/quiz/builder/questions/import-csv"), {
+      const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
+      const res = await fetch(`${baseUrl}/api/quiz/builder/questions/import-csv?quizId=${encodeURIComponent(quiz.id)}`, {
         method: "POST",
         headers: token ? { Authorization: `Bearer ${token}` } : undefined,
         body: formData,
       });
 
-      let body: { createdQuestions?: number; createdAnswers?: number; skippedRows?: number; totalRows?: number; error?: string } = {};
-      try {
-        body = (await res.json()) as typeof body;
-      } catch {
-        // ignore parse error and fallback to generic message
-      }
-
+      const body = await res.json() as QuizEditorDraftResponse & {
+        createdQuestions: number; createdAnswers: number; skippedRows: number; totalRows: number; error?: string;
+      };
       if (!res.ok) {
-        throw new Error(body.error ?? `Erreur ${res.status}`);
+        throw new ApiError(res.status, body.error ?? `Erreur ${res.status}`);
       }
-
+      editor.accept(body);
       setImportResult(
         `Import termine: ${body.createdQuestions ?? 0} question(s), ${body.createdAnswers ?? 0} reponse(s), ${body.skippedRows ?? 0} ligne(s) ignoree(s) sur ${body.totalRows ?? 0}.`,
       );
       setImportFile(null);
-      await load();
     } catch (err) {
+      editor.fail(err);
       setImportResult(`Erreur import: ${(err as Error).message}`);
     } finally {
       setImporting(false);
@@ -558,81 +606,74 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
 
   const handleCreateQuestion = async () => {
     if (!newQuestion.text.trim()) return;
-    setSaving(true);
-    try {
-      const created = await apiFetch<QuestionWithAnswers>(scope("/api/quiz/builder/questions"), {
-        method: "POST",
-        body: JSON.stringify({
-          text: newQuestion.text.trim(),
-          helpText: newQuestion.helpText || null,
-          type: newQuestion.type,
-        } satisfies QuestionCreateInput),
-      });
-      setQuestions((prev) => [...prev, created]);
-      setNewQuestion({ text: "", helpText: "", type: "single" });
-      setShowNewForm(false);
-    } catch (err) {
-      alert((err as Error).message);
-    } finally {
-      setSaving(false);
-    }
+    const created: QuestionWithAnswers = {
+      id: `draft_${crypto.randomUUID()}`, text: newQuestion.text.trim(),
+      helpText: newQuestion.helpText || null, type: newQuestion.type, imageUrl: null,
+      conditionAnswerId: null, abVariant: null, active: true,
+      order: Math.max(-1, ...questions.map((q) => q.order)) + 1, answers: [],
+    };
+    setQuestions((prev) => [...prev, created]);
+    setNewQuestion({ text: "", helpText: "", type: "single" });
+    setShowNewForm(false);
   };
 
   const handleUpdateQuestion = async (id: string, data: QuestionUpdateInput) => {
-    const updated = await apiFetch<QuestionWithAnswers>(scope(`/api/quiz/builder/questions/${id}`), {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
-    setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...updated } : q)));
+    setQuestions((prev) => prev.map((q) => (q.id === id ? { ...q, ...data } : q)));
   };
 
   const handleDeleteQuestion = async (id: string) => {
     const q = questions.find((q) => q.id === id);
-    if (!confirm(`Supprimer la question « ${q?.text ?? id} » et toutes ses réponses ?`)) return;
-    await apiFetch(scope(`/api/quiz/builder/questions/${id}`), { method: "DELETE" });
-    setQuestions((prev) => prev.filter((q) => q.id !== id));
+    const removedIds = new Set(q?.answers.map((a) => a.id));
+    const dependent = questions.some((item) => item.conditionAnswerId && removedIds.has(item.conditionAnswerId));
+    if (!confirm(`Supprimer la question « ${q?.text ?? id} » et toutes ses réponses ?${dependent ? " Les questions qui en dépendent deviendront inconditionnelles dans le brouillon." : ""}`)) return;
+    setQuestions((prev) => prev.filter((q) => q.id !== id).map((q) =>
+      q.conditionAnswerId && removedIds.has(q.conditionAnswerId) ? { ...q, conditionAnswerId: null } : q));
   };
 
   // ── CRUD Answers ────────────────────────────────────────────────────────────
 
   const handleAddAnswer = async (questionId: string, data: AnswerCreateInput) => {
-    const answer = await apiFetch<Answer>(scope(`/api/quiz/builder/questions/${questionId}/answers`), {
-      method: "POST",
-      body: JSON.stringify(data),
-    });
+    const question = questions.find((q) => q.id === questionId);
+    if (!question) throw new Error("Question absente du brouillon");
+    const answer: Answer = {
+      id: `draft_${crypto.randomUUID()}`, text: data.text, emoji: data.emoji ?? null,
+      imageUrl: data.imageUrl ?? null, active: true, impacts: {},
+      order: Math.max(-1, ...question.answers.map((a) => a.order)) + 1,
+    };
     setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, answers: [...q.answers, answer] } : q)));
   };
 
   const handleUpdateAnswer = async (id: string, data: AnswerUpdateInput) => {
-    const updated = await apiFetch<Answer>(scope(`/api/quiz/builder/answers/${id}`), {
-      method: "PUT",
-      body: JSON.stringify(data),
-    });
     setQuestions((prev) =>
       prev.map((q) => ({
         ...q,
-        answers: q.answers.map((a) => (a.id === id ? updated : a)),
+        answers: q.answers.map((a) => (a.id === id ? { ...a, ...data, impacts: data.impacts ? Object.fromEntries(
+          Object.entries(data.impacts).filter((entry): entry is [string, number] => typeof entry[1] === "number"),
+        ) : a.impacts } : a)),
       })),
     );
   };
 
   const handleDeleteAnswer = async (questionId: string, id: string) => {
-    await apiFetch(scope(`/api/quiz/builder/answers/${id}`), { method: "DELETE" });
-    setQuestions((prev) => prev.map((q) => (q.id === questionId ? { ...q, answers: q.answers.filter((a) => a.id !== id) } : q)));
+    const dependent = questions.some((q) => q.conditionAnswerId === id);
+    if (!confirm(`Supprimer cette réponse ?${dependent ? " Les questions qui en dépendent deviendront inconditionnelles dans le brouillon." : ""}`)) return;
+    setQuestions((prev) => prev.map((q) => ({
+      ...q, answers: q.id === questionId ? q.answers.filter((a) => a.id !== id) : q.answers,
+      conditionAnswerId: q.conditionAnswerId === id ? null : q.conditionAnswerId,
+    })));
   };
 
   // ── Reorder ─────────────────────────────────────────────────────────────────
 
   const handleReorderAnswers = async (questionId: string, payload: ReorderPayload) => {
-    await apiFetch<{ ok: boolean }>(scope("/api/quiz/builder/answers/reorder-all"), {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    });
     const orderedIds = payload.order.map((o) => o.id);
     setQuestions((prev) =>
       prev.map((q) => {
         if (q.id !== questionId) return q;
-        const reordered = orderedIds.map((id) => q.answers.find((a) => a.id === id)).filter(Boolean) as Answer[];
+        const reordered = orderedIds.flatMap((id, order) => {
+          const answer = q.answers.find((a) => a.id === id);
+          return answer ? [{ ...answer, order }] : [];
+        });
         return { ...q, answers: reordered };
       }),
     );
@@ -643,6 +684,7 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
   };
 
   const handleQuestionDrop = async (targetId: string) => {
+    if (saving || importing) return;
     const dragId = dragQuestionRef.current;
     if (!dragId || dragId === targetId) return;
 
@@ -654,23 +696,7 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
     const [moved] = reordered.splice(fromIdx, 1);
     reordered.splice(toIdx, 0, moved);
 
-    const payload = {
-      order: reordered.map((q, i) => ({ id: q.id, order: i })),
-    };
-
-    try {
-      await apiFetch<{ ok: boolean }>(scope("/api/quiz/builder/questions/reorder"), {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
-      // Update state after successful API call
-      const orderedIds = payload.order.map((o) => o.id);
-      const reorderedAfter = orderedIds.map((id) => questions.find((q) => q.id === id)).filter(Boolean) as QuestionWithAnswers[];
-      setQuestions(reorderedAfter);
-    } catch (err) {
-      alert((err as Error).message);
-      void load(); // revert
-    }
+    setQuestions(() => reordered.map((q, order) => ({ ...q, order })));
     dragQuestionRef.current = null;
   };
 
@@ -678,10 +704,29 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
 
   return (
     <div className="page">
+      <QuizDraftStatus dirty={unsaved} hasChanges={editor.state?.hasChanges ?? false}
+        revision={editor.state?.revision ?? 0} saving={saving || importing || loading} conflict={editor.conflict} error={editor.error}
+        onReload={() => {
+          if (!unsaved || confirm("Recharger et perdre les modifications locales non enregistrées ?")) void editor.load();
+        }}
+        onDiscard={() => {
+          if (confirm("Abandonner toutes les modifications préparatoires de ce quiz ? Le contenu public restera inchangé.")) {
+            void editor.discard().then((ok) => { if (ok) { setShowNewForm(false); setPending({}); } });
+          }
+        }} />
+      {hasPending && <p role="status">Terminez ou annulez les formulaires ouverts avant d'enregistrer le brouillon.</p>}
+      {themeError && <p id="theme-validation-error" className="form-error" role="alert">{themeError}</p>}
+      <button type="button" className="btn-primary"
+        disabled={loading || saving || importing || !editor.draft || !editor.dirty || hasPending || editor.conflict || !!themeError}
+        onClick={() => void editor.save()}>Enregistrer le brouillon</button>
+      <div hidden={!visible} className="quiz-editor-panel"
+        {...(embedded ? { role: "tabpanel", id: "editor-panel-questions", "aria-labelledby": "editor-tab-questions" } : {})}>
+      <fieldset disabled={loading || saving || importing || !editor.draft} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Quiz Builder — {quiz.name}</h1>
+          {embedded ? <h2 className="page-title">Questions et réponses</h2> :
+            <h1 className="page-title">Quiz Builder — {quiz.name}</h1>}
           <p className="page-subtitle">
             {questions.length} question{questions.length !== 1 ? "s" : ""} · {questions.filter((q) => q.active).length} active
             {questions.filter((q) => q.active).length !== 1 ? "s" : ""}
@@ -691,6 +736,7 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
           + Nouvelle question
         </button>
       </div>
+      <p className="section-hint">Les boutons des cartes appliquent les changements localement. Enregistrez ensuite le brouillon complet.</p>
 
       {/* A/B Stats */}
       {Object.keys(variantStats).length > 1 && (
@@ -707,15 +753,7 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
       {/* CSV Import */}
       <div className="new-question-form" style={{ marginBottom: "1rem" }}>
         <h3 className="form-section-title">Import CSV Questions/Reponses</h3>
-        <div className="form-row">
-          <label className="form-label">Tenant email (utile en super-admin)</label>
-          <input
-            className="input"
-            placeholder="demo@poapo-tech.com"
-            value={importTenantEmail}
-            onChange={(e) => setImportTenantEmail(e.target.value)}
-          />
-        </div>
+        <p className="section-hint">L'import ajoute les questions au brouillon, jamais au quiz public. Enregistrez d'abord les changements locaux.</p>
         <div className="form-row">
           <label className="form-label">Fichier CSV</label>
           <input className="input" type="file" accept=".csv,text/csv" onChange={(e) => setImportFile(e.target.files?.[0] ?? null)} />
@@ -725,7 +763,7 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
           {impactLabels.length > 0 && <>, et une colonne d'impact (-1 à 1) par axe : {impactLabels.map((axis) => axis.key).join(", ")}</>}.
         </p>
         <div className="new-question-actions">
-          <button type="button" className="btn-primary" onClick={() => void handleImportCsv()} disabled={!importFile || importing}>
+          <button type="button" className="btn-primary" onClick={() => void handleImportCsv()} disabled={!importFile || importing || unsaved || editor.conflict}>
             {importing ? "Import en cours..." : "Importer le CSV"}
           </button>
         </div>
@@ -733,7 +771,6 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
       </div>
 
       {loading && <p className="text-muted">Chargement…</p>}
-      {error && <p className="error-msg">{error}</p>}
 
       {/* New question form */}
       {showNewForm && (
@@ -797,8 +834,8 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
             </button>
           </div>
         )}
-        {questions.map((question) => (
-          <div key={question.id} onDragOver={(e) => e.preventDefault()} onDrop={() => handleQuestionDrop(question.id)}>
+        {questions.map((question, index) => (
+          <div id={`editor-question-${question.id}`} key={`${editor.state?.revision}:${question.id}`} onDragOver={(e) => e.preventDefault()} onDrop={() => handleQuestionDrop(question.id)}>
             <QuestionCard
               question={question}
               impactLabels={impactLabels}
@@ -809,6 +846,14 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
               onUpdateAnswer={handleUpdateAnswer}
               onDeleteAnswer={handleDeleteAnswer}
               onReorderAnswers={handleReorderAnswers}
+              onPendingChange={onPendingChange}
+              showReorderControls={embedded}
+              reorderControls={embedded && <span className="editor-reorder-controls">
+                <button type="button" className="btn-icon" aria-label="Monter la question" disabled={index === 0}
+                  onClick={() => { handleQuestionDragStart(question.id); handleQuestionDrop(questions[index - 1].id); }}>↑</button>
+                <button type="button" className="btn-icon" aria-label="Descendre la question" disabled={index === questions.length - 1}
+                  onClick={() => { handleQuestionDragStart(question.id); handleQuestionDrop(questions[index + 1].id); }}>↓</button>
+              </span>}
               dragHandleProps={{
                 draggable: true,
                 onDragStart: () => handleQuestionDragStart(question.id),
@@ -819,6 +864,11 @@ function QuizBuilderContent({ quiz }: { quiz: Quiz }) {
           </div>
         ))}
       </div>
+      </fieldset>
+      </div>
+      {renderAppearance?.(editor, loading || saving || importing || !editor.draft, themeError)}
+      {renderPreview?.(editor, hasPending)}
+      {renderPublication?.(editor, hasPending, setPublicationBusy)}
     </div>
   );
 }

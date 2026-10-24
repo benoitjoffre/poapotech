@@ -1,4 +1,5 @@
 import type { Question } from "@poapo/types";
+import { visibleQuizQuestions } from "@poapo/types";
 
 const AB_STORAGE_KEY = "poapo_ab_variant";
 
@@ -23,15 +24,5 @@ export function filterVisibleQuestions(
   selectedAnswerIds: Set<string>,
   abVariant: string | null,
 ): Question[] {
-  return questions.filter((question) => {
-    if (question.abVariant && abVariant && question.abVariant !== abVariant) {
-      return false;
-    }
-
-    if (question.conditionAnswerId && !selectedAnswerIds.has(question.conditionAnswerId)) {
-      return false;
-    }
-
-    return true;
-  });
+  return visibleQuizQuestions(questions, selectedAnswerIds, abVariant);
 }

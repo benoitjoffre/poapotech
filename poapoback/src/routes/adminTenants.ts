@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import { prisma } from "../lib/prisma";
 import { verifySuperAdmin, AuthRequest } from "../middleware/auth";
 import type { TenantAdminCreateInput, TenantAdminUpdateInput } from "@poapo/types";
-import { ensureDefaultQuiz, asyncRoute } from "../services/quizzes";
+import { asyncRoute, QuizError } from "../services/quizzes";
 
 const router = Router();
 
@@ -97,6 +97,9 @@ router.post("/", async (req: AuthRequest, res: Response) => {
 router.put("/:id", asyncRoute(async (req: AuthRequest, res: Response) => {
   const id = String(req.params.id);
   const body = req.body as TenantAdminUpdateInput;
+  if (body.quizTitle !== undefined || body.ctaText !== undefined) {
+    throw new QuizError(409, "Le titre et le CTA du quiz se modifient uniquement dans son brouillon");
+  }
 
   const existing = await prisma.tenant.findUnique({ where: { id }, select: { id: true } });
   if (!existing) {
@@ -104,14 +107,11 @@ router.put("/:id", asyncRoute(async (req: AuthRequest, res: Response) => {
     return;
   }
 
-  const quiz = await ensureDefaultQuiz(id);
-  const [updated] = await prisma.$transaction([prisma.tenant.update({
+  const updated = await prisma.tenant.update({
     where: { id },
     data: {
       ...(body.name !== undefined ? { name: body.name?.trim() || null } : {}),
       ...(body.active !== undefined ? { active: body.active } : {}),
-      ...(body.quizTitle !== undefined ? { quizTitle: body.quizTitle?.trim() || null } : {}),
-      ...(body.ctaText !== undefined ? { ctaText: body.ctaText?.trim() || null } : {}),
       ...(body.primaryColor !== undefined ? { primaryColor: body.primaryColor?.trim() || null } : {}),
       ...(body.embedDomain !== undefined ? { embedDomain: body.embedDomain?.trim() || null } : {}),
     },
@@ -126,13 +126,7 @@ router.put("/:id", asyncRoute(async (req: AuthRequest, res: Response) => {
       ctaText: true,
       primaryColor: true,
     },
-  }), prisma.quiz.update({
-    where: { id: quiz.id },
-    data: {
-      ...(body.quizTitle !== undefined && { quizTitle: body.quizTitle?.trim() || "Trouve ton produit idéal" }),
-      ...(body.ctaText !== undefined && { ctaText: body.ctaText?.trim() || "Découvrir ma sélection" }),
-    },
-  })]);
+  });
 
   res.json(updated);
 }));

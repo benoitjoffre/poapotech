@@ -31,10 +31,10 @@ let base: string;
 const originalFetch = globalThis.fetch;
 const restores: (() => void)[] = [];
 
-function stub<T extends object, K extends keyof T>(target: T, key: K, value: T[K]) {
+function stub<T extends object>(target: T, key: keyof T, implementation: (...args: never[]) => unknown) {
   const previous = target[key];
-  target[key] = value;
-  restores.push(() => { target[key] = previous; });
+  assert.ok(Reflect.set(target, key, implementation));
+  restores.push(() => { assert.ok(Reflect.set(target, key, previous)); });
 }
 
 /** Évaluateur minimal des filtres Prisma utilisés par la route (égalité, in, comparaisons, contains, AND/OR). */
@@ -107,7 +107,25 @@ beforeEach(() => {
 
 before(async () => {
   process.env.JWT_SECRET = "multi-quiz-tests-only";
+  stub(prisma, "$transaction", async (fn: (db: typeof prisma) => unknown) => fn(prisma));
+  stub(prisma, "$queryRaw", async (_sql: unknown, quizId: unknown, tenantId: unknown) =>
+    quizzes.filter((q) => q.id === quizId && q.tenantId === tenantId).map((q) => ({ id: q.id })));
   stub(prisma.tenant, "findUnique", (async () => null) as typeof prisma.tenant.findUnique);
+  stub(prisma.tenant, "findUniqueOrThrow", async () => ({ primaryColor: "#246753", logoUrl: null }));
+  stub(prisma.quiz, "findFirstOrThrow", async ({ where }: { where: { id: string; tenantId: string } }) => {
+    const quiz = quizzes.find((q) => q.id === where.id && q.tenantId === where.tenantId);
+    assert.ok(quiz);
+    return { ...quiz, products: [], industry: "", axes: [], quizTitle: "Titre", ctaText: "Découvrir",
+      catalog: { id: quiz.catalogId, name: catalogNames[String(quiz.catalogId)] } };
+  });
+  stub(prisma.question, "findMany", async () => [{
+    id: "q", text: "Question", helpText: null, imageUrl: null, type: "single", active: true, order: 0,
+    conditionAnswerId: null, abVariant: null,
+    answers: [{ id: "a", text: "Réponse", emoji: null, imageUrl: null, active: true, order: 0, impacts: {} }],
+  }]);
+  stub(prisma.catalog, "findFirst", async ({ where }: { where: { id: string; tenantId: string } }) =>
+    ({ id: where.id, tenantId: where.tenantId, name: catalogNames[where.id] }));
+  stub(prisma.product, "findMany", async () => [{ id: "p", attributes: {}, embedding: [] }]);
   stub(prisma.quiz, "upsert", (async () => {
     throw new Error("Une campagne ne doit jamais créer de quiz par défaut");
   }) as typeof prisma.quiz.upsert);
@@ -207,6 +225,24 @@ test("filtres par statut calculé, recherche et paramètres invalides", async ()
   assert.equal((await request("?status=LIVE")).status, 400);
   assert.equal((await request("?occasion=EASTER")).status, 400);
   assert.equal((await request("?sort=__proto__")).status, 400);
+});
+
+test("éditeur : les campagnes partageant le quiz restent isolées par tenant et catalogue", async () => {
+  campaigns.push(campaign({ id: "other-catalog", quizId: "sleeping", name: "Autre catalogue" }));
+  const response = await request("?quizId=coffee");
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.data.length, 5);
+  assert.ok(body.data.every((item: Row) => item.tenantId === "tenant-a" && item.quizId === "coffee"));
+  for (const item of body.data) {
+    assert.deepEqual(item.quiz.catalog, { id: "catalog-a", name: "Catalogue principal" });
+  }
+  const foreign = await (await request("?quizId=foreign-quiz")).json();
+  assert.deepEqual(foreign.data, []);
+  const inactive = await (await request("/other-catalog")).json();
+  assert.equal(inactive.quiz.id, "sleeping");
+  assert.equal(inactive.quiz.active, false);
+  assert.deepEqual(inactive.quiz.catalog, { id: "catalog-voyages", name: "Voyages" });
 });
 
 test("effectiveStatusWhere est cohérent avec effectiveStatus pour toutes les combinaisons", () => {

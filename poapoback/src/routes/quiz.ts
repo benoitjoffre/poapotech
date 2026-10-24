@@ -4,7 +4,8 @@ import { verifyToken, AuthRequest } from "../middleware/auth";
 import type { QuizSubmitPayload, MetricType } from "@poapo/types";
 import { publicQuizScope, adminQuizScope, getQuiz, asyncRoute } from "../services/quizzes";
 import { parseAxes } from "../services/axes";
-import { computeProfile } from "../services/scoring";
+import { recommendQuiz } from "../services/quizRecommendations";
+import { QuizError } from "../services/quizzes";
 import { localInsightsFromSnapshot, type MetricsSnapshot } from "../services/quizInsights";
 
 const router = Router();
@@ -134,56 +135,10 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
     }
 
     const axes = parseAxes(quiz.axes);
-    const profile = computeProfile(axes, answerDocs.map((ans) => ans.impacts));
-
-    // Appel au service IA pour la recommandation
-    const aiResponse = await fetch(`${aiUrl}/recommend`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        tenantId: clientId,
-        // Le moteur ne classe que les produits du catalogue du quiz (useAllProducts inclus).
-        catalogId: quiz.catalogId,
-        profile,
-        industry: quiz.industry,
-        axes,
-        productIds,
-      }),
-      signal: AbortSignal.timeout(10_000),
+    const { product, explanation, profileSummary } = await recommendQuiz({
+      tenantId: clientId, catalogId: quiz.catalogId, industry: quiz.industry,
+      axes, productIds, impacts: answerDocs.map((ans) => ans.impacts),
     });
-
-    if (!aiResponse.ok) {
-      throw new Error(`AI service error: ${aiResponse.status}`);
-    }
-
-    const { productId, explanation, profileSummary } = (await aiResponse.json()) as {
-      productId: string;
-      explanation: string[];
-      profileSummary: Record<string, unknown>;
-    };
-
-    if (productIds && !productIds.includes(productId)) {
-      res.status(502).json({ error: "Le produit recommandé ne fait pas partie de ce quiz" });
-      return;
-    }
-    const product = await prisma.product.findFirst({
-      where: { id: productId, tenantId: clientId, catalogId: quiz.catalogId, active: true },
-      select: {
-        id: true,
-        name: true,
-        brand: true,
-        description: true,
-        price: true,
-        imageUrl: true,
-        purchaseUrl: true,
-        tags: true,
-        attributes: true,
-      },
-    });
-    if (!product) {
-      res.status(502).json({ error: "La recommandation renvoyée ne correspond à aucun produit" });
-      return;
-    }
 
     // Persister la session
     const session = await prisma.quizSession.create({
@@ -191,7 +146,7 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
         tenantId: clientId,
         quizId: quiz.id,
         answers: answers as unknown as object,
-        resultProductId: productId,
+        resultProductId: product.id,
         decisionTime: decisionTime ?? null,
         abVariant: abVariant ?? null,
         completedAt: new Date(),
@@ -200,6 +155,10 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
 
     res.json({ sessionId: session.id, quizId: quiz.id, industry: quiz.industry, product, explanation, profileSummary });
   } catch (err) {
+    if (err instanceof QuizError) {
+      res.status(err.status).json({ error: err.message });
+      return;
+    }
     console.error("[quiz] submit error:", err);
     res.status(500).json({ error: "Erreur lors du calcul de la recommandation" });
   }

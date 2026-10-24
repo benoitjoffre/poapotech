@@ -5,7 +5,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { SUPER_ADMIN_TENANT_ID, verifyToken } from "../middleware/auth";
 import type { AuthRequest } from "../middleware/auth";
-import { asyncRoute, QuizError, resolveQuiz } from "../services/quizzes";
+import { asyncRoute, QuizError, quizInclude, resolveQuiz } from "../services/quizzes";
 import {
   assertCampaignConsistency,
   CAMPAIGN_LIMITS,
@@ -19,6 +19,8 @@ import {
 } from "../services/campaigns";
 import type { CampaignWithQuiz } from "../services/campaigns";
 import quizGenerationRouter from "./quizGeneration";
+import { lockQuiz } from "../services/quizPublication";
+import { assertPublishedQuizValid } from "../services/quizPublicationDiagnostic";
 
 const router = Router();
 
@@ -126,7 +128,7 @@ router.post(
   asyncRoute(async (req: AuthRequest, res) => {
     const tenantId = tenantOf(req);
     const input = parseCampaignInput(req.body, true);
-    const quiz = await resolveQuiz(tenantId, input.quizId);
+    const selected = await resolveQuiz(tenantId, input.quizId);
     const merged = {
       occasion: input.occasion!,
       occasionLabel: input.occasionLabel ?? null,
@@ -134,9 +136,11 @@ router.post(
       startsAt: input.startsAt ?? null,
       endsAt: input.endsAt ?? null,
     };
-    assertCampaignConsistency(merged, quiz.active);
-
-    const campaign = await prisma.campaign.create({
+    const campaign = await prisma.$transaction(async (db) => {
+      const quiz = await lockQuiz(db, tenantId, selected.id);
+      assertCampaignConsistency(merged, quiz.active);
+      if (merged.status === "ACTIVE" || merged.status === "SCHEDULED") await assertPublishedQuizValid(quiz, db);
+      return db.campaign.create({
       data: {
         ...input,
         ...merged,
@@ -146,6 +150,7 @@ router.post(
         objectives: input.objectives ?? [],
       },
       include: campaignInclude,
+    });
     });
     res.status(201).json(await respondWith(tenantId, campaign));
   }),
@@ -165,22 +170,26 @@ router.put(
     const tenantId = tenantOf(req);
     const input = parseCampaignInput(req.body, false);
     const existing = await findCampaign(tenantId, req.params.id);
-    const quiz = input.quizId !== undefined && input.quizId !== existing.quizId
-      ? await resolveQuiz(tenantId, input.quizId)
-      : existing.quiz;
-
-    assertCampaignConsistency({
-      occasion: input.occasion ?? existing.occasion,
-      occasionLabel: input.occasionLabel !== undefined ? input.occasionLabel : existing.occasionLabel,
-      status: input.status ?? existing.status,
-      startsAt: input.startsAt !== undefined ? input.startsAt : existing.startsAt,
-      endsAt: input.endsAt !== undefined ? input.endsAt : existing.endsAt,
-    }, quiz.active);
-
-    const campaign = await prisma.campaign.update({
-      where: { id: existing.id },
-      data: { ...input, ...(input.quizId !== undefined && { quizId: quiz.id }) },
-      include: campaignInclude,
+    const campaign = await prisma.$transaction(async (db) => {
+      const targetQuizId = input.quizId ?? existing.quizId;
+      for (const id of [...new Set([existing.quizId, targetQuizId])].sort()) await lockQuiz(db, tenantId, id);
+      const current = await db.campaign.findFirst({ where: { id: existing.id, tenantId }, include: campaignInclude });
+      if (!current || current.quizId !== existing.quizId) throw new QuizError(409, "La campagne a changé ; rechargez-la");
+      const quiz = await db.quiz.findFirstOrThrow({ where: { id: targetQuizId, tenantId }, include: quizInclude });
+      const merged = {
+        occasion: input.occasion ?? current.occasion,
+        occasionLabel: input.occasionLabel !== undefined ? input.occasionLabel : current.occasionLabel,
+        status: input.status ?? current.status,
+        startsAt: input.startsAt !== undefined ? input.startsAt : current.startsAt,
+        endsAt: input.endsAt !== undefined ? input.endsAt : current.endsAt,
+      };
+      assertCampaignConsistency(merged, quiz.active);
+      if (merged.status === "ACTIVE" || merged.status === "SCHEDULED") await assertPublishedQuizValid(quiz, db);
+      return db.campaign.update({
+        where: { id: existing.id },
+        data: { ...input, ...(input.quizId !== undefined && { quizId: quiz.id }) },
+        include: campaignInclude,
+      });
     });
     res.json(await respondWith(tenantId, campaign));
   }),
@@ -192,21 +201,18 @@ router.post(
     const tenantId = tenantOf(req);
     const source = await findCampaign(tenantId, req.params.id);
     const suffix = " (copie)";
-    const copy = await prisma.campaign.create({
-      data: {
-        tenantId,
-        quizId: source.quizId,
-        name: `${source.name.slice(0, CAMPAIGN_LIMITS.name - suffix.length)}${suffix}`,
-        occasion: source.occasion,
-        occasionLabel: source.occasionLabel,
-        description: source.description,
-        objectives: source.objectives,
-        imageUrl: source.imageUrl,
-        status: "DRAFT",
-        startsAt: null,
-        endsAt: null,
-      },
-      include: campaignInclude,
+    const copy = await prisma.$transaction(async (db) => {
+      await lockQuiz(db, tenantId, source.quizId);
+      return db.campaign.create({
+        data: {
+          tenantId, quizId: source.quizId,
+          name: `${source.name.slice(0, CAMPAIGN_LIMITS.name - suffix.length)}${suffix}`,
+          occasion: source.occasion, occasionLabel: source.occasionLabel,
+          description: source.description, objectives: source.objectives, imageUrl: source.imageUrl,
+          status: "DRAFT", startsAt: null, endsAt: null,
+        },
+        include: campaignInclude,
+      });
     });
     res.status(201).json(await respondWith(tenantId, copy));
   }),
@@ -218,7 +224,10 @@ router.delete(
     const tenantId = tenantOf(req);
     const existing = await findCampaign(tenantId, req.params.id);
     if (existing.status !== "DRAFT") throw new QuizError(409, "Seules les campagnes en brouillon peuvent être supprimées");
-    const { count } = await prisma.campaign.deleteMany({ where: { id: existing.id, tenantId, status: "DRAFT" } });
+    const { count } = await prisma.$transaction(async (db) => {
+      await lockQuiz(db, tenantId, existing.quizId);
+      return db.campaign.deleteMany({ where: { id: existing.id, tenantId, status: "DRAFT" } });
+    });
     if (count === 0) throw new QuizError(409, "Seules les campagnes en brouillon peuvent être supprimées");
     res.status(204).end();
   }),

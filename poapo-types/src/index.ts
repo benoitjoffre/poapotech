@@ -1,6 +1,9 @@
 // ─────────────────────────────────────────────
 // Tenant
 // ─────────────────────────────────────────────
+export * from "./quizTheme";
+export * from "./quizFlow";
+
 export interface Tenant {
   id: string;
   email: string;
@@ -35,6 +38,8 @@ export interface EmbedConfig {
   quizTitle: string;
   ctaText: string;
   active: boolean;
+  /** Published overrides only. Absent for historical, uncustomized quizzes. */
+  theme?: import("./quizTheme").QuizTheme;
 }
 
 /**
@@ -544,6 +549,67 @@ export interface AnswerUpdateInput extends Partial<AnswerCreateInput> {
 
 export interface ReorderPayload {
   order: { id: string; order: number }[];
+}
+
+export type QuizEditorAnswer = Omit<Answer, "questionId">;
+export type QuizEditorQuestion = Omit<Question, "tenantId" | "quizId" | "answers"> & {
+  answers: QuizEditorAnswer[];
+};
+
+/** Independent of the single-choice draft returned by AI generation. */
+export interface QuizEditorDraft {
+  schemaVersion: 1;
+  theme?: import("./quizTheme").QuizTheme | null;
+  config: {
+    name: string;
+    catalogId: string;
+    industry: string;
+    axes: QuizAxis[];
+    quizTitle: string;
+    ctaText: string;
+    active: boolean;
+    useAllProducts: boolean;
+    productIds: string[];
+  };
+  questions: QuizEditorQuestion[];
+}
+
+export interface QuizEditorDraftResponse {
+  quizId: string;
+  revision: number;
+  hasChanges: boolean;
+  updatedAt: string | null;
+  draft: QuizEditorDraft;
+}
+
+export interface QuizEditorDraftSaveInput {
+  revision: number;
+  draft: QuizEditorDraft;
+}
+
+export interface QuizPreviewSnapshot {
+  quizId: string;
+  draft: QuizEditorDraft;
+  branding: import("./quizTheme").QuizBranding;
+}
+
+export interface QuizPublicationIssue {
+  code: string;
+  message: string;
+  section: "questions" | "appearance" | "configuration" | "publication";
+  questionId?: string;
+  answerId?: string;
+}
+
+export interface QuizPublicationDiagnostic {
+  quizId: string;
+  revision: number;
+  hasChanges: boolean;
+  valid: boolean;
+  errors: QuizPublicationIssue[];
+  warnings: QuizPublicationIssue[];
+  campaigns: { id: string; name: string }[];
+  summary: { name: string; catalogId: string; catalogName: string; questions: number; products: number; active: boolean };
 }
 
 // ─────────────────────────────────────────────

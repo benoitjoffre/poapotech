@@ -330,6 +330,7 @@ function CampaignCard({ campaign, busy, onOpen, onStatus, onDuplicate, onDelete 
         </div>
         {countdown && <p className="campaign-countdown">{countdown}</p>}
         <div className="campaign-actions">
+          <Link className="btn-primary btn-sm campaign-personalize" to={`/campaigns/${campaign.id}/quiz-editor`}><Icon name="builder" size={16} />Personnaliser le quiz</Link>
           {!isDraft && <Link className="btn-ghost btn-sm" to={`/campaigns/${campaign.id}`}><Icon name="eye" size={16} />Voir</Link>}
           <Link className="btn-ghost btn-sm" to={editPath}><Icon name="edit" size={16} />{isDraft ? "Continuer" : "Modifier"}</Link>
           <button type="button" className="btn-ghost btn-sm" disabled={busy} onClick={onDuplicate}><Icon name="copy" size={16} />Dupliquer</button>

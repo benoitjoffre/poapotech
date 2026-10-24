@@ -45,10 +45,10 @@ const metricScopes: { tenantId?: string; quizId?: string }[] = [];
 const originalFetch = globalThis.fetch;
 const restores: (() => void)[] = [];
 
-function stub<T extends object, K extends keyof T>(target: T, key: K, value: T[K]) {
+function stub<T extends object>(target: T, key: keyof T, implementation: (...args: never[]) => unknown) {
   const previous = target[key];
-  target[key] = value;
-  restores.push(() => { target[key] = previous; });
+  assert.ok(Reflect.set(target, key, implementation));
+  restores.push(() => { assert.ok(Reflect.set(target, key, previous)); });
 }
 
 before(async () => {
@@ -67,7 +67,10 @@ before(async () => {
       (where.isDefault === undefined || catalog.isDefault === where.isDefault)) ?? null
   ) as unknown as typeof prisma.catalog.findFirst);
   stub(prisma.catalog, "upsert", (async () => catalogs[0]) as unknown as typeof prisma.catalog.upsert);
-  stub(prisma, "$transaction", (async (fn: (tx: typeof prisma) => unknown) => fn(prisma)) as unknown as typeof prisma.$transaction);
+  stub(prisma, "$transaction", async (fn: (tx: typeof prisma) => unknown) => fn(prisma));
+  stub(prisma, "$queryRaw", async (_sql: unknown, id: unknown, tenantId: unknown) =>
+    id === coffeeQuiz.id && tenantId === coffeeQuiz.tenantId ? [{ id }] : []);
+  stub(prisma.quiz, "findFirstOrThrow", async () => coffeeQuiz);
   stub(prisma.quizProduct, "deleteMany", (async () => {
     writes.push("quizProduct.deleteMany");
     return { count: 1 };
@@ -195,19 +198,19 @@ test("list includes independent quizzes", async () => {
   assert.equal((await res.json()).length, 2);
 });
 
-test("builder creates within selected quiz and blocks foreign conditions", async () => {
+test("legacy builder writes require the revisioned draft API", async () => {
   const res = await request("/api/quiz/builder/questions?quizId=coffee", "POST", { text: "Quel café ?" });
-  assert.equal(res.status, 201);
-  assert.equal((savedQuestion as { quizId: string }).quizId, "coffee");
+  assert.equal(res.status, 409);
+  assert.equal(savedQuestion, undefined);
   const invalid = await request("/api/quiz/builder/questions?quizId=coffee", "POST", {
     text: "Question", conditionAnswerId: "answer-in-other-quiz",
   });
-  assert.equal(invalid.status, 400);
+  assert.equal(invalid.status, 409);
 });
 
 test("builder cannot modify a question in a different quiz", async () => {
   const res = await request("/api/quiz/builder/questions/foreign-question?quizId=coffee", "PUT", { text: "Changed" });
-  assert.equal(res.status, 404);
+  assert.equal(res.status, 409);
 });
 
 test("tracking persists quiz identity", async () => {
@@ -325,11 +328,11 @@ test("metrics and AI insights query only the selected quiz", async () => {
   assert.ok(metricScopes.every((where) => where.tenantId === "tenant-a" && where.quizId === "coffee"));
 });
 
-test("question reorder route is reachable and rejects foreign questions", async () => {
+test("legacy question reorder cannot modify published content", async () => {
   const res = await request("/api/quiz/builder/questions/reorder?quizId=coffee", "PUT", {
     order: [{ id: "foreign-question", order: 0 }],
   });
-  assert.equal(res.status, 403);
+  assert.equal(res.status, 409);
 });
 
 test("multi-catalogue : sans catalogId, le quiz est créé dans le catalogue par défaut", async () => {
@@ -357,7 +360,7 @@ test("multi-catalogue : la sélection d'un quiz est limitée aux produits de son
 test("multi-catalogue : catalogue d'un autre tenant introuvable, catalogId invalide refusé", async () => {
   assert.equal((await request("/api/quizzes", "POST", { name: "X", catalogId: "catalog-b" })).status, 404);
   assert.equal((await request("/api/quizzes", "POST", { name: "X", catalogId: 42 })).status, 400);
-  assert.equal((await request("/api/quizzes/coffee", "PUT", { catalogId: "catalog-b", productIds: [] })).status, 404);
+  assert.equal((await request("/api/quizzes/coffee", "PUT", { catalogId: "catalog-b", productIds: [] })).status, 409);
 });
 
 test("multi-catalogue : la liste des quiz se filtre par catalogue, toujours dans le tenant", async () => {
@@ -367,21 +370,17 @@ test("multi-catalogue : la liste des quiz se filtre par catalogue, toujours dans
   assert.deepEqual(lastQuizListWhere, { tenantId: "tenant-a" });
 });
 
-test("multi-catalogue : changer le catalogue d'un quiz exige une nouvelle sélection", async () => {
+test("multi-catalogue : l'ancienne API ne déplace jamais le catalogue public", async () => {
+  writes.length = 0;
   const refused = await request("/api/quizzes/coffee", "PUT", { catalogId: "catalog-voyages" });
   assert.equal(refused.status, 409);
 
   assert.equal((await request("/api/quizzes/coffee", "PUT", {
     catalogId: "catalog-voyages", productIds: ["coffee-product"],
-  })).status, 400);
-
-  writes.length = 0;
+  })).status, 409);
   const moved = await request("/api/quizzes/coffee", "PUT", { catalogId: "catalog-voyages", productIds: ["trip-product"] });
-  assert.equal(moved.status, 200);
-  const data = await moved.json();
-  assert.equal(data.catalogId, "catalog-voyages");
-  assert.deepEqual(data.products.create, [{ productId: "trip-product" }]);
-  assert.deepEqual(writes, ["quizProduct.deleteMany", "quiz.update"], "l'ancienne sélection est retirée avant le changement");
+  assert.equal(moved.status, 409);
+  assert.deepEqual(writes, [], "aucune écriture sur le contenu publié");
 });
 
 test("multi-catalogue : /submit limite le moteur et le produit recommandé au catalogue du quiz", async () => {

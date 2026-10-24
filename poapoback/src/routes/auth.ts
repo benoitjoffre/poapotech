@@ -3,7 +3,7 @@ import { sendMagicLink, verifyMagicToken, loginWithPassword, setPassword } from 
 import { verifyToken, AuthRequest, SUPER_ADMIN_TENANT_ID } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import type { TenantBranding } from "@poapo/types";
-import { ensureDefaultQuiz, asyncRoute } from "../services/quizzes";
+import { ensureDefaultQuiz, asyncRoute, QuizError } from "../services/quizzes";
 
 const router = Router();
 const MAX_INDUSTRY_LENGTH = 80;
@@ -82,7 +82,6 @@ router.get("/me", verifyToken, asyncRoute(async (req: AuthRequest, res: Response
   const quiz = await ensureDefaultQuiz(tenant.id);
   res.json({
     ...tenant,
-    industry: quiz.industry,
     quizTitle: quiz.quizTitle,
     ctaText: quiz.ctaText,
     tenantId: tenant.id,
@@ -92,7 +91,10 @@ router.get("/me", verifyToken, asyncRoute(async (req: AuthRequest, res: Response
 
 // PUT /api/auth/me/branding
 router.put("/me/branding", verifyToken, asyncRoute(async (req: AuthRequest, res: Response) => {
-  const allowed: (keyof TenantBranding)[] = ["name", "industry", "primaryColor", "logoUrl", "quizTitle", "ctaText", "embedDomain"];
+  if (req.body?.quizTitle !== undefined || req.body?.ctaText !== undefined) {
+    throw new QuizError(409, "Le titre et le CTA du quiz se modifient uniquement dans son brouillon");
+  }
+  const allowed: (keyof TenantBranding)[] = ["name", "industry", "primaryColor", "logoUrl", "embedDomain"];
   const data: Partial<TenantBranding> = {};
   for (const key of allowed) {
     const val = (req.body as Record<string, unknown>)[key];
@@ -106,14 +108,7 @@ router.put("/me/branding", verifyToken, asyncRoute(async (req: AuthRequest, res:
     data.industry = data.industry.trim();
   }
 
-  const quiz = await ensureDefaultQuiz(req.tenant!.tenantId);
-  await prisma.$transaction([
-    prisma.tenant.update({ where: { id: req.tenant!.tenantId }, data }),
-    prisma.quiz.update({
-      where: { id: quiz.id },
-      data: { industry: data.industry, quizTitle: data.quizTitle, ctaText: data.ctaText },
-    }),
-  ]);
+  await prisma.tenant.update({ where: { id: req.tenant!.tenantId }, data });
   res.json({ ok: true });
 }));
 

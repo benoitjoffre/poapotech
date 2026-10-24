@@ -136,7 +136,7 @@ test("createQuestionsWithAnswers numérote les questions et ignore les réponses
   ]);
 });
 
-test("l'import CSV du builder conserve son comportement après extraction", async () => {
+test("l'import CSV historique sans révision ne peut pas écrire sur le contenu publié", async () => {
   createdQuestions = [];
   createdAnswers = [];
   const csv = [
@@ -152,16 +152,8 @@ test("l'import CSV du builder conserve son comportement après extraction", asyn
   const response = await fetch(`${base}/api/quiz/builder/questions/import-csv?quizId=coffee`, {
     method: "POST", headers: { Authorization: `Bearer ${token}` }, body: form,
   });
-  assert.equal(response.status, 200);
-  const body = await response.json() as Row;
-  assert.deepEqual(
-    [body.createdQuestions, body.createdAnswers, body.skippedRows, body.totalRows],
-    [2, 3, 1, 4],
-  );
-  assert.deepEqual(createdQuestions.map((q) => [q.text, q.order, q.type]), [["Quel café ?", 5, "single"], ["Moment ?", 6, "single"]]);
-  assert.deepEqual(createdAnswers.map((a) => [a.text, a.emoji, a.active, a.order, a.impacts]), [
-    ["Corsé", "☕", true, 0, { body: 0.4 }],
-    ["Léger", null, false, 1, { body: -1, acidity: 0.1 }],
-    ["Matin", null, true, 0, { body: 0.2 }],
-  ]);
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /Révision/);
+  assert.deepEqual(createdQuestions, []);
+  assert.deepEqual(createdAnswers, []);
 });

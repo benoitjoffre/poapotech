@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { asyncRoute, publicQuizScope, getQuiz } from "../services/quizzes";
 import { parseAxes } from "../services/axes";
+import { parseQuizTheme, resolveQuizTheme } from "@poapo/types";
 
 const router = Router();
 
@@ -54,13 +55,16 @@ router.get("/config", publicQuizScope, asyncRoute(async (req: Request, res: Resp
   }
 
   const quiz = getQuiz(res);
+  const theme = parseQuizTheme(quiz.publishedTheme);
+  const effective = resolveQuizTheme(tenant, theme);
   res.json({
     tenantId: tenant.id,
     quizId: quiz.id,
     industry: quiz.industry,
     axes: parseAxes(quiz.axes),
-    primaryColor: tenant.primaryColor ?? "#0d9488",
-    logoUrl: tenant.logoUrl,
+    primaryColor: effective.primaryColor,
+    logoUrl: effective.logoUrl,
+    ...(theme && { theme }),
     quizTitle: quiz.quizTitle,
     ctaText: quiz.ctaText,
     active: quiz.active,

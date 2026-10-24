@@ -70,6 +70,8 @@ model Quiz {
   industry       String   @default("")
   // Axes numériques de recommandation : [{ key, label, lowLabel?, highLabel? }], valeurs 0–1
   axes           Json     @default("[]")
+  // Only controlled publication writes these overrides; drafts remain separate.
+  publishedTheme Json?
   quizTitle      String
   ctaText        String
   active         Boolean  @default(true)
@@ -86,11 +88,26 @@ model Quiz {
   metrics        Metric[]
   products       QuizProduct[]
   campaigns      Campaign[]
+  editorDraft    QuizEditorDraft?
 
   @@unique([tenantId, id])
   @@unique([catalogId, id])
   @@index([tenantId])
   @@index([tenantId, catalogId])
+}
+
+// A reset retains the row and increments revision to reject stale pre-reset writers.
+model QuizEditorDraft {
+  quizId    String   @id
+  tenantId  String
+  revision  Int      @default(1)
+  content   Json?
+  updatedAt DateTime @updatedAt
+
+  quiz Quiz @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, quizId])
+  @@index([tenantId])
 }
 
 // ─────────────────────────────────────────────

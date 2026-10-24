@@ -71,7 +71,6 @@ export default function CampaignDetailPage() {
   }
 
   const countdown = startsIn(campaign);
-  const quizQuery = `?quizId=${encodeURIComponent(campaign.quiz.id)}`;
 
   return (
     <div className="page campaign-detail">
@@ -82,6 +81,7 @@ export default function CampaignDetailPage() {
           <p className="page-subtitle">{occasionName(campaign)} · {formatPeriod(campaign)}</p>
         </div>
         <div className="campaign-detail-actions">
+          <Link className="btn-primary campaign-personalize" to={`/campaigns/${campaign.id}/quiz-editor`}><Icon name="builder" size={16} />Personnaliser le quiz</Link>
           <CampaignStatusToggle
             campaign={campaign}
             disabled={busy}
@@ -141,7 +141,7 @@ export default function CampaignDetailPage() {
         <p className="section-hint">La campagne s'appuie sur ce quiz sans le modifier : questions, recommandations et intégration restent celles du quiz.</p>
         <div className="campaign-detail-links">
           <Link className="btn-ghost" to={`/quizzes/${encodeURIComponent(campaign.quiz.id)}`}>Configurer / intégrer le quiz</Link>
-          <Link className="btn-ghost" to={`/quiz-builder${quizQuery}`}>Questions</Link>
+          <Link className="btn-ghost" to={`/campaigns/${campaign.id}/quiz-editor`}>Personnaliser le quiz</Link>
           <Link className="btn-primary" to={`/campaigns/${campaign.id}/generate-quiz`}>✨ Générer un quiz avec l'IA</Link>
         </div>
         <p className="section-hint">

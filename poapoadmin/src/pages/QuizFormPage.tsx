@@ -4,13 +4,16 @@ import type { Quiz, QuizAxis, QuizInput } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 import { useQuiz } from "../contexts/QuizContext";
 import { CatalogSelect, storedCatalogId, useCatalogs } from "../lib/catalogs";
+import { useQuizEditorDraft } from "../hooks/useQuizEditorDraft";
+import { useLeaveGuard } from "../hooks/useLeaveGuard";
+import QuizDraftStatus from "../components/QuizDraftStatus";
 
 type CatalogItem = { id: string; name: string; active: boolean };
 /** Un axe pas encore enregistré garde une clé modifiable (elle est ensuite référencée par les produits et réponses). */
 type AxisDraft = QuizAxis & { isNew?: boolean };
 const EMPTY = {
   name: "", industry: "", axes: [] as AxisDraft[], quizTitle: "Trouve ton produit idéal",
-  ctaText: "Découvrir ma sélection", active: true, useAllProducts: true, productIds: [] as string[], catalogId: "",
+  ctaText: "Découvrir ma sélection", active: false, useAllProducts: true, productIds: [] as string[], catalogId: "",
 };
 
 /** « Niveau de torréfaction » → « niveauDeTorrefaction » */
@@ -34,6 +37,10 @@ export default function QuizFormPage() {
   const { reload } = useQuiz();
   const navigate = useNavigate();
   const [form, setForm] = useState(EMPTY);
+  const [savedForm, setSavedForm] = useState(EMPTY);
+  const editor = useQuizEditorDraft(quizId);
+  const dirty = JSON.stringify(form) !== JSON.stringify(savedForm);
+  useLeaveGuard(!!quizId && dirty, "La configuration du brouillon contient des modifications non enregistrées. Quitter ?");
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
@@ -52,11 +59,7 @@ export default function QuizFormPage() {
         const existing = quizId ? await apiFetch<Quiz>(`/api/quizzes/${encodeURIComponent(quizId)}`) : null;
         if (cancelled) return;
         setQuiz(existing);
-        setForm(existing ? {
-          name: existing.name, industry: existing.industry, axes: existing.axes ?? [], quizTitle: existing.quizTitle, ctaText: existing.ctaText,
-          active: existing.active, useAllProducts: existing.useAllProducts, productIds: existing.products.map((p) => p.productId),
-          catalogId: existing.catalogId,
-        } : EMPTY);
+        if (!existing) { setForm(EMPTY); setSavedForm(EMPTY); }
       } catch (err) {
         if (!cancelled) setError((err as Error).message);
       } finally {
@@ -66,6 +69,12 @@ export default function QuizFormPage() {
     void load();
     return () => { cancelled = true; };
   }, [quizId]);
+  useEffect(() => {
+    if (!editor.state) return;
+    const next = { ...editor.state.draft.config, axes: editor.state.draft.config.axes };
+    setForm(next);
+    setSavedForm(next);
+  }, [editor.state]);
   // Nouveau quiz : catalogue demandé (?catalogId), sinon dernier choisi, sinon catalogue principal.
   useEffect(() => {
     if (quizId || loading || catalogsLoading || form.catalogId) return;
@@ -113,12 +122,17 @@ export default function QuizFormPage() {
     setError("");
     setSuccess("");
     try {
-      const saved = await apiFetch<Quiz>(quizId ? `/api/quizzes/${encodeURIComponent(quizId)}` : "/api/quizzes", {
-        method: quizId ? "PUT" : "POST",
-        body: JSON.stringify({
-          ...form,
-          axes: form.axes.map(({ key, label, lowLabel, highLabel }) => ({ key, label, lowLabel, highLabel })),
-        } satisfies QuizInput),
+      const config = {
+        ...form,
+        axes: form.axes.map(({ key, label, lowLabel, highLabel }) => ({ key, label, lowLabel, highLabel })),
+      };
+      if (quizId) {
+        if (editor.draft && await editor.save({ ...editor.draft, config })) setSuccess("Brouillon enregistré. Le quiz public reste inchangé.");
+        return;
+      }
+      const saved = await apiFetch<Quiz>("/api/quizzes", {
+        method: "POST",
+        body: JSON.stringify(config satisfies QuizInput),
       });
       await reload();
       setQuiz(saved);
@@ -134,16 +148,28 @@ export default function QuizFormPage() {
   const widgetBase = String(import.meta.env.VITE_WIDGET_BASE_URL ?? (import.meta.env.PROD ? "https://app.poapo-tech.com" : "http://localhost:5173")).replace(/\/$/, "");
   const link = quiz ? `${widgetBase}/?${new URLSearchParams({ clientId: quiz.tenantId, quizId: quiz.id })}` : "";
   const snippet = quiz ? `<script src="${widgetBase}/poapo-widget.js" data-url="${widgetBase}" data-client-id="${quiz.tenantId}" data-quiz-id="${quiz.id}" async></script>` : "";
-  if (loading) return <div className="loading-block">Chargement...</div>;
+  if (loading || editor.loading) return <div className="loading-block">Chargement...</div>;
   return (
     <div className="page page-form">
       <div className="page-header">
-        <h1 className="page-title">{quizId ? "Configurer le quiz" : "Nouveau quiz"}</h1>
+        <h1 className="page-title">{quizId ? "Configurer le brouillon du quiz" : "Nouveau quiz"}</h1>
         <Link className="btn-ghost" to={form.catalogId ? `/quizzes?catalogId=${encodeURIComponent(form.catalogId)}` : "/quizzes"}>Mes quiz</Link>
       </div>
       {error && <div className="form-error">{error}</div>}
-      {success && <div className="form-success">{success}</div>}
+      {success && !dirty && <div className="form-success">{success}</div>}
+      {quizId && <QuizDraftStatus dirty={dirty} hasChanges={editor.state?.hasChanges ?? false}
+        revision={editor.state?.revision ?? 0} saving={saving} conflict={editor.conflict} error={editor.error}
+        onReload={() => {
+          if (!dirty || confirm("Recharger et perdre la configuration locale non enregistrée ?")) { setSuccess(""); void editor.load(); }
+        }}
+        onDiscard={() => {
+          if (confirm("Abandonner le brouillon complet, questions et configuration comprises ? Le quiz public restera inchangé.")) {
+            setSuccess("");
+            void editor.discard();
+          }
+        }} />}
       {(!quizId || quiz) && <form className="product-form" onSubmit={save}>
+        <fieldset disabled={saving || (!!quizId && !editor.draft)} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
         <section className="form-section">
           <div className="form-grid">
             <div className="field-span2">
@@ -170,8 +196,8 @@ export default function QuizFormPage() {
             </div>
           </div>
           <label className="checkbox-label">
-            <input type="checkbox" checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
-            Quiz actif (désactiver conserve les questions et les statistiques)
+            <input type="checkbox" disabled={!quizId} checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
+            {quizId ? "Activation préparée dans le brouillon (sans effet sur le quiz public)" : "Un nouveau quiz est créé inactif. Complétez-le puis publiez son brouillon pour l'activer."}
           </label>
           {quiz?.isDefault && <p className="section-hint">Ce quiz est utilisé par les anciens liens qui ne précisent pas de quizId.</p>}
         </section>
@@ -209,7 +235,11 @@ export default function QuizFormPage() {
                   onChange={(e) => update({ highLabel: e.target.value })} />
               </div>
               <button type="button" className="btn-ghost" onClick={() => {
-                if (!axis.isNew && !window.confirm(`Supprimer l'axe « ${axis.label} » ? Les impacts des réponses sur cet axe seront ignorés.`)) return;
+                if (quiz?.axes.some((item) => item.key === axis.key)) {
+                  setError("Les clés des axes publiés sont conservées à cette étape. Vous pouvez modifier leurs libellés.");
+                  return;
+                }
+                if (!axis.isNew && !window.confirm(`Supprimer l'axe « ${axis.label} » du brouillon ?`)) return;
                 setForm({ ...form, axes: form.axes.filter((_, i) => i !== index) });
               }}>Supprimer</button>
             </div>;
@@ -238,10 +268,13 @@ export default function QuizFormPage() {
             {form.productIds.length === 0 && <p className="form-error">Sans produit sélectionné, ce quiz ne pourra pas recommander de produit.</p>}
           </>}
         </section>
-        <button className="btn-primary" disabled={saving || !form.catalogId} type="submit">{saving ? "Enregistrement..." : "Enregistrer"}</button>
+        <p className="section-hint">{quizId && "Tous ces réglages, y compris l'activation, sont préparatoires. Ils ne modifient pas la version publique."}</p>
+        <button className="btn-primary" disabled={saving || !form.catalogId || editor.conflict || (!!quizId && !dirty)} type="submit">{saving ? "Enregistrement..." : quizId ? "Enregistrer le brouillon" : "Créer le quiz"}</button>
+        </fieldset>
       </form>}
       {quiz && <section className="form-section">
-        <h2 className="section-title">Diffusion</h2>
+        <h2 className="section-title">Diffusion de la version publique</h2>
+        <p className="section-hint">Ces liens ouvrent la version publique, pas le brouillon en préparation.</p>
         <p><a href={link} target="_blank" rel="noreferrer">Ouvrir le quiz</a></p>
         <p><Link to={`/quiz-builder?quizId=${encodeURIComponent(quiz.id)}`}>Modifier les questions</Link></p>
         <p><Link to={`/analytics?quizId=${encodeURIComponent(quiz.id)}`}>Voir les statistiques</Link></p>

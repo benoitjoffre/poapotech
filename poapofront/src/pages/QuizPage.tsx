@@ -1,12 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Question, QuizResult, SessionAnswer, MetricType } from "@poapo/types";
+import type { Question, QuizResult, SessionAnswer, MetricType, EmbedConfig, resolveQuizTheme } from "@poapo/types";
 import { useTenant } from "../contexts/TenantContext";
 import { filterVisibleQuestions, pickAbVariant } from "../lib/quiz";
+import QuizThemeStyle from "../components/QuizThemeStyle";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
 
-function QuizContent() {
-  const { clientId, quizId, config } = useTenant();
+export interface QuizPreviewRuntime {
+  quizId: string;
+  config: EmbedConfig;
+  questions: Question[];
+  abVariant: string | null;
+  theme: ReturnType<typeof resolveQuizTheme>;
+  submit: (answers: SessionAnswer[], abVariant: string | null) => Promise<QuizResult>;
+}
+
+export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
+  const tenant = useTenant();
+  const { clientId } = tenant;
+  const quizId = preview?.quizId ?? tenant.quizId;
+  const config = preview?.config ?? tenant.config;
+  const labels = preview?.theme ?? config?.theme;
 
   const [allQuestions, setAllQuestions] = useState<Question[]>([]);
   const [abVariant, setAbVariant] = useState<string | null>(null);
@@ -45,10 +59,7 @@ function QuizContent() {
   );
 
   // Questions filtered by variant and conditions
-  const questions = useMemo(
-    () => filterVisibleQuestions(allQuestions, selectedAnswerIds, abVariant),
-    [allQuestions, selectedAnswerIds, abVariant],
-  );
+  const questions = useMemo(() => filterVisibleQuestions(allQuestions, selectedAnswerIds, abVariant), [allQuestions, selectedAnswerIds, abVariant]);
   // answers array aligned to visible questions
   const answers = useMemo(() => questions.map((q) => answersByQuestionId[q.id] ?? null), [questions, answersByQuestionId]);
 
@@ -65,7 +76,12 @@ function QuizContent() {
   const quizTitle = config?.quizTitle || "Trouve ton produit idéal";
   const ctaText = config?.ctaText || "Découvrir ma sélection";
 
+  useEffect(() => {
+    setStepIndex((index) => Math.max(0, Math.min(index, questions.length - 1)));
+  }, [questions.length]);
+
   const trackEvent = async (type: MetricType, payload: Record<string, unknown> = {}, { timeoutMs = 6000 } = {}): Promise<{ ok: boolean }> => {
+    if (preview) return { ok: true };
     if (!clientId) return { ok: false };
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -86,6 +102,7 @@ function QuizContent() {
 
   // Hot-path tracker for step interactions: non-blocking to keep UI snappy.
   const trackEventNoBlock = (type: MetricType, payload: Record<string, unknown> = {}): void => {
+    if (preview) return;
     if (!clientId) return;
     const url = `${apiBaseUrl}/api/quiz/track`;
     const body = JSON.stringify({ clientId, quizId, type, payload });
@@ -109,6 +126,12 @@ function QuizContent() {
   };
 
   useEffect(() => {
+    if (preview) {
+      setAllQuestions(preview.questions);
+      setAbVariant(preview.abVariant);
+      setIsLoadingQuestions(false);
+      return;
+    }
     let isMounted = true;
     const load = async () => {
       setIsLoadingQuestions(true);
@@ -135,8 +158,7 @@ function QuizContent() {
     return () => {
       isMounted = false;
     };
-  }, [clientId, quizId]);
-
+  }, [clientId, quizId, preview]);
 
   const handleAnswer = (questionIndex: number, optionIndex: number) => {
     const question = questions[questionIndex];
@@ -183,12 +205,17 @@ function QuizContent() {
       setError("Merci de repondre a toutes les questions avant de valider.");
       return;
     }
-    if (!clientId) {
+    if (!clientId && !preview) {
       setError("Aucun clientId fourni (ex : ?clientId=xxx).");
       return;
     }
     setIsSubmitting(true);
     try {
+      if (preview) {
+        setResult(await preview.submit(buildSessionAnswers(), abVariant));
+        setHasTrackedComplete(true);
+        return;
+      }
       const res = await fetch(`${apiBaseUrl}/api/quiz/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -237,7 +264,6 @@ function QuizContent() {
     }
   };
 
-
   useEffect(() => {
     if (!hasStarted || isLoadingQuestions || result) return;
 
@@ -270,12 +296,12 @@ function QuizContent() {
 
   return (
     <div className="app">
+      {!preview && config && <QuizThemeStyle branding={config} theme={config.theme} />}
       {!result && (
         <section className="intro">
           <div className="intro-logo">
             {config?.logoUrl ? <img src={config.logoUrl} alt={config.quizTitle ?? "logo"} /> : <img src="/poapo_logo.svg" alt="poapo" />}
           </div>
-          <div className="intro-badge">Quiz de personnalité</div>
           <div className={`intro-layout ${hasStarted ? "collapsed" : ""}`}>
             <div className="intro-copy">
               <h1 className="title">
@@ -287,7 +313,7 @@ function QuizContent() {
           {!hasStarted ? (
             <div className="hero-actions">
               <button className="submit" type="button" onClick={handleStart} disabled={isLoadingQuestions || !!error || questionsCount === 0}>
-                Commencer le quiz
+                {labels?.startLabel ?? "Commencer le quiz"}
               </button>
               <div className="hero-subtext">{questionsCount} questions · Recommandation immédiate</div>
             </div>
@@ -303,6 +329,16 @@ function QuizContent() {
                 <div className="progress-fill" style={{ width: `${progressPercent}%` }} />
               </div>
             </>
+          )}
+          {!hasStarted && error && (
+            <div className="form-error" role="alert">
+              {error}
+            </div>
+          )}
+          {!isLoadingQuestions && !questionsCount && (
+            <div className="form-error" role="alert">
+              Aucune question visible pour ce parcours.
+            </div>
           )}
         </section>
       )}
@@ -331,6 +367,15 @@ function QuizContent() {
                   <div className="question-help-text">
                     {currentQuestion.answers[typeof answers[currentQuestionIndex] === "number" ? answers[currentQuestionIndex] : 0]?.text}
                   </div>
+                  <button
+                    type="button"
+                    className="secondary"
+                    onClick={() =>
+                      handleAnswer(currentQuestionIndex, typeof answers[currentQuestionIndex] === "number" ? answers[currentQuestionIndex] : 0)
+                    }
+                  >
+                    Choisir cette valeur
+                  </button>
                 </div>
               ) : (
                 <div className="options">
@@ -383,7 +428,7 @@ function QuizContent() {
 
           <div className="nav-actions">
             <button className="secondary" type="button" disabled={stepIndex === 0} onClick={() => setStepIndex((prev) => Math.max(prev - 1, 0))}>
-              Retour
+              {labels?.previousLabel ?? "Retour"}
             </button>
             {!isLastStep ? (
               <button
@@ -392,13 +437,11 @@ function QuizContent() {
                 disabled={
                   isLoadingQuestions ||
                   questionsCount === 0 ||
-                  (Array.isArray(answers[currentQuestionIndex])
-                    ? answers[currentQuestionIndex].length === 0
-                    : answers[currentQuestionIndex] === null)
+                  (Array.isArray(answers[currentQuestionIndex]) ? answers[currentQuestionIndex].length === 0 : answers[currentQuestionIndex] === null)
                 }
                 onClick={() => setStepIndex((prev) => Math.min(prev + 1, totalSteps - 1))}
               >
-                Suivant
+                {labels?.nextLabel ?? "Suivant"}
               </button>
             ) : (
               <button
@@ -406,7 +449,7 @@ function QuizContent() {
                 type="submit"
                 disabled={isSubmitting || isLoadingQuestions || questionsCount === 0 || answeredCount !== questionsCount}
               >
-                {isSubmitting ? "Envoi en cours..." : "Envoyer mes reponses"}
+                {isSubmitting ? "Envoi en cours..." : (labels?.submitLabel ?? "Envoyer mes reponses")}
               </button>
             )}
           </div>
@@ -508,7 +551,12 @@ function QuizContent() {
 
           {/* ── Actions finales ── */}
           <div className="result-footer-actions">
-            {result.product?.purchaseUrl && (
+            {result.product?.purchaseUrl && preview && (
+              <button type="button" className="result-cta-btn" disabled title="Désactivé en mode aperçu : aucune conversion">
+                {ctaText}
+              </button>
+            )}
+            {result.product?.purchaseUrl && !preview && (
               <a
                 href={result.product.purchaseUrl}
                 target="_blank"
@@ -520,7 +568,7 @@ function QuizContent() {
               </a>
             )}
             <button className="result-restart-btn" type="button" onClick={handleRestart}>
-              Recommencer le quiz
+              {labels?.restartLabel ?? "Recommencer le quiz"}
             </button>
           </div>
         </section>

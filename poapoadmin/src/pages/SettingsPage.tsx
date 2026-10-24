@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import type { TenantBranding } from "@poapo/types";
 import { apiFetch } from "../lib/api";
+import { Link } from "react-router-dom";
 
 interface BrandingForm {
   name: string;
@@ -79,8 +80,6 @@ export default function SettingsPage() {
         industry: form.industry,
         primaryColor: form.primaryColor || undefined,
         logoUrl: form.logoUrl || undefined,
-        quizTitle: form.quizTitle || undefined,
-        ctaText: form.ctaText || undefined,
         embedDomain: form.embedDomain || undefined,
       };
       await apiFetch("/api/auth/me/branding", {
@@ -140,7 +139,7 @@ export default function SettingsPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">Paramètres</h1>
-          <p className="page-subtitle">Identité de votre espace et réglages du quiz par défaut. Gérez les autres quiz dans « Mes quiz ».</p>
+          <p className="page-subtitle">Identité de votre espace. La configuration des quiz se prépare dans leurs brouillons.</p>
         </div>
       </div>
 
@@ -218,15 +217,16 @@ export default function SettingsPage() {
               <label className="field-label" htmlFor="quizTitle">
                 Titre du quiz
               </label>
-              <input id="quizTitle" className="field-input" value={form.quizTitle} onChange={(e) => set("quizTitle", e.target.value)} />
+              <input id="quizTitle" className="field-input" value={form.quizTitle} readOnly />
             </div>
             <div className="field-group">
               <label className="field-label" htmlFor="ctaText">
                 Texte du bouton CTA
               </label>
-              <input id="ctaText" className="field-input" value={form.ctaText} onChange={(e) => set("ctaText", e.target.value)} />
+              <input id="ctaText" className="field-input" value={form.ctaText} readOnly />
             </div>
           </div>
+          <p className="section-hint"><Link to="/quizzes">Préparer le titre, le CTA et les axes dans le brouillon du quiz</Link>. L'activité du compte ne modifie plus les quiz déjà créés.</p>
         </section>
 
         {error && <div className="form-error">{error}</div>}

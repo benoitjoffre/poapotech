@@ -53,7 +53,7 @@ export function createQuiz(tenantId: string, input: QuizCreateData, db: QuizDb =
       axes: (input.axes ?? []) as unknown as Prisma.InputJsonValue,
       quizTitle: input.quizTitle?.trim() ?? defaults.quizTitle,
       ctaText: input.ctaText?.trim() ?? defaults.ctaText,
-      active: input.active ?? true,
+      active: input.active ?? false,
       useAllProducts: input.useAllProducts ?? true,
       products: {
         create: (input.productIds ?? []).map((productId) => ({ productId })),
@@ -78,6 +78,7 @@ export async function ensureDefaultQuiz(tenantId: string) {
       tenantId,
       catalogId: catalog.id,
       isDefault: true,
+      active: false,
       name: "Quiz par défaut",
       industry: tenant.industry,
       quizTitle: tenant.quizTitle || defaults.quizTitle,
@@ -87,18 +88,18 @@ export async function ensureDefaultQuiz(tenantId: string) {
   });
 }
 
-export async function resolveQuiz(tenantId: string, quizId: unknown, publicOnly = false): Promise<ScopedQuiz> {
+export async function resolveQuiz(tenantId: string, quizId: unknown, publicOnly = false, db: QuizDb = prisma): Promise<ScopedQuiz> {
   if (quizId !== undefined && (typeof quizId !== "string" || !quizId.trim())) {
     throw new QuizError(400, "quizId invalide");
   }
 
   const quiz = quizId === undefined
     ? await ensureDefaultQuiz(tenantId)
-    : await prisma.quiz.findFirst({ where: { id: quizId as string, tenantId }, include: quizInclude });
+    : await db.quiz.findFirst({ where: { id: quizId as string, tenantId }, include: quizInclude });
 
   if (!quiz) throw new QuizError(404, "Quiz introuvable");
   if (publicOnly) {
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { active: true } });
+    const tenant = await db.tenant.findUnique({ where: { id: tenantId }, select: { active: true } });
     if (!tenant?.active || !quiz.active) throw new QuizError(403, "Ce quiz est désactivé");
   }
   return quiz;
@@ -135,7 +136,7 @@ export const adminQuizScope: RequestHandler = (req: AuthRequest, res, next) => {
 
 export const quizErrorHandler: ErrorRequestHandler = (err: unknown, _req, res, _next) => {
   if (err instanceof QuizError) {
-    res.status(err.status).json({ error: err.message });
+    res.status(err.status).json({ error: err.message, ...("diagnostic" in err && { diagnostic: err.diagnostic }) });
     return;
   }
   // Clé étrangère composite refusée par PostgreSQL (ex. catalogues mélangés lors d'une écriture concurrente).

@@ -29,6 +29,77 @@ Visiteur ──> Widget React ──HTTP──> API TypeScript ──> PostgreSQ
 - **Les types partagés** décrivent les contrats utilisés entre les applications
   TypeScript ; ils ne remplacent pas la validation côté serveur.
 
+Depuis le Sprint 3, l'édition des quiz existants ne modifie plus les tables
+publiques : le builder et la configuration utilisent un document
+`QuizEditorDraft` séparé, sauvegardé avec une révision obligatoire.
+`poapoback/src/services/quizEditorDrafts.ts` contrôle ce document, les identités
+des questions/réponses et la sélection de produits. La révision est conservée
+et incrémentée même après abandon, afin de refuser les écritures d'un ancien
+onglet. Les anciennes routes de mutation du contenu ne permettent pas de
+contourner ce mécanisme ; l'import CSV prépare lui aussi le brouillon.
+Les identifiants publics existants restent dans le document, sans recréation.
+
+Seule l'opération de publication contrôlée applique ce document : le widget, les
+recommandations et les liens historiques continuent à lire `Quiz`, `Question`, `Answer` et
+`QuizProduct`. Les campagnes partageant un quiz partagent son brouillon.
+Le protocole API, la recette dans l'interface et le test PostgreSQL sont décrits
+dans le [README de l'API](../poapoback/README.md#persistent-quiz-editor-drafts-sprint-3-step-1).
+
+Depuis Campaign Studio, **Personnaliser le quiz** ouvre l'espace
+`/campaigns/:campaignId/quiz-editor`. Il réutilise les cartes du Quiz Builder et
+le même brouillon, sans dépendre du quiz sélectionné dans le menu global.
+L'en-tête rappelle la campagne, le quiz et son catalogue public associé.
+Les campagnes partageant le quiz sont signalées avec des liens.
+Les quatre sections **Questions**, **Apparence**, **Aperçu** et **Publication**
+sont opérationnelles. Changer de section
+conserve les modifications locales ; quitter l'éditeur reste protégé.
+
+L'apparence est stockée dans le champ facultatif `theme` du brouillon JSON.
+La validation et la résolution centralisée (branding tenant + valeurs propres
+au quiz + styles historiques) sont dans
+[quizTheme.ts](../poapo-types/src/quizTheme.ts). Les valeurs sont limitées aux
+couleurs hexadécimales, polices locales prédéfinies, formes et libellés autorisés.
+[QuizAppearancePanel.tsx](../poapoadmin/src/components/QuizAppearancePanel.tsx)
+présente les contrôles et un aperçu graphique statique. Le widget public ne lit
+pas ce thème préparatoire : aucun changement public avant publication contrôlée.
+
+L'onglet **Aperçu** prend explicitement un instantané du brouillon **local**, y
+compris les changements non enregistrés. Les formulaires ouverts restent conservés
+mais doivent être validés localement pour être inclus. Le composant client
+[QuizContent](../poapofront/src/pages/QuizPage.tsx) est réutilisé dans un cadre
+isolé avec les styles du widget et le thème préparé, sans second moteur de rendu.
+Les conditions sont résolues par
+[quizFlow.ts](../poapo-types/src/quizFlow.ts), partagé avec le parcours public.
+Les endpoints authentifiés de [quizPreview.ts](../poapoback/src/services/quizPreview.ts)
+valident tenant, catalogue, sélection, réponses et variantes avant d'appeler le
+même calcul de profil et le même moteur Python via
+[quizRecommendations.ts](../poapoback/src/services/quizRecommendations.ts).
+Ce mode ne crée aucune session ni métrique : tracking et liens d'achat sont
+neutralisés. Il fonctionne aussi pour un quiz inactif et ne publie rien.
+
+L'onglet **Publication** vérifie uniquement la révision **enregistrée** :
+[quizPublicationDiagnostic.ts](../poapoback/src/services/quizPublicationDiagnostic.ts)
+est le diagnostic commun, réutilisé obligatoirement à la publication et lors
+de l'activation de la version publique. Les erreurs de parcours, conditions,
+axes, catalogue/tenant, produits ou thème sont bloquantes ; les limites du
+générateur IA ne s'appliquent pas aux quiz historiques.
+[quizPublication.ts](../poapoback/src/services/quizPublication.ts) verrouille le quiz,
+compare la révision, exige la confirmation exacte des campagnes partagées et
+applique tout en une transaction PostgreSQL. Les identifiants existants restent
+stables, les nouvelles références conditionnelles sont remappées et tout échec
+annule aussi la consommation du brouillon. Les lectures du brouillon utilisent
+un instantané cohérent de sa révision et du contenu public.
+
+Le thème publié est séparé dans `Quiz.publishedTheme` (migration additive).
+[QuizThemeStyle.tsx](../poapofront/src/components/QuizThemeStyle.tsx) applique les
+surcharges validées au vrai widget, sans styles supplémentaires en leur absence.
+Le thème préparatoire n'est jamais exposé dans la configuration publique.
+Une activation ou programmation vérifie le **public existant**, ne publie jamais
+le brouillon et ne change pas la sémantique des statuts de campagne. Les nouveaux
+quiz démarrent inactifs ; aucun quiz historique n'est désactivé rétroactivement.
+La recette, les API et les tests réels sont dans le
+[README de l'API](../poapoback/README.md#controlled-validation-and-publication-sprint-3-step-5).
+
 ### Une présentation courte du projet
 
 > Poapo est une plateforme multi-tenant qui permet à une marque de créer des quiz
