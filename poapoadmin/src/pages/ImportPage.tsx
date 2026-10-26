@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getToken } from "../lib/api";
+import EmbeddingStatus from "../components/EmbeddingStatus";
 import { useQuiz } from "../contexts/QuizContext";
 import { catalogAxes, CatalogSelect, useCatalogSelection } from "../lib/catalogs";
 import {
@@ -441,14 +442,9 @@ export default function ImportPage() {
               </div>
             )}
           </div>
-          {result.embeddings === "queued" && (
-            <p className="import-info">
-              La préparation des recommandations a été lancée en arrière-plan. Elle peut prendre un moment : tant qu'elle n'est pas terminée, ces produits peuvent être moins bien classés.
-              Le statut de cette préparation n'est pas affiché ici.
-            </p>
-          )}
+          {result.embeddings === "queued" && catalogId && <EmbeddingStatus catalogId={catalogId} />}
           {result.embeddings === "unavailable" && (
-            <p className="import-warn">⚠ Le service de préparation des recommandations n'est pas configuré : les produits importés seront classés uniquement sur leurs axes.</p>
+            <p className="import-warn">⚠ Le service de préparation des recommandations n'est pas configuré : les produits importés restent en attente et seront classés uniquement sur leurs axes tant qu'il n'est pas disponible.</p>
           )}
           {result.errors.length > 0 && (
             <div className="form-error" style={{ marginTop: 12 }}>

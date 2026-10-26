@@ -60,6 +60,7 @@ function matches(row: Row, where: Row | undefined): boolean {
   return Object.entries(where).every(([key, condition]) => {
     if (condition instanceof Date) return row[key] instanceof Date && row[key].getTime() === condition.getTime();
     if (condition !== null && typeof condition === "object" && "in" in condition) return condition.in.includes(row[key]);
+    if (condition !== null && typeof condition === "object" && "not" in condition) return row[key] !== condition.not;
     return row[key] === condition;
   });
 }
@@ -110,7 +111,7 @@ before(async () => {
   )) as unknown as typeof prisma.product.findMany);
   stub(prisma.product, "updateMany", (async ({ where, data }: { where: Row; data: Row }) => {
     const rows = products.filter((p) => matches(p, where));
-    rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }));
+    rows.forEach((row) => Object.assign(row, data, { updatedAt: new Date() }, "embeddingVersion" in data ? { embeddingVersion: 1 } : {}));
     return { count: rows.length };
   }) as unknown as typeof prisma.product.updateMany);
   stub(prisma.product, "findUnique", (async ({ where }: { where: Row }) => (
@@ -357,8 +358,9 @@ test("apply : ajoute les valeurs, conserve les autres clés et recalcule l'embed
   const trek = products.find((p) => p.id === "trek")!;
   assert.deepEqual(trek.attributes, { duree: "12 jours", adventure: 0.9, culture: 0.23, comfort: 0.3 });
   await flush();
-  assert.deepEqual(aiCalls.filter((c) => c.path === "/embed/product").map((c) => c.body.id), ["trek", "museum"]);
-  assert.deepEqual(trek.embedding, [0.42]);
+  // Les produits modifiés sont remis en file (PENDING) ; le worker, testé sur PostgreSQL, calcule l'embedding.
+  assert.deepEqual(products.filter((p) => p.embeddingStatus === "PENDING").map((p) => p.id), ["trek", "museum"]);
+  assert.equal(aiCalls.filter((c) => c.path === "/embed/product").length, 0);
 });
 
 test("apply : une valeur existante n'est jamais remplacée sans confirmation (tout ou rien)", async () => {

@@ -12,6 +12,7 @@ import importRouter from "../src/routes/import";
 import quizzesRouter from "../src/routes/quizzes";
 import quizRouter from "../src/routes/quiz";
 import { quizErrorHandler } from "../src/services/quizzes";
+import { embeddingSummary, runEmbeddingBatch } from "../src/services/embeddings";
 
 // Parcours sur base PostgreSQL vide (migrate deploy) avec poapoai local (AI_SERVICE_URL), sans OpenAI.
 test("Base neuve : tenant → catalogue → import idempotent → embeddings → quiz → publication → recommandation", {
@@ -84,15 +85,17 @@ test("Base neuve : tenant → catalogue → import idempotent → embeddings →
     // Isolation tenant : l'autre tenant ne voit rien.
     assert.equal(await prisma.importBatch.count({ where: { tenantId: otherTenantId } }), 0);
 
-    // Embeddings persistés (génération en arrière-plan).
-    const deadline = Date.now() + 60_000;
-    let embedded = 0;
-    while (Date.now() < deadline) {
-      embedded = (await prisma.$queryRaw<{ n: bigint }[]>`SELECT count(*) AS n FROM "Product" WHERE "tenantId" = ${tenantId} AND embedding IS NOT NULL AND embedding::text <> 'null'`)[0].n as unknown as number;
-      if (Number(embedded) >= 12) break;
-      await new Promise((r) => setTimeout(r, 1000));
+    // Importés ≠ prêts : tous les produits sont en file, aucun n'est encore recommandable sémantiquement.
+    const queued = await embeddingSummary(tenantId);
+    assert.deepEqual([queued.total, queued.pending, queued.ready, queued.failed], [12, 12, 0, 0]);
+    // Le worker (moteur Python local réel) traite la file.
+    const deadline = Date.now() + 120_000;
+    while (Date.now() < deadline && (await embeddingSummary(tenantId)).ready < 12) {
+      if (await runEmbeddingBatch() === 0) await new Promise((r) => setTimeout(r, 500));
     }
-    assert.equal(Number(embedded), 12);
+    const prepared = await embeddingSummary(tenantId);
+    assert.deepEqual([prepared.ready, prepared.pending, prepared.failed], [12, 0, 0]);
+    assert.equal((await embeddingSummary(otherTenantId)).total, 0);
 
     // Quiz → brouillon → publication.
     const quiz = await (await call("/api/quizzes", "POST", {

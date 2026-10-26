@@ -9,7 +9,7 @@ import type {
 import type { AuthRequest } from "../middleware/auth";
 import { AiServiceError, callAiService } from "../services/aiClient";
 import { resolveAccountTenantId } from "../services/catalogs";
-import { triggerEmbeddings } from "../services/embeddings";
+import { enqueueEmbeddings } from "../services/embeddings";
 import {
   applyEnrichment,
   buildEnrichmentBatch,
@@ -160,7 +160,7 @@ router.post("/apply", asyncRoute(async (req, res) => {
   const updates = parseApplyInput(req.body, scope);
   const { productIds, ...result } = await applyEnrichment(tenantId, scope.catalog.id, updates);
   // Comme après une modification de fiche : l'embedding inclut les valeurs d'axes.
-  triggerEmbeddings(productIds, tenantId).catch(console.error);
+  await enqueueEmbeddings(productIds, tenantId);
   const response: ProductEnrichmentApplyResponse = result;
   res.json(response);
 }));

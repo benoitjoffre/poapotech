@@ -105,7 +105,7 @@ export async function diagnoseQuiz(
   const products = await db.product.findMany({
     where: { tenantId: quiz.tenantId, catalogId: draft.config.catalogId, active: true,
       ...(!draft.config.useAllProducts && { id: { in: draft.config.productIds } }) },
-    select: { id: true, attributes: true, embedding: true },
+    select: { id: true, attributes: true, embedding: true, embeddingStatus: true },
   });
   const catalog = await db.catalog.findFirst({ where: { tenantId: quiz.tenantId, id: draft.config.catalogId } });
   diagnostic.summary = {
@@ -128,6 +128,8 @@ export async function diagnoseQuiz(
   }
   if (!draft.config.axes.length) warning("NO_AXES", "Aucun axe : la discrimination du profil est limitée.");
   if (products.some((p) => !Array.isArray(p.embedding) || !p.embedding.length)) warning("MISSING_EMBEDDINGS", "Certains produits n'ont pas d'embedding ; leur score sémantique sera nul.");
+  if (products.some((p) => p.embeddingStatus === "FAILED")) warning("FAILED_EMBEDDINGS", "La préparation des recommandations a échoué pour certains produits : relancez-la depuis le catalogue.");
+  else if (products.some((p) => p.embeddingStatus === "PENDING" || p.embeddingStatus === "PROCESSING")) warning("PENDING_EMBEDDINGS", "La préparation des recommandations de certains produits n'est pas terminée.");
   const tenant = await db.tenant.findUniqueOrThrow({ where: { id: quiz.tenantId }, select: { primaryColor: true, logoUrl: true } });
   const theme = resolveQuizTheme(tenant, draft.theme);
   if (contrast(theme.textColor, theme.backgroundColor) < 4.5 || contrast("#ffffff", theme.primaryColor) < 4.5) {

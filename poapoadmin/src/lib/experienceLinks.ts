@@ -6,8 +6,8 @@ export function quizPath(quiz: Pick<DashboardExperience, "id" | "catalog">, path
 }
 
 export function widgetBaseUrl(): string {
-  return String(import.meta.env.VITE_WIDGET_BASE_URL ??
-    (import.meta.env.PROD ? "https://app.poapo-tech.com" : "http://localhost:5173")).replace(/\/$/, "");
+  // VITE_WIDGET_BASE_URL est obligatoire au build de production ; le repli local n'existe qu'en développement.
+  return String(import.meta.env.VITE_WIDGET_BASE_URL ?? (import.meta.env.DEV ? "http://localhost:5173" : "")).replace(/\/$/, "");
 }
 
 export function publicQuizLink(tenantId: string, quizId: string): string {

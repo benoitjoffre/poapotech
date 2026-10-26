@@ -1,3 +1,4 @@
+import { aiHeaders } from "./aiClient";
 import type { QuizAxis } from "@poapo/types";
 import { prisma } from "../lib/prisma";
 import { computeProfile } from "./scoring";
@@ -26,7 +27,7 @@ export async function recommendQuiz(input: RecommendationInput) {
   try {
     response = await fetch(`${aiUrl}/recommend`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: aiHeaders(),
       body: JSON.stringify({ ...scope, profile }),
       signal: AbortSignal.timeout(RECOMMEND_TIMEOUT_MS),
     });

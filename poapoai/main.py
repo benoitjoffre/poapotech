@@ -5,6 +5,7 @@ Recommandation générique par embeddings sémantiques et axes numériques par q
 """
 from __future__ import annotations
 
+import hmac
 import os
 import json
 import math
@@ -17,7 +18,8 @@ import numpy as np
 import openai
 import psycopg2
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, ValidationError
 from sentence_transformers import SentenceTransformer
@@ -43,10 +45,20 @@ app = FastAPI(title="Poapo AI Service", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5050"],
+    allow_origins=[o.strip() for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:5050").split(",") if o.strip()],
     allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )
+
+AI_SERVICE_TOKEN = os.getenv("AI_SERVICE_TOKEN", "")
+
+@app.middleware("http")
+async def require_token(request: Request, call_next):
+    """Jeton partagé avec l'API Node quand AI_SERVICE_TOKEN est défini (sondes et préflight exclus)."""
+    if AI_SERVICE_TOKEN and request.method != "OPTIONS" and request.url.path not in ("/health", "/ready"):
+        if not hmac.compare_digest(request.headers.get("x-ai-token", ""), AI_SERVICE_TOKEN):
+            return JSONResponse(status_code=401, content={"detail": {"code": "unauthorized", "message": "Jeton invalide"}})
+    return await call_next(request)
 
 # Modèle d'embeddings : chargé au démarrage (lifespan), mis en cache en mémoire.
 _model: SentenceTransformer | None = None
@@ -72,9 +84,10 @@ openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # ─── DB helper ────────────────────────────────────────────────────────────────
 def get_connection():
-    # Strip Prisma-specific query params not supported by psycopg2
-    dsn = DATABASE_URL.split("?")[0]
-    return psycopg2.connect(dsn)
+    # Retire le paramètre propre à Prisma (schema) ; conserve les autres (ex. sslmode) pour psycopg2
+    base, _, query = DATABASE_URL.partition("?")
+    kept = "&".join(p for p in query.split("&") if p and not p.startswith("schema="))
+    return psycopg2.connect(f"{base}?{kept}" if kept else base)
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 def level_of(value: float) -> str:

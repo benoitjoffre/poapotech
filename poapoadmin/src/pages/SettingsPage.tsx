@@ -3,6 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import type { TenantBranding } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 import { Link } from "react-router-dom";
+import { widgetBaseUrl as resolveWidgetBaseUrl } from "../lib/experienceLinks";
 
 interface BrandingForm {
   name: string;
@@ -29,8 +30,7 @@ const EMPTY: BrandingForm = {
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  const defaultWidgetBaseUrl = import.meta.env.PROD ? "https://app.poapo-tech.com" : "http://localhost:5173";
-  const widgetBaseUrl = String(import.meta.env.VITE_WIDGET_BASE_URL ?? defaultWidgetBaseUrl).replace(/\/$/, "");
+  const widgetBaseUrl = resolveWidgetBaseUrl();
   const [form, setForm] = useState<BrandingForm>(EMPTY);
   const [tenantId, setTenantId] = useState("");
   const [isLoading, setIsLoading] = useState(true);

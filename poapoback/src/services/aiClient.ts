@@ -11,6 +11,12 @@ interface AiErrorBody {
   detail?: { code?: string; message?: string; errors?: unknown } | string;
 }
 
+/** En-têtes des appels vers poapoai : jeton partagé (AI_SERVICE_TOKEN) si le service est exposé hors réseau privé. */
+export function aiHeaders(): Record<string, string> {
+  const token = process.env.AI_SERVICE_TOKEN;
+  return { "Content-Type": "application/json", ...(token && { "X-AI-Token": token }) };
+}
+
 /** Appelle le service IA (poapoai) en JSON, avec délai d'attente et erreurs typées. */
 export async function callAiService<T>(path: string, body: unknown, timeoutMs: number): Promise<T> {
   const aiUrl = process.env.AI_SERVICE_URL;
@@ -20,7 +26,7 @@ export async function callAiService<T>(path: string, body: unknown, timeoutMs: n
   try {
     response = await fetch(`${aiUrl}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: aiHeaders(),
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });

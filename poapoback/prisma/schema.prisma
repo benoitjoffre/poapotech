@@ -212,6 +212,16 @@ model Product {
   attributes  Json     @default("{}")
   // AI embedding stored as JSON array (pgvector via raw SQL for queries)
   embedding   Json?
+  // File persistante des embeddings : `embedding` est à jour seulement si embeddingStatus = READY.
+  embeddingStatus        EmbeddingStatus @default(PENDING)
+  // Incrémenté à chaque changement de contenu : un résultat calculé sur une version périmée est écarté.
+  embeddingVersion       Int             @default(0)
+  embeddingAttempts      Int             @default(0)
+  embeddingError         String?
+  embeddingNextAttemptAt DateTime?
+  // Bail du traitement en cours : un traitement interrompu est repris une fois le bail expiré.
+  embeddingLockedUntil   DateTime?
+  embeddingUpdatedAt     DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -225,6 +235,7 @@ model Product {
   @@index([tenantId])
   @@index([tenantId, active])
   @@index([tenantId, catalogId, active])
+  @@index([embeddingStatus, embeddingNextAttemptAt])
 }
 
 // ─────────────────────────────────────────────
@@ -348,6 +359,13 @@ enum CampaignOccasion {
   PROMOTION
   PERMANENT
   CUSTOM
+}
+
+enum EmbeddingStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
 }
 
 enum FeedbackType {

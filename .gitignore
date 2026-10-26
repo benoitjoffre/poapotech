@@ -28,3 +28,6 @@ npm-debug.log*
 # OS
 .DS_Store
 Thumbs.db
+
+# Cache du modèle d'embeddings (téléchargé au build)
+poapoai/.hf-cache/

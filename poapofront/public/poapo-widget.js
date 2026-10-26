@@ -13,9 +13,15 @@
     return;
   }
 
-  if (!widgetUrl) {
-    widgetUrl = "https://widget.poapo.fr";
+  // Sans data-url, le widget est servi par le même site que ce script.
+  if (!widgetUrl && script && script.src) {
+    widgetUrl = new URL(script.src, window.location.href).origin;
   }
+  if (!widgetUrl) {
+    console.warn("[Poapo] data-url manquant et origine du script introuvable.");
+    return;
+  }
+  widgetUrl = widgetUrl.replace(/\/$/, "");
 
   var iframeSrc = widgetUrl + "/?clientId=" + encodeURIComponent(clientId);
   if (quizId) iframeSrc += "&quizId=" + encodeURIComponent(quizId);

@@ -7,7 +7,7 @@ import { Prisma } from "@prisma/client";
 import { verifyToken, AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { catalogAxes, resolveAccountTenantId, resolveCatalog, toCatalogRef } from "../services/catalogs";
-import { triggerEmbeddings } from "../services/embeddings";
+import { kickEmbeddingWorker } from "../services/embeddings";
 import { suggestMapping, validateMapping, ATTRIBUTE_KEY_PATTERN, type FieldMapping, type ImportIssue } from "../services/importMapping";
 import { asyncRoute } from "../services/quizzes";
 
@@ -344,12 +344,12 @@ router.post("/execute", verifyToken, asyncRoute(async (req: AuthRequest, res: Re
     throw err;
   }
 
-  // Embeddings locaux (poapoai, sans OpenAI) en arrière-plan : ils pèsent 60 % du score de recommandation.
-  // Aucun état de préparation n'est exposé par l'API : on indique seulement si la demande a été lancée.
+  // Les produits sont créés PENDING (file persistante) : le worker calcule leurs embeddings locaux (poapoai, sans OpenAI).
+  // « queued » : file active ; l'état réel (prêts / en échec) est lu via GET /api/catalog/embeddings.
   const embeddings = createdIds.length === 0 ? "none" : process.env.AI_SERVICE_URL ? "queued" : "unavailable";
   const result = { created: createdIds.length, skipped: evaluations.length - createdIds.length, errors, embeddings, catalog: toCatalogRef(catalog) };
   await prisma.importBatch.update({ where: batchKey, data: { status: "completed", result: result as unknown as Prisma.InputJsonObject } });
-  if (embeddings === "queued") triggerEmbeddings(createdIds, tenantId).catch(console.error);
+  if (embeddings === "queued") kickEmbeddingWorker();
   res.json(result);
 }));
 

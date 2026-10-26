@@ -5,7 +5,7 @@ import type { ProductCreateInput, ProductUpdateInput } from "@poapo/types";
 import { invalidAxisValue, isProductAttributes } from "../services/axes";
 import { catalogAxes, resolveAccountTenantId, resolveCatalog } from "../services/catalogs";
 import { asyncRoute, QuizError } from "../services/quizzes";
-import { triggerEmbedding } from "../services/embeddings";
+import { embeddingSummary, enqueueEmbeddings, kickEmbeddingWorker, retryEmbeddings } from "../services/embeddings";
 
 const router = Router();
 router.use(verifyToken);
@@ -67,6 +67,7 @@ router.get("/products", asyncRoute(async (req: AuthRequest, res: Response) => {
         featured: true,
         createdAt: true,
         catalogId: true,
+        embeddingStatus: true,
         catalog: { select: { id: true, name: true } },
       },
     }),
@@ -74,6 +75,21 @@ router.get("/products", asyncRoute(async (req: AuthRequest, res: Response) => {
   ]);
 
   res.json({ data, total, page, pageSize });
+}));
+
+// GET /api/catalog/embeddings?catalogId= — état de préparation des recommandations (tenant du compte)
+router.get("/embeddings", asyncRoute(async (req: AuthRequest, res: Response) => {
+  const tenantId = await resolveTenantId(req);
+  const catalogId = typeof req.query.catalogId === "string" && req.query.catalogId ? req.query.catalogId : undefined;
+  res.json(await embeddingSummary(tenantId, catalogId));
+}));
+
+// POST /api/catalog/embeddings/retry { catalogId? } — relance les produits en échec ou en attente de relance
+router.post("/embeddings/retry", asyncRoute(async (req: AuthRequest, res: Response) => {
+  const tenantId = await resolveTenantId(req);
+  const catalogId = typeof req.body?.catalogId === "string" && req.body.catalogId ? req.body.catalogId : undefined;
+  if (catalogId) await resolveCatalog(tenantId, catalogId);
+  res.json({ requeued: await retryEmbeddings(tenantId, catalogId) });
 }));
 
 // GET /api/catalog/products/:id
@@ -122,8 +138,8 @@ router.post("/products", asyncRoute(async (req: AuthRequest, res: Response) => {
     },
   });
 
-  // Déclencher l'embedding en arrière-plan (non bloquant)
-  triggerEmbedding(product.id, tenantId).catch(console.error);
+  // Le produit naît PENDING : le worker calcule son embedding.
+  kickEmbeddingWorker();
 
   res.status(201).json(product);
 }));
@@ -178,7 +194,7 @@ router.put("/products/:id", asyncRoute(async (req: AuthRequest, res: Response) =
   // Les axes du nouveau catalogue entrent dans le texte d'embedding.
   const descriptionChanged = catalogChanged || ["name", "brand", "description", "tags", "attributes"].some((k) => k in body);
   if (descriptionChanged) {
-    triggerEmbedding(updated.id, tenantId).catch(console.error);
+    await enqueueEmbeddings([updated.id], tenantId);
   }
 
   res.json(updated);

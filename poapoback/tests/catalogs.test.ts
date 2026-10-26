@@ -138,6 +138,12 @@ before(async () => {
   stub(prisma.importBatch, "findFirst", (async () => null) as unknown as typeof prisma.importBatch.findFirst);
   stub(prisma.importBatch, "create", (async () => ({})) as unknown as typeof prisma.importBatch.create);
   stub(prisma.importBatch, "update", (async () => ({})) as unknown as typeof prisma.importBatch.update);
+  // File d'embeddings : seul le marquage PENDING est observable ici (le worker est testé sur PostgreSQL).
+  stub(prisma.product, "updateMany", (async ({ where, data }: { where: Row; data: Row }) => {
+    const rows = products.filter((p) => p.tenantId === where.tenantId && where.id.in.includes(p.id));
+    rows.forEach((row) => Object.assign(row, data, { embeddingVersion: ((row.embeddingVersion as number) ?? 0) + 1 }));
+    return { count: rows.length };
+  }) as unknown as typeof prisma.product.updateMany);
   stub(prisma.product, "update", (async ({ where, data }: { where: Row; data: Row }) => {
     const row = products.find((p) => p.id === where.id)!;
     Object.assign(row, data);
@@ -372,13 +378,12 @@ test("aperçu : isolation tenant/catalogue et corps invalide", async () => {
   assert.equal((await request("/api/catalog/import/preview", "POST", { mapping: guidedMapping, rows: ["x"] })).status, 400);
 });
 
-test("import confirmé : seules les lignes valides sont créées, embeddings déclenchés après l'écriture", async () => {
+test("import confirmé : seules les lignes valides sont créées, embeddings mis en file sans appel inline", async () => {
   process.env.AI_SERVICE_URL = "http://ai.invalid";
   const embedded: string[] = [];
-  stub(prisma.product, "findUnique", (async ({ where }: { where: Row }) => products.find((p) => p.id === where.id) ?? null) as unknown as typeof prisma.product.findUnique);
   const realFetch = globalThis.fetch;
   globalThis.fetch = (async (url: string, init?: { body?: string }) => {
-    if (String(url).endsWith("/embed/product")) { embedded.push(JSON.parse(init!.body!).id); return new Response("{}", { status: 503 }); }
+    if (String(url).includes("ai.invalid")) { embedded.push(String(url)); return new Response("{}", { status: 503 }); }
     return realFetch(url as never, init as never);
   }) as typeof fetch;
   try {
@@ -390,10 +395,9 @@ test("import confirmé : seules les lignes valides sont créées, embeddings dé
     const body = await res.json();
     assert.deepEqual([body.created, body.skipped, body.embeddings], [1, 1, "queued"]);
     assert.match(body.errors[0], /Ligne 3/);
-    await new Promise((resolve) => setTimeout(resolve, 50));
     const created = products.find((p) => p.name === "Riad 2")!;
     assert.deepEqual([created.tenantId, created.catalogId, created.price], ["tenant-a", "catalog-heberg", 90]);
-    assert.deepEqual(embedded, [created.id]);
+    assert.deepEqual(embedded, []); // l'import ne dépend plus du service IA : le worker prend le relais
     assert.ok(!products.some((p) => p.name === "Mauvais"));
   } finally {
     globalThis.fetch = realFetch;

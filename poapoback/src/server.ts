@@ -1,6 +1,5 @@
 import "dotenv/config";
 import express from "express";
-import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 
@@ -19,9 +18,14 @@ import campaignsRouter from "./routes/campaigns";
 import dashboardRouter from "./routes/dashboard";
 import experiencesRouter from "./routes/experiences";
 import { quizErrorHandler } from "./services/quizzes";
+import { corsPolicy } from "./services/cors";
+import { checkReadiness } from "./services/readiness";
+import { startEmbeddingWorker } from "./services/embeddings";
 import { globalRateLimitMax } from "./rateLimitConfig";
 
 const app = express();
+// Derrière le proxy Render : IP réelle du visiteur pour le rate limiting.
+if (process.env.TRUST_PROXY) app.set("trust proxy", Number(process.env.TRUST_PROXY) || process.env.TRUST_PROXY);
 
 // ─── Security ──────────────────────────────────────────────────────────────────
 app.use(
@@ -32,19 +36,20 @@ app.use(
   }),
 );
 
-// CORS — autoriser les origines configurées
-const allowedOrigins = [process.env.FRONTEND_URL ?? "http://localhost:5173", process.env.ADMIN_URL ?? "http://localhost:5174"];
-app.use(
-  cors({
-    origin: (origin, callback) => {
-      // Autoriser les requêtes sans origin (curl, Postman, server-side)
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
-      callback(new Error(`CORS: origin ${origin} non autorisée`));
-    },
-    credentials: true,
-  }),
-);
+// CORS — widget public ouvert à toute origine, administration limitée à FRONTEND_URL / ADMIN_URL
+app.use(corsPolicy());
+
+// Liveness : le processus répond (utilisé par Render pour redémarrer, sans dépendance externe).
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", ts: new Date().toISOString() });
+});
+
+// Readiness : 503 seulement si PostgreSQL est inaccessible. Python arrêté = "degraded" (200) :
+// l'administration reste disponible, seuls les parcours qui en dépendent échouent explicitement.
+app.get("/ready", async (_req, res) => {
+  const state = await checkReadiness();
+  res.status(state.ready ? 200 : 503).json({ status: !state.ready ? "unavailable" : state.ai === "down" ? "degraded" : "ok", ...state });
+});
 
 // Rate limiting global
 app.use(
@@ -85,11 +90,6 @@ app.use("/api/admin/tenants", adminTenantsRouter);
 app.use("/api/metrics", metricsRouter);
 app.use("/api/results", resultsRouter);
 
-// Health check
-app.get("/health", (_req, res) => {
-  res.json({ status: "ok", ts: new Date().toISOString() });
-});
-
 app.use(quizErrorHandler);
 
 // 404 handler
@@ -101,6 +101,7 @@ app.use((_req, res) => {
 const port = Number(process.env.PORT ?? 5050);
 app.listen(port, () => {
   console.log(`[poapoback] API listening on http://localhost:${port}`);
+  startEmbeddingWorker();
 });
 
 export default app;

@@ -62,7 +62,7 @@ async function createMagicLinkToken(tenantId: string): Promise<string> {
 }
 
 async function sendMagicLinkEmail(email: string, rawToken: string): Promise<void> {
-  const verifyUrl = `${process.env.ADMIN_URL}/auth/verify?token=${rawToken}`;
+  const verifyUrl = `${(process.env.ADMIN_URL ?? "http://localhost:5174").split(",")[0].trim().replace(/\/$/, "")}/auth/verify?token=${rawToken}`;
 
   await transporter.sendMail({
     from: process.env.EMAIL_FROM,

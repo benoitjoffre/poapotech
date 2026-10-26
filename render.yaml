@@ -1,0 +1,120 @@
+# Blueprint Render pour POAPO. Rien n'est créé tant que ce fichier n'est pas importé dans Render.
+# Plans : "free" partout par défaut pour ne créer aucune ressource payante par erreur. Voir docs/deploiement-render.md
+# (mémoire du service Python, durée de vie de la base gratuite, mise en veille) avant la mise en ligne.
+databases:
+  - name: poapo-db
+    region: frankfurt
+    plan: free
+    databaseName: poapo
+    user: poapo
+    # pgvector : CREATE EXTENSION vector est exécuté par la migration baseline.
+
+services:
+  # ── API Node (Express + Prisma) ───────────────────────────────────────────────
+  - type: web
+    name: poapo-api
+    runtime: node
+    region: frankfurt
+    plan: free
+    buildCommand: >-
+      npm ci --include=dev &&
+      npm run build -w poapo-types &&
+      npx prisma generate --schema poapoback/prisma/schema.prisma &&
+      npm run build -w poapoback
+    # Les migrations sont appliquées au démarrage (sans preDeployCommand, réservé aux offres payantes).
+    startCommand: cd poapoback && npx prisma migrate deploy && node dist/server.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.12.0
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: DATABASE_URL
+        fromDatabase: { name: poapo-db, property: connectionString }
+      - key: JWT_SECRET
+        generateValue: true
+      - key: AI_SERVICE_TOKEN
+        generateValue: true
+      - key: AI_SERVICE_URL
+        sync: false # https://poapo-ai.onrender.com
+      - key: FRONTEND_URL
+        sync: false # URL du widget (poapo-widget)
+      - key: ADMIN_URL
+        sync: false # URL de l'administration (poapo-admin)
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: SUPER_ADMIN_EMAIL
+        sync: false
+      - key: SUPER_ADMIN_PASSWORD
+        sync: false
+
+  # ── Moteur Python (embeddings locaux, recommandation) ────────────────────────
+  - type: web
+    name: poapo-ai
+    runtime: python
+    region: frankfurt
+    plan: free
+    rootDir: poapoai
+    # Le modèle est téléchargé au build dans HF_HOME (même chemin au runtime) : aucun téléchargement au démarrage.
+    buildCommand: >-
+      pip install -r requirements.txt &&
+      python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')"
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9 # la roue torch épinglée est cp311
+      - key: HF_HOME
+        value: /opt/render/project/src/poapoai/.hf-cache
+      - key: MODEL_NAME
+        value: paraphrase-multilingual-MiniLM-L12-v2
+      - key: DATABASE_URL
+        fromDatabase: { name: poapo-db, property: connectionString }
+      - key: AI_SERVICE_TOKEN
+        fromService: { type: web, name: poapo-api, envVarKey: AI_SERVICE_TOKEN }
+      - key: ALLOWED_ORIGINS
+        value: https://poapo-api.onrender.com
+      - key: OPENAI_API_KEY
+        sync: false # facultatif : génération de quiz et enrichissement uniquement
+
+  # ── Administration React (site statique) ─────────────────────────────────────
+  - type: web
+    name: poapo-admin
+    runtime: static
+    region: frankfurt
+    buildCommand: npm ci --include=dev && npm run build -w poapo-types && npm run build -w poapoadmin
+    staticPublishPath: poapoadmin/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false # https://poapo-api.onrender.com
+      - key: VITE_WIDGET_BASE_URL
+        sync: false # URL de poapo-widget
+
+  # ── Widget public + script d'intégration poapo-widget.js (site statique) ─────
+  - type: web
+    name: poapo-widget
+    runtime: static
+    region: frankfurt
+    buildCommand: npm ci --include=dev && npm run build -w poapo-types && npm run build -w poapofront
+    staticPublishPath: poapofront/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false # https://poapo-api.onrender.com
