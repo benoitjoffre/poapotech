@@ -1,0 +1,50 @@
+.help-page { max-width: 1100px; color: var(--text); gap: 28px; }
+.help-page :is(a, button, input, summary):focus-visible { outline: 3px solid var(--primary-hover); outline-offset: 3px; }
+.help-page :is(h1, h2, h3, p, a, strong, li, summary) { overflow-wrap: anywhere; }
+.help-page a:not(.btn-primary):not(.btn-ghost):not(.help-card):not(.table-link) { color: var(--primary-hover); }
+.help-muted { color: #505065; font-size: 13px; }
+.help-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.help-h2 { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+.help-hero { padding: 28px; border-radius: 16px; background: linear-gradient(115deg, #f2edff, #ebe5ff); display: flex; flex-direction: column; gap: 14px; }
+.help-hero .page-title { font-size: clamp(26px, 4vw, 36px); }
+.help-hero p { max-width: 560px; color: #505065; }
+.help-search { position: relative; max-width: 560px; display: flex; align-items: center; }
+.help-search svg { position: absolute; left: 14px; color: var(--primary-hover); pointer-events: none; }
+.help-search input { width: 100%; height: 44px; padding: 0 14px 0 42px; border: 1px solid var(--border); border-radius: 10px; background: #fff; font: inherit; }
+.help-chips { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 0; }
+.help-chip { padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px; background: #fff; font: inherit; font-size: 13px; cursor: pointer; color: var(--text); }
+.help-chip:hover, .help-chip.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary-hover); }
+.help-grid { list-style: none; padding: 0; margin: 16px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.help-card { display: flex; gap: 14px; height: 100%; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); text-decoration: none; color: var(--text); }
+.help-card:hover { border-color: var(--primary); box-shadow: 0 4px 16px #6c47ff1f; }
+.help-card-icon { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border-radius: 12px; background: var(--primary-soft); color: var(--primary-hover); }
+.help-card-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 13px; }
+.help-card-body strong { font-size: 15px; }
+.help-empty { margin-top: 12px; }
+.help-start { list-style: none; padding: 0; margin: 14px 0 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.help-start a { display: flex; gap: 10px; align-items: flex-start; text-decoration: none; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); }
+.help-start a > span:last-child { display: flex; flex-direction: column; font-size: 13px; min-width: 0; }
+.help-num { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--primary); color: #fff; font-weight: 700; font-size: 13px; }
+.help-faq { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.help-faq details { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding: 12px 16px; }
+.help-faq summary { cursor: pointer; font-weight: 600; }
+.help-faq p { margin-top: 8px; color: #505065; }
+.help-article { max-width: 760px; }
+.help-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 1.4px; font-weight: 700; color: var(--primary-hover); margin-bottom: 6px; }
+.help-lead { font-size: 16px; color: #505065; margin-top: 8px; }
+.help-block { display: flex; flex-direction: column; gap: 8px; }
+.help-block ul, .help-tip ul { padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.help-steps { list-style: none; counter-reset: step; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 14px; }
+.help-steps li { counter-increment: step; position: relative; padding: 16px 16px 16px 60px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.help-steps li::before { content: counter(step); position: absolute; left: 16px; top: 16px; width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: #fff; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.help-steps h3 { font-size: 15px; }
+.help-tip { padding: 16px 20px; border-radius: 14px; background: var(--primary-soft); border: 1px solid #ddd3ff; }
+.help-pager { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.help-pager a:not(.btn-primary) { color: var(--primary-hover); }
+.help-pager .btn-primary { text-decoration: none; }
+@media (max-width: 480px) {
+  .help-hero { padding: 18px; }
+  .help-steps li { padding-left: 52px; }
+  .help-steps li::before { left: 12px; }
+  .help-pager .btn-primary { width: 100%; justify-content: center; text-align: center; }
+}

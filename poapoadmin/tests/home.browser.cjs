@@ -69,7 +69,7 @@ async function main() {
   await page.getByRole("heading", { name: "Votre prochaine action" }).waitFor();
   const navigation = page.getByRole("navigation", { name: "Navigation principale" });
   check((await navigation.getByRole("link").allTextContents()).join("|") ===
-    "Accueil|Mes produits|Mes expériences|Campagnes|Résultats|Paramètres", "six merchant destinations in the validated order");
+    "Accueil|Mes produits|Mes expériences|Campagnes|Résultats|Paramètres|Centre d'aide", "seven merchant destinations in the validated order");
   check(await navigation.getByRole("link", { name: "Campagnes", exact: true }).getAttribute("href") === "/campaigns",
     "campaign navigation retains the existing studio route");
   check(await page.getByText("Boutique de démonstration", { exact: true }).count() === 1, "real shop identity");

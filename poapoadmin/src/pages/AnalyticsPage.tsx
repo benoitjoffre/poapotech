@@ -59,7 +59,7 @@ export default function AnalyticsPage() {
       <header className="page-header rs-header">
         <div>
           <h1 className="page-title">Résultats</h1>
-          <p className="page-subtitle">Suivez l'utilisation de vos expériences et comprenez ce qui intéresse vos visiteurs.</p>
+          <p className="page-subtitle">Suivez l'utilisation de vos expériences et comprenez ce qui intéresse vos visiteurs. <Link to="/help/comprendre-vos-resultats">Comprendre vos résultats</Link></p>
         </div>
         <div className="rs-range" role="group" aria-label="Période">
           {RANGES.map((value) => (

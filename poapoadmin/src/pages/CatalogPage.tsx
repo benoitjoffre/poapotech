@@ -98,7 +98,7 @@ export default function CatalogPage() {
           <h1 className="page-title">{catalog ? catalog.name : "Produits"}</h1>
           <p className="page-subtitle">
             {total} produit{total !== 1 ? "s" : ""}
-            {catalog ? "" : " · tous les catalogues"}
+            {catalog ? "" : " · tous les catalogues"}{" · "}<Link to="/help/ajouter-vos-produits">Aide : ajouter vos produits</Link>
           </p>
         </div>
         <Link to={catalogLink("/catalog/new")} className="btn-primary">

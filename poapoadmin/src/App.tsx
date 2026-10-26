@@ -19,6 +19,8 @@ import CampaignQuizGeneratorPage from "./pages/CampaignQuizGeneratorPage";
 import ExperienceEditorPage, { ExperienceSetupPage } from "./pages/ExperienceEditorPage";
 import CampaignQuizEditorPage from "./pages/CampaignQuizEditorPage";
 import ProductEnrichmentPage from "./pages/ProductEnrichmentPage";
+import HelpCenterPage from "./pages/HelpCenterPage";
+import HelpArticlePage from "./pages/HelpArticlePage";
 import HomePage from "./pages/HomePage";
 import Icon from "./components/Icon";
 import { QuizProvider } from "./contexts/QuizContext";
@@ -58,6 +60,7 @@ function AppLayout() {
             <NavLink className={link} to="/campaigns"><Icon name="megaphone" />Campagnes</NavLink>
             <NavLink className={link} to="/analytics"><Icon name="chart" />Résultats</NavLink>
             <NavLink className={link} to="/settings"><Icon name="gear" />Paramètres</NavLink>
+            <NavLink className={link} to="/help"><Icon name="help" />Centre d'aide</NavLink>
           </>}
         </nav>
         <div className="admin-sidebar-user">
@@ -111,6 +114,8 @@ function App() {
             <Route element={<SuperAdminRoute />}>
               <Route path="/admin/tenants" element={<TenantsAdminPage />} />
             </Route>
+            <Route path="/help" element={<HelpCenterPage />} />
+            <Route path="/help/:slug" element={<HelpArticlePage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Route>

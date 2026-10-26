@@ -73,7 +73,7 @@ export default function QuizzesPage() {
     <header className="page-header">
       <div>
         <h1 className="page-title">Mes expériences</h1>
-        <p className="page-subtitle">Créez, modifiez et publiez vos quiz de recommandation. Une expérience est un quiz unique qui peut être utilisé dans plusieurs campagnes, ou sans campagne.</p>
+        <p className="page-subtitle">Créez, modifiez et publiez vos quiz de recommandation. Une expérience est un quiz unique qui peut être utilisé dans plusieurs campagnes, ou sans campagne. <Link to="/help/creer-une-experience">Guide : créer une expérience</Link></p>
       </div>
       <Link className="btn-primary" to={createPath}><Icon name="plus" size={16} />&nbsp;Créer une expérience</Link>
     </header>
