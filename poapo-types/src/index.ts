@@ -4,6 +4,7 @@
 export * from "./quizTheme";
 export * from "./quizFlow";
 export * from "./dashboard";
+export * from "./experiences";
 
 export interface Tenant {
   id: string;
