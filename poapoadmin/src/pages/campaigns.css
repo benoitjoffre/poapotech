@@ -1,0 +1,79 @@
+.cp { --cp-primary: #6C47FF; --cp-primary-soft: #f1edff; --cp-border: #e3e5ee; --cp-muted: #5c6072; }
+.cp .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cp-muted { color: var(--cp-muted); font-size: 13px; }
+.cp-note { background: var(--cp-primary-soft); border: 1px solid #d9d0ff; border-radius: 12px; padding: 12px 16px; margin: 0 0 16px; color: #2d1f73; font-size: 14px; }
+.cp-note p { margin: 0 0 4px; }
+.cp-note p:last-child { margin: 0; }
+
+.cp-toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.cp-search { grid-column: 1 / -1; }
+.cp-search input { width: 100%; }
+.cp-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
+.cp-tab { border: 1px solid var(--cp-border); background: #fff; border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; color: #2b2d3c; }
+.cp-tab.active { background: var(--cp-primary); border-color: var(--cp-primary); color: #fff; }
+.cp-count { opacity: .8; margin-left: 4px; font-weight: 650; }
+.cp .cp-tab:focus-visible, .cp .cp-step:focus-visible, .cp .cp-menu-item:focus-visible, .cp .cp-choice:focus-within { outline: 3px solid var(--cp-primary); outline-offset: 2px; }
+
+.cp-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.cp-card { display: grid; grid-template-columns: 72px 1fr auto; gap: 16px; align-items: center; background: #fff; border: 1px solid var(--cp-border); border-radius: 14px; padding: 16px; }
+.cp-card-visual { width: 72px; height: 72px; border-radius: 10px; overflow: hidden; }
+.cp-card-visual img, .cp-card-visual .campaign-fallback { width: 100%; height: 100%; object-fit: cover; }
+.cp-card-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.cp-card-title { font-size: 16px; margin: 0; }
+.cp-card-title a { color: inherit; text-decoration: none; }
+.cp-card-title a:hover { text-decoration: underline; }
+.cp-meta { margin: 4px 0; font-size: 13px; color: var(--cp-muted); overflow-wrap: anywhere; }
+.cp-card-actions { display: flex; gap: 8px; align-items: center; }
+.cp-menu { position: relative; }
+.cp-menu-list { position: absolute; right: 0; top: 100%; z-index: 5; min-width: 200px; background: #fff; border: 1px solid var(--cp-border); border-radius: 10px; box-shadow: 0 8px 24px rgba(20, 20, 50, .12); padding: 4px; display: flex; flex-direction: column; }
+.cp-menu-item { text-align: left; background: none; border: 0; padding: 8px 10px; border-radius: 6px; cursor: pointer; font: inherit; color: #1f2133; text-decoration: none; }
+.cp-menu-item:hover { background: var(--cp-primary-soft); }
+.cp-menu-item.danger { color: #b3261e; }
+
+.xp-badge.cp-status.active { background: #e8e2ff; color: #3b22b3; }
+.xp-badge.cp-status.scheduled { background: #e3effd; color: #0b4a8f; }
+.xp-badge.cp-status.draft { background: #eef0f5; color: #45475b; }
+.xp-badge.cp-status.paused { background: #fff2d9; color: #795000; }
+.xp-badge.cp-status.completed { background: #f1f1f4; color: #4b4e60; }
+
+.cp-empty { text-align: center; background: #fff; border: 1px dashed var(--cp-border); border-radius: 14px; padding: 32px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.cp-empty p { max-width: 520px; color: var(--cp-muted); margin: 0; }
+
+.cp-steps { list-style: none; display: flex; gap: 8px; margin: 0 0 16px; padding: 0; overflow-x: auto; }
+.cp-step { display: flex; align-items: center; gap: 8px; border: 1px solid var(--cp-border); background: #fff; border-radius: 999px; padding: 6px 12px; cursor: pointer; font: inherit; white-space: nowrap; }
+.cp-step-num { width: 22px; height: 22px; border-radius: 50%; background: #eef0f5; display: inline-grid; place-items: center; font-size: 12px; font-weight: 700; }
+.cp-step.current { border-color: var(--cp-primary); color: var(--cp-primary); font-weight: 650; }
+.cp-step.current .cp-step-num, .cp-step.done .cp-step-num { background: var(--cp-primary); color: #fff; }
+.cp-sub { margin: 20px 0 4px; font-size: 15px; }
+.cp-choices { display: grid; gap: 10px; }
+.cp-choice { display: flex; gap: 12px; align-items: flex-start; background: #fff; border: 1px solid var(--cp-border); border-radius: 12px; padding: 12px 14px; cursor: pointer; }
+.cp-choice.selected { border-color: var(--cp-primary); background: var(--cp-primary-soft); }
+.cp-choice-body { display: flex; flex-direction: column; gap: 4px; }
+.cp-form-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+
+.cp-detail-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 16px; }
+.cp-panel { background: #fff; border: 1px solid var(--cp-border); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+.cp-detail-grid .cp-panel { margin-bottom: 0; }
+.cp-panel h2 { font-size: 17px; margin: 0 0 8px; }
+.cp-panel h3 { font-size: 14px; margin: 16px 0 6px; }
+.cp-panel-visual { width: 100%; max-height: 140px; border-radius: 10px; overflow: hidden; margin-bottom: 12px; }
+.cp-facts { display: grid; gap: 8px; margin: 0 0 12px; }
+.cp-facts > div { display: grid; grid-template-columns: minmax(120px, 40%) 1fr; gap: 8px; }
+.cp-facts dt { color: var(--cp-muted); font-size: 13px; }
+.cp-facts dd { margin: 0; overflow-wrap: anywhere; }
+.cp-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.cp-others { margin: 0 0 8px; padding-left: 18px; }
+.cp-code { display: block; padding: 8px 10px; background: #f6f6fb; border-radius: 8px; font-size: 12px; overflow-wrap: anywhere; }
+
+@media (min-width: 768px) {
+  .cp-search { grid-column: span 2; }
+  .cp-detail-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 640px) {
+  .cp .page-header { flex-wrap: wrap; gap: 12px; }
+  .cp .page-header > .btn-primary { width: 100%; justify-content: center; box-sizing: border-box; }
+  .cp-card { grid-template-columns: 56px 1fr; }
+  .cp-card-visual { width: 56px; height: 56px; }
+  .cp-card-actions { grid-column: 1 / -1; justify-content: space-between; }
+  .cp-facts > div { grid-template-columns: 1fr; gap: 2px; }
+}

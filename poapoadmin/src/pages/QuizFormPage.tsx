@@ -1,36 +1,15 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import type { Quiz, QuizAxis, QuizInput } from "@poapo/types";
+import type { Quiz, QuizInput } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 import { useQuiz } from "../contexts/QuizContext";
-import { CatalogSelect, storedCatalogId, useCatalogs } from "../lib/catalogs";
+import { storedCatalogId, useCatalogs } from "../lib/catalogs";
 import { useQuizEditorDraft } from "../hooks/useQuizEditorDraft";
 import { useLeaveGuard } from "../hooks/useLeaveGuard";
 import QuizDraftStatus from "../components/QuizDraftStatus";
-
-type CatalogItem = { id: string; name: string; active: boolean };
-/** Un axe pas encore enregistré garde une clé modifiable (elle est ensuite référencée par les produits et réponses). */
-type AxisDraft = QuizAxis & { isNew?: boolean };
-const EMPTY = {
-  name: "", industry: "", axes: [] as AxisDraft[], quizTitle: "Trouve ton produit idéal",
-  ctaText: "Découvrir ma sélection", active: false, useAllProducts: true, productIds: [] as string[], catalogId: "",
-};
-
-/** « Niveau de torréfaction » → « niveauDeTorrefaction » */
-function axisKeyFromLabel(label: string): string {
-  const words = label
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^A-Za-z0-9]+/g, " ")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  const key = words
-    .map((word, index) => (index === 0 ? word.toLowerCase() : word[0].toUpperCase() + word.slice(1).toLowerCase()))
-    .join("")
-    .replace(/^[0-9]+/, "");
-  return key.slice(0, 40);
-}
+import {
+  EMPTY_CONFIG as EMPTY, QuizAxesFields, QuizGeneralFields, QuizProductSelection, toDraftConfig, useCatalogProducts,
+} from "../components/quizEditor/QuizConfigFields";
 
 export default function QuizFormPage() {
   const { quizId } = useParams();
@@ -42,8 +21,6 @@ export default function QuizFormPage() {
   const dirty = JSON.stringify(form) !== JSON.stringify(savedForm);
   useLeaveGuard(!!quizId && dirty, "La configuration du brouillon contient des modifications non enregistrées. Quitter ?");
   const [quiz, setQuiz] = useState<Quiz | null>(null);
-  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
-  const [productsLoading, setProductsLoading] = useState(false);
   const [searchParams] = useSearchParams();
   const { catalogs, loading: catalogsLoading } = useCatalogs();
   const [loading, setLoading] = useState(true);
@@ -83,37 +60,10 @@ export default function QuizFormPage() {
     const catalogId = catalogs.some((item) => item.id === requested) ? requested : fallback;
     if (catalogId) setForm((current) => ({ ...current, catalogId }));
   }, [quizId, loading, catalogsLoading, catalogs, form.catalogId, searchParams]);
-  // Seuls les produits du catalogue du quiz sont sélectionnables.
-  useEffect(() => {
-    if (!form.catalogId) return;
-    let cancelled = false;
-    const loadProducts = async () => {
-      setProductsLoading(true);
-      try {
-        const products: CatalogItem[] = [];
-        let page = 1;
-        let total = 0;
-        do {
-          const params = new URLSearchParams({ pageSize: "100", page: String(page++), catalogId: form.catalogId });
-          const result = await apiFetch<{ data: CatalogItem[]; total: number }>(`/api/catalog/products?${params}`);
-          products.push(...result.data);
-          total = result.total;
-          if (result.data.length === 0) break;
-        } while (products.length < total);
-        if (!cancelled) setCatalog(products);
-      } catch (err) {
-        if (!cancelled) setError((err as Error).message);
-      } finally {
-        if (!cancelled) setProductsLoading(false);
-      }
-    };
-    void loadProducts();
-    return () => { cancelled = true; };
-  }, [form.catalogId]);
+  const { products: catalog, loading: productsLoading, error: productsError } = useCatalogProducts(form.catalogId);
   const changeCatalog = (catalogId: string) => {
     if (catalogId === form.catalogId) return;
     if (form.productIds.length > 0 && !window.confirm("Changer de catalogue retire les produits sélectionnés pour ce quiz. Continuer ?")) return;
-    setCatalog([]);
     setForm({ ...form, catalogId, productIds: [] });
   };
   const save = async (event: React.FormEvent) => {
@@ -122,10 +72,7 @@ export default function QuizFormPage() {
     setError("");
     setSuccess("");
     try {
-      const config = {
-        ...form,
-        axes: form.axes.map(({ key, label, lowLabel, highLabel }) => ({ key, label, lowLabel, highLabel })),
-      };
+      const config = toDraftConfig(form);
       if (quizId) {
         if (editor.draft && await editor.save({ ...editor.draft, config })) setSuccess("Brouillon enregistré. Le quiz public reste inchangé.");
         return;
@@ -155,7 +102,7 @@ export default function QuizFormPage() {
         <h1 className="page-title">{quizId ? "Configurer le brouillon du quiz" : "Nouveau quiz"}</h1>
         <Link className="btn-ghost" to={form.catalogId ? `/quizzes?catalogId=${encodeURIComponent(form.catalogId)}` : "/quizzes"}>Mes quiz</Link>
       </div>
-      {error && <div className="form-error">{error}</div>}
+      {(error || productsError) && <div className="form-error">{error || productsError}</div>}
       {success && !dirty && <div className="form-success">{success}</div>}
       {quizId && <QuizDraftStatus dirty={dirty} hasChanges={editor.state?.hasChanges ?? false}
         revision={editor.state?.revision ?? 0} saving={saving} conflict={editor.conflict} error={editor.error}
@@ -170,104 +117,11 @@ export default function QuizFormPage() {
         }} />}
       {(!quizId || quiz) && <form className="product-form" onSubmit={save}>
         <fieldset disabled={saving || (!!quizId && !editor.draft)} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
-        <section className="form-section">
-          <div className="form-grid">
-            <div className="field-span2">
-              <CatalogSelect catalogs={catalogs} value={form.catalogId} onChange={changeCatalog} id="quiz-catalog" disabled={catalogsLoading} />
-              <p className="field-hint">Le quiz recommande uniquement des produits de ce catalogue ; ses axes restent propres au quiz.</p>
-            </div>
-            <div className="field-group">
-              <label className="field-label" htmlFor="quiz-name">Nom interne</label>
-              <input id="quiz-name" className="field-input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            </div>
-            <div className="field-group">
-              <label className="field-label" htmlFor="quiz-industry">Activité</label>
-              <input id="quiz-industry" className="field-input" maxLength={80} placeholder="ex. Café de spécialité, Cosmétique, Vin…"
-                value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} />
-              <p className="field-hint">Décrit votre activité à l'IA pour contextualiser les recommandations.</p>
-            </div>
-            <div className="field-group">
-              <label className="field-label" htmlFor="quiz-title">Titre public</label>
-              <input id="quiz-title" className="field-input" required value={form.quizTitle} onChange={(e) => setForm({ ...form, quizTitle: e.target.value })} />
-            </div>
-            <div className="field-group">
-              <label className="field-label" htmlFor="quiz-cta">Texte du bouton résultat</label>
-              <input id="quiz-cta" className="field-input" required value={form.ctaText} onChange={(e) => setForm({ ...form, ctaText: e.target.value })} />
-            </div>
-          </div>
-          <label className="checkbox-label">
-            <input type="checkbox" disabled={!quizId} checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
-            {quizId ? "Activation préparée dans le brouillon (sans effet sur le quiz public)" : "Un nouveau quiz est créé inactif. Complétez-le puis publiez son brouillon pour l'activer."}
-          </label>
-          {quiz?.isDefault && <p className="section-hint">Ce quiz est utilisé par les anciens liens qui ne précisent pas de quizId.</p>}
-        </section>
-        <section className="form-section">
-          <h2 className="section-title">Axes de recommandation</h2>
-          <p className="section-hint">
-            Définissez les critères numériques (0 à 1) propres à votre activité : par exemple « Acidité » pour un café,
-            « Hydratation » pour un soin. Chaque produit est positionné sur ces axes et chaque réponse du quiz déplace le
-            profil du visiteur ; le produit le plus proche est recommandé.
-          </p>
-          {form.axes.map((axis, index) => {
-            const update = (patch: Partial<AxisDraft>) => setForm({
-              ...form, axes: form.axes.map((item, i) => (i === index ? { ...item, ...patch } : item)),
-            });
-            return <div key={index} className="form-grid axis-row">
-              <div className="field-group">
-                <label className="field-label" htmlFor={`axis-label-${index}`}>Libellé</label>
-                <input id={`axis-label-${index}`} className="field-input" required value={axis.label} placeholder="ex. Acidité"
-                  onChange={(e) => update({ label: e.target.value, ...(axis.isNew && { key: axisKeyFromLabel(e.target.value) }) })} />
-              </div>
-              <div className="field-group">
-                <label className="field-label" htmlFor={`axis-key-${index}`}>Clé technique</label>
-                <input id={`axis-key-${index}`} className="field-input" required pattern="[A-Za-z][A-Za-z0-9_]*" maxLength={40}
-                  value={axis.key} readOnly={!axis.isNew} title={axis.isNew ? "Lettres, chiffres et _ ; utilisée dans les imports CSV" : "La clé d'un axe enregistré ne peut plus changer"}
-                  onChange={(e) => update({ key: e.target.value })} />
-              </div>
-              <div className="field-group">
-                <label className="field-label" htmlFor={`axis-low-${index}`}>Libellé bas (0)</label>
-                <input id={`axis-low-${index}`} className="field-input" value={axis.lowLabel ?? ""} placeholder="ex. Douce"
-                  onChange={(e) => update({ lowLabel: e.target.value })} />
-              </div>
-              <div className="field-group">
-                <label className="field-label" htmlFor={`axis-high-${index}`}>Libellé haut (1)</label>
-                <input id={`axis-high-${index}`} className="field-input" value={axis.highLabel ?? ""} placeholder="ex. Vive"
-                  onChange={(e) => update({ highLabel: e.target.value })} />
-              </div>
-              <button type="button" className="btn-ghost" onClick={() => {
-                if (quiz?.axes.some((item) => item.key === axis.key)) {
-                  setError("Les clés des axes publiés sont conservées à cette étape. Vous pouvez modifier leurs libellés.");
-                  return;
-                }
-                if (!axis.isNew && !window.confirm(`Supprimer l'axe « ${axis.label} » du brouillon ?`)) return;
-                setForm({ ...form, axes: form.axes.filter((_, i) => i !== index) });
-              }}>Supprimer</button>
-            </div>;
-          })}
-          <button type="button" className="btn-ghost" disabled={form.axes.length >= 12}
-            onClick={() => setForm({ ...form, axes: [...form.axes, { key: "", label: "", lowLabel: "", highLabel: "", isNew: true }] })}>
-            + Ajouter un axe
-          </button>
-        </section>
-        <section className="form-section">
-          <h2 className="section-title">Produits recommandables</h2>
-          <label className="checkbox-label">
-            <input type="checkbox" checked={form.useAllProducts} onChange={(e) => setForm({ ...form, useAllProducts: e.target.checked })} />
-            Tous les produits actifs du catalogue « {catalogs.find((item) => item.id === form.catalogId)?.name ?? "—"} » (y compris les futurs produits)
-          </label>
-          <p className="section-hint">Sélectionnez au besoin un sous-ensemble des produits de ce catalogue. Seuls les produits actifs sont recommandés.</p>
-          {!form.useAllProducts && <>
-            {productsLoading && <p className="section-hint">Chargement des produits...</p>}
-            {!productsLoading && catalog.length === 0 && <p className="section-hint">Ce catalogue ne contient encore aucun produit.</p>}
-            {catalog.map((product) => <label key={product.id} className="checkbox-label">
-              <input type="checkbox" checked={form.productIds.includes(product.id)} onChange={(e) => setForm({
-                ...form, productIds: e.target.checked ? [...form.productIds, product.id] : form.productIds.filter((id) => id !== product.id),
-              })} />
-              {product.name}{!product.active ? " (inactif)" : ""}
-            </label>)}
-            {form.productIds.length === 0 && <p className="form-error">Sans produit sélectionné, ce quiz ne pourra pas recommander de produit.</p>}
-          </>}
-        </section>
+        <QuizGeneralFields form={form} setForm={setForm} catalogs={catalogs} catalogsLoading={catalogsLoading}
+          onCatalogChange={changeCatalog} canActivate={!!quizId} isDefault={quiz?.isDefault} />
+        <QuizAxesFields form={form} setForm={setForm} publishedAxes={quiz?.axes ?? []} onError={setError} />
+        <QuizProductSelection form={form} setForm={setForm} products={catalog} loading={productsLoading}
+          catalogName={catalogs.find((item) => item.id === form.catalogId)?.name ?? "—"} />
         <p className="section-hint">{quizId && "Tous ces réglages, y compris l'activation, sont préparatoires. Ils ne modifient pas la version publique."}</p>
         <button className="btn-primary" disabled={saving || !form.catalogId || editor.conflict || (!!quizId && !dirty)} type="submit">{saving ? "Enregistrement..." : quizId ? "Enregistrer le brouillon" : "Créer le quiz"}</button>
         </fieldset>

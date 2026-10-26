@@ -3,9 +3,12 @@ import type { QuizEditorDraftResponse, QuizPublicationDiagnostic, QuizPublicatio
 import { ApiError, apiFetch } from "../lib/api";
 import type { QuizEditorSession } from "../hooks/useQuizEditorDraft";
 
-export default function QuizPublicationPanel({ editor, quizId, visible, pending, navigate, onPublished, onBusyChange }: {
+export default function QuizPublicationPanel({ editor, quizId, visible, pending, navigate, locate, onLocate, onPublished, onBusyChange }: {
   editor: QuizEditorSession; quizId: string; visible: boolean; pending: boolean;
-  navigate: (section: "questions" | "appearance", questionId?: string) => void;
+  navigate?: (section: "questions" | "appearance", questionId?: string) => void;
+  /** Éditeur unifié : localise un diagnostic dans n'importe quelle section sans quitter la page. */
+  locate?: (issue: QuizPublicationIssue) => unknown;
+  onLocate?: (issue: QuizPublicationIssue) => void;
   onPublished: (result: QuizEditorDraftResponse, diagnostic: QuizPublicationDiagnostic) => void;
   onBusyChange: (busy: boolean) => void;
 }) {
@@ -56,9 +59,10 @@ export default function QuizPublicationPanel({ editor, quizId, visible, pending,
   function issues(items: QuizPublicationIssue[]) {
     return <ul>{items.map((issue, index) => <li key={`${issue.code}:${index}`}>
       <span>{issue.message}</span>{" "}
-      {issue.section === "configuration" ? <a href={`/quizzes/${encodeURIComponent(quizId)}`}>Configurer le quiz</a>
+      {locate && onLocate ? (locate(issue) ? <button type="button" className="table-link" onClick={() => onLocate(issue)}>Corriger</button> : null)
+        : issue.section === "configuration" ? <a href={`/quizzes/${encodeURIComponent(quizId)}`}>Configurer le quiz</a>
         : issue.section !== "publication" && <button type="button" className="table-link"
-          onClick={() => navigate(issue.section === "appearance" ? "appearance" : "questions", issue.questionId)}>Voir l'élément</button>}
+          onClick={() => navigate?.(issue.section === "appearance" ? "appearance" : "questions", issue.questionId)}>Voir l'élément</button>}
     </li>)}</ul>;
   }
   return <section id="editor-panel-publication" role="tabpanel" aria-labelledby="editor-tab-publication"

@@ -11,15 +11,17 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import TenantsAdminPage from "./pages/TenantsAdminPage";
 import QuizzesPage from "./pages/QuizzesPage";
 import QuizFormPage from "./pages/QuizFormPage";
+import ExperienceCreatePage from "./pages/ExperienceCreatePage";
 import CampaignsPage from "./pages/CampaignsPage";
 import CampaignFormPage from "./pages/CampaignFormPage";
 import CampaignDetailPage from "./pages/CampaignDetailPage";
 import CampaignQuizGeneratorPage from "./pages/CampaignQuizGeneratorPage";
+import ExperienceEditorPage, { ExperienceSetupPage } from "./pages/ExperienceEditorPage";
 import CampaignQuizEditorPage from "./pages/CampaignQuizEditorPage";
 import ProductEnrichmentPage from "./pages/ProductEnrichmentPage";
 import HomePage from "./pages/HomePage";
 import Icon from "./components/Icon";
-import { QuizProvider, useQuiz } from "./contexts/QuizContext";
+import { QuizProvider } from "./contexts/QuizContext";
 
 function ProtectedRoute() {
   const { token, loading } = useAuth();
@@ -36,9 +38,8 @@ function SuperAdminRoute() {
 
 function AppLayout() {
   const { user, logout } = useAuth();
-  const { quiz } = useQuiz();
   const campaignEditor = useMatch("/campaigns/:campaignId/quiz-editor");
-  const quizQuery = quiz ? `?quizId=${encodeURIComponent(quiz.id)}` : "";
+  const experienceEditor = useMatch("/experiences/*");
   const link = ({ isActive }: { isActive: boolean }) => `admin-side-link${isActive ? " active" : ""}`;
   return (
     <div className={`admin-layout${user?.isSuperAdmin ? "" : " merchant-layout"}${campaignEditor ? " campaign-editor-layout" : ""}`}>
@@ -53,9 +54,9 @@ function AppLayout() {
           ) : <>
             <NavLink className={link} to="/" end><Icon name="home" />Accueil</NavLink>
             <NavLink className={link} to="/catalog"><Icon name="box" />Mes produits</NavLink>
-            <NavLink className={link} to="/quizzes"><Icon name="quiz" />Mes expériences</NavLink>
+            <NavLink className={({ isActive }) => link({ isActive: isActive || !!experienceEditor })} to="/quizzes"><Icon name="quiz" />Mes expériences</NavLink>
             <NavLink className={link} to="/campaigns"><Icon name="megaphone" />Campagnes</NavLink>
-            <NavLink className={link} to={`/analytics${quizQuery}`}><Icon name="chart" />Résultats</NavLink>
+            <NavLink className={link} to="/analytics"><Icon name="chart" />Résultats</NavLink>
             <NavLink className={link} to="/settings"><Icon name="gear" />Paramètres</NavLink>
           </>}
         </nav>
@@ -97,6 +98,9 @@ function App() {
             <Route path="/quizzes" element={<QuizzesPage />} />
             <Route path="/quizzes/new" element={<QuizFormPage />} />
             <Route path="/quizzes/:quizId" element={<QuizFormPage />} />
+            <Route path="/experiences/new" element={<ExperienceCreatePage />} />
+            <Route path="/experiences/:quizId/setup" element={<ExperienceSetupPage />} />
+            <Route path="/experiences/:quizId/edit" element={<ExperienceEditorPage />} />
             <Route path="/campaigns" element={<CampaignsPage />} />
             <Route path="/campaigns/new" element={<CampaignFormPage />} />
             <Route path="/campaigns/:campaignId" element={<CampaignDetailPage />} />

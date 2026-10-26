@@ -1,4 +1,4 @@
-// Opt-in against the local admin, widget, API, PostgreSQL and recommendation service.
+// Opt-in against PostgreSQL and the recommendation service; starts an isolated API/admin/widget unless POAPO_API_URL is set.
 const assert = require("node:assert/strict");
 const path = require("node:path");
 const { randomUUID } = require("node:crypto");
@@ -9,11 +9,12 @@ const { chromium } = require(process.env.POAPO_PLAYWRIGHT_MODULE || "playwright"
 
 const prisma = new PrismaClient();
 const tenantId = `publication-browser-${randomUUID()}`;
-const api = process.env.POAPO_API_URL || "http://localhost:5050";
-const admin = process.env.POAPO_ADMIN_URL || "http://localhost:5174";
-const widget = process.env.POAPO_WIDGET_URL || "http://localhost:5173";
+const { resolveStack } = require("./support/isolatedStack.cjs");
 let browser;
+let stack;
 async function main() {
+  stack = await resolveStack();
+  const { api, admin, widget } = stack;
   const tenant = await prisma.tenant.create({ data: { id: tenantId, email: `${tenantId}@example.test`, primaryColor: "#246753" } });
   const catalog = await prisma.catalog.create({ data: { tenantId, name: "Odyssey publication", isDefault: true } });
   const product = await prisma.product.create({ data: { tenantId, catalogId: catalog.id, name: "Voyage Odyssey", tags: [],
@@ -169,6 +170,7 @@ async function main() {
 }
 main().catch((err) => { console.error(err); process.exitCode = 1; }).finally(async () => {
   if (browser) await browser.close();
+  if (stack) stack.stop();
   await prisma.tenant.deleteMany({ where: { id: tenantId } });
   await prisma.$disconnect();
 });

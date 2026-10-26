@@ -1,5 +1,18 @@
 import type { CampaignStatus, ExperienceListItem } from "@poapo/types";
 
+export interface PublicAvailability {
+  accessible: boolean;
+  label: string;
+  reason: string | null;
+}
+
+/** Même règle que l'API publique : boutique active ET quiz actif. Le statut des campagnes n'intervient pas. */
+export function publicAvailability({ shopActive, quizActive }: { shopActive: boolean; quizActive: boolean }): PublicAvailability {
+  if (!shopActive) return { accessible: false, label: "Désactivée pour le public", reason: "Boutique désactivée" };
+  if (!quizActive) return { accessible: false, label: "Désactivée pour le public", reason: "Quiz désactivé" };
+  return { accessible: true, label: "Accessible au public", reason: null };
+}
+
 export type AvailabilityFilter = "all" | "accessible" | "inactive";
 export type DraftFilter = "all" | "with" | "without";
 export type ExperienceSort = "recent" | "name";

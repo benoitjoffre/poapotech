@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { verifyToken, AuthRequest } from "../middleware/auth";
 import type { QuizSubmitPayload, MetricType } from "@poapo/types";
@@ -6,6 +7,8 @@ import { publicQuizScope, adminQuizScope, getQuiz, asyncRoute } from "../service
 import { parseAxes } from "../services/axes";
 import { recommendQuiz } from "../services/quizRecommendations";
 import { QuizError } from "../services/quizzes";
+import { validateTrackEvent, validateFeedback, signFeedbackToken, verifyFeedbackToken } from "../services/analyticsEvents";
+import { abandonCounts, buildSteps, buildVariants, computeIndicators, stepRows, variantRows } from "../services/quizMetrics";
 import { localInsightsFromSnapshot, type MetricsSnapshot } from "../services/quizInsights";
 
 const router = Router();
@@ -19,6 +22,10 @@ async function generateOpenAIInsights(snapshot: MetricsSnapshot, industry: strin
     "Analyse ces métriques et retourne uniquement un JSON valide avec la forme:",
     '{"insights":[{"title":"...","insight":"...","priority":"high|medium|low","actions":["...","..."]}]}',
     "3 insights maximum, concis, orientés action.",
+    "Règles : productClicks sont des clics vers une fiche produit, jamais des ventes ni des conversions.",
+    "clicksPer100Recommendations est indicatif (clics non rattachés à une session) : ne le présente jamais comme un CTR ou un taux de conversion.",
+    "Un indicateur dont reliable vaut false ne doit pas être interprété comme une performance ; recentAbandons est une collecte partielle, pas un taux.",
+    "N'invente aucune donnée absente (ventes, chiffre d'affaires, visiteurs uniques, temps de complétion, satisfaction, campagnes).",
     `Métriques: ${JSON.stringify(snapshot)}`,
   ].join("\n");
 
@@ -147,13 +154,13 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
         quizId: quiz.id,
         answers: answers as unknown as object,
         resultProductId: product.id,
-        decisionTime: decisionTime ?? null,
-        abVariant: abVariant ?? null,
+        decisionTime: typeof decisionTime === "number" && Number.isInteger(decisionTime) && decisionTime >= 0 && decisionTime <= 86_400_000 ? decisionTime : null,
+        abVariant: typeof abVariant === "string" && abVariant.trim() && abVariant.length <= 40 ? abVariant : null,
         completedAt: new Date(),
       },
     });
 
-    res.json({ sessionId: session.id, quizId: quiz.id, industry: quiz.industry, product, explanation, profileSummary });
+    res.json({ sessionId: session.id, feedbackToken: signFeedbackToken(session.id, clientId, quiz.id), quizId: quiz.id, industry: quiz.industry, product, explanation, profileSummary });
   } catch (err) {
     if (err instanceof QuizError) {
       res.status(err.status).json({ error: err.message });
@@ -166,30 +173,14 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
 
 // POST /api/quiz/track
 router.post("/track", publicQuizScope, asyncRoute(async (req: Request, res: Response) => {
-  const { clientId, type, payload } = req.body as {
-    clientId?: string;
-    type?: string;
-    payload?: Record<string, unknown>;
-  };
-
+  const { clientId, type, payload } = req.body as { clientId?: string; type?: unknown; payload?: unknown };
   if (!clientId || !type) {
     res.status(400).json({ error: "clientId et type requis" });
     return;
   }
-
-  const validTypes: MetricType[] = [
-    "quiz_start",
-    "quiz_complete",
-    "quiz_abandon",
-    "step_view",
-    "step_answer",
-    "buy_click",
-    "feedback",
-    "decision_time",
-  ];
-
-  if (!validTypes.includes(type as MetricType)) {
-    res.status(400).json({ error: "Type d'événement invalide" });
+  const event = validateTrackEvent(type, payload);
+  if (!event.ok) {
+    res.status(400).json({ error: event.error });
     return;
   }
 
@@ -198,34 +189,44 @@ router.post("/track", publicQuizScope, asyncRoute(async (req: Request, res: Resp
       tenantId: clientId,
       quizId: getQuiz(res).id,
       type: type as MetricType,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      payload: (payload ?? {}) as any,
+      payload: event.payload as Prisma.InputJsonObject,
     },
   });
 
   res.json({ ok: true });
 }));
 
-// POST /api/quiz/feedback
-router.post("/feedback", async (req: Request, res: Response) => {
-  const { sessionId, feedback, reasons } = req.body as {
-    sessionId?: string;
-    feedback?: "positive" | "negative";
-    reasons?: string[];
+// POST /api/quiz/feedback — le sessionId seul ne prouve rien : il faut le jeton émis par /submit pour ce tenant et ce quiz.
+router.post("/feedback", publicQuizScope, asyncRoute(async (req: Request, res: Response) => {
+  const { clientId, sessionId, feedbackToken, feedback, reasons } = req.body as {
+    clientId: string; sessionId?: unknown; feedbackToken?: unknown; feedback?: unknown; reasons?: unknown;
   };
-
-  if (!sessionId || !feedback) {
-    res.status(400).json({ error: "sessionId et feedback requis" });
+  const quizId = getQuiz(res).id;
+  if (typeof sessionId !== "string" || !sessionId || sessionId.length > 100) {
+    res.status(400).json({ error: "sessionId requis" });
+    return;
+  }
+  const parsed = validateFeedback(feedback, reasons);
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+  if (!verifyFeedbackToken(feedbackToken, sessionId, clientId, quizId)) {
+    res.status(403).json({ error: "Autorisation de retour invalide" });
     return;
   }
 
-  await prisma.quizSession.update({
-    where: { id: sessionId },
-    data: { feedback, feedbackReasons: reasons ?? [] },
+  const updated = await prisma.quizSession.updateMany({
+    where: { id: sessionId, tenantId: clientId, quizId },
+    data: { feedback: parsed.feedback, feedbackReasons: parsed.reasons },
   });
+  if (updated.count === 0) {
+    res.status(404).json({ error: "Session introuvable" });
+    return;
+  }
 
   res.json({ ok: true });
-});
+}));
 
 // ─── Protected — dashboard métriques ────────────────────────────────────────
 
@@ -239,12 +240,13 @@ router.get("/metrics", verifyToken, adminQuizScope, asyncRoute(async (req: AuthR
     return;
   }
 
-  const [totalStarted, totalCompleted, totalAbandoned, totalBuyClicks, feedbackStats, topProducts, stepViews, stepAnswers, abEvents] =
+  const [totalStarted, totalCompleted, abandons, totalBuyClicks, recommendations, feedbackStats, topProducts, stepData, variantData] =
     await Promise.all([
       prisma.metric.count({ where: { tenantId, quizId, type: "quiz_start", createdAt: { gte: since } } }),
       prisma.metric.count({ where: { tenantId, quizId, type: "quiz_complete", createdAt: { gte: since } } }),
-      prisma.metric.count({ where: { tenantId, quizId, type: "quiz_abandon", createdAt: { gte: since } } }),
+      abandonCounts(tenantId, quizId, since),
       prisma.metric.count({ where: { tenantId, quizId, type: "buy_click", createdAt: { gte: since } } }),
+      prisma.quizSession.count({ where: { tenantId, quizId, completedAt: { gte: since } } }),
       prisma.quizSession.groupBy({
         by: ["feedback"],
         where: { tenantId, quizId, feedback: { not: null }, createdAt: { gte: since } },
@@ -257,75 +259,22 @@ router.get("/metrics", verifyToken, adminQuizScope, asyncRoute(async (req: AuthR
         orderBy: { _count: { resultProductId: "desc" } },
         take: 5,
       }),
-      prisma.metric.findMany({
-        where: { tenantId, quizId, type: "step_view", createdAt: { gte: since } },
-        select: { payload: true },
-      }),
-      prisma.metric.findMany({
-        where: { tenantId, quizId, type: "step_answer", createdAt: { gte: since } },
-        select: { payload: true },
-      }),
-      prisma.metric.findMany({
-        where: { tenantId, quizId, type: { in: ["quiz_start", "quiz_complete", "buy_click"] }, createdAt: { gte: since } },
-        select: { type: true, payload: true },
-      }),
+      stepRows(tenantId, quizId, since),
+      variantRows(tenantId, quizId, since),
     ]);
 
   const completionRate = totalStarted > 0 ? Math.round((totalCompleted / totalStarted) * 100) : 0;
+  const indicators = computeIndicators({
+    started: totalStarted, completed: totalCompleted, recommendations, productClicks: totalBuyClicks,
+  });
 
   type FeedbackRow = { feedback: string | null; _count: number };
   type TopProductRow = { resultProductId: string | null; _count: number };
 
   const thumbsUp = (feedbackStats as FeedbackRow[]).find((f) => f.feedback === "positive")?._count ?? 0;
   const thumbsDown = (feedbackStats as FeedbackRow[]).find((f) => f.feedback === "negative")?._count ?? 0;
-
-  type MetricPayloadRow = { payload: unknown };
-  const viewsByStep = new Map<string, number>();
-  const answersByStep = new Map<string, number>();
-
-  for (const row of stepViews as MetricPayloadRow[]) {
-    const payload = row.payload as Record<string, unknown>;
-    const step = String(payload.step ?? payload.questionId ?? "unknown");
-    viewsByStep.set(step, (viewsByStep.get(step) ?? 0) + 1);
-  }
-  for (const row of stepAnswers as MetricPayloadRow[]) {
-    const payload = row.payload as Record<string, unknown>;
-    const step = String(payload.step ?? payload.questionId ?? "unknown");
-    answersByStep.set(step, (answersByStep.get(step) ?? 0) + 1);
-  }
-
-  const stepKeys = new Set<string>([...viewsByStep.keys(), ...answersByStep.keys()]);
-  const steps = [...stepKeys]
-    .map((step) => {
-      const views = viewsByStep.get(step) ?? 0;
-      const answers = answersByStep.get(step) ?? 0;
-      const dropOffRate = views > 0 ? Math.round(((views - answers) / views) * 100) : 0;
-      return { step, views, answers, dropOffRate };
-    })
-    .sort((a, b) => b.views - a.views);
-
-  type AbMetricRow = { type: MetricType; payload: unknown };
-  const variants = new Map<string, { started: number; completed: number; clicks: number }>();
-  for (const row of abEvents as AbMetricRow[]) {
-    const payload =
-      typeof row.payload === "object" && row.payload !== null && !Array.isArray(row.payload)
-        ? (row.payload as Record<string, unknown>)
-        : {};
-    const variant = typeof payload.abVariant === "string" && payload.abVariant.trim() ? payload.abVariant.trim() : "standard";
-    const counts = variants.get(variant) ?? { started: 0, completed: 0, clicks: 0 };
-    if (row.type === "quiz_start") counts.started++;
-    if (row.type === "quiz_complete") counts.completed++;
-    if (row.type === "buy_click") counts.clicks++;
-    variants.set(variant, counts);
-  }
-  const variantPerformance = [...variants.entries()]
-    .map(([variant, counts]) => ({
-      variant,
-      ...counts,
-      completionRate: counts.started > 0 ? Math.round((counts.completed / counts.started) * 100) : 0,
-      clickThroughRate: counts.completed > 0 ? Math.round((counts.clicks / counts.completed) * 100) : 0,
-    }))
-    .sort((a, b) => b.started - a.started);
+  const steps = buildSteps(stepData);
+  const variantPerformance = buildVariants(variantData);
 
   // Résoudre les noms des top produits
   const productIds = (topProducts as TopProductRow[]).map((p) => p.resultProductId).filter(Boolean) as string[];
@@ -340,9 +289,12 @@ router.get("/metrics", verifyToken, adminQuizScope, asyncRoute(async (req: AuthR
     funnel: {
       started: totalStarted,
       completed: totalCompleted,
-      abandoned: totalAbandoned,
+      // Uniquement les abandons émis par le widget corrigé (avec `reason`) ; les anciens sont comptés à part.
+      abandoned: abandons.reliable,
+      legacyAbandonEvents: abandons.legacy,
       completionRate,
     },
+    indicators,
     cta: {
       clicks: totalBuyClicks,
       clickThroughRate: totalCompleted > 0 ? Math.round((totalBuyClicks / totalCompleted) * 100) : 0,
@@ -373,16 +325,12 @@ router.get("/metrics/ai-insights", verifyToken, adminQuizScope, asyncRoute(async
     return;
   }
 
-  const [started, completed, abandoned, ctaClicks, feedbackStats, topProducts, stepViews, stepAnswers] = await Promise.all([
+  const [started, completed, abandons, productClicks, recommendations, topProducts, stepData] = await Promise.all([
     prisma.metric.count({ where: { tenantId, quizId, type: "quiz_start", createdAt: { gte: since } } }),
     prisma.metric.count({ where: { tenantId, quizId, type: "quiz_complete", createdAt: { gte: since } } }),
-    prisma.metric.count({ where: { tenantId, quizId, type: "quiz_abandon", createdAt: { gte: since } } }),
+    abandonCounts(tenantId, quizId, since),
     prisma.metric.count({ where: { tenantId, quizId, type: "buy_click", createdAt: { gte: since } } }),
-    prisma.quizSession.groupBy({
-      by: ["feedback"],
-      where: { tenantId, quizId, feedback: { not: null }, createdAt: { gte: since } },
-      _count: true,
-    }),
+    prisma.quizSession.count({ where: { tenantId, quizId, completedAt: { gte: since } } }),
     prisma.quizSession.groupBy({
       by: ["resultProductId"],
       where: { tenantId, quizId, resultProductId: { not: null }, completedAt: { gte: since } },
@@ -390,41 +338,16 @@ router.get("/metrics/ai-insights", verifyToken, adminQuizScope, asyncRoute(async
       orderBy: { _count: { resultProductId: "desc" } },
       take: 3,
     }),
-    prisma.metric.findMany({ where: { tenantId, quizId, type: "step_view", createdAt: { gte: since } }, select: { payload: true } }),
-    prisma.metric.findMany({ where: { tenantId, quizId, type: "step_answer", createdAt: { gte: since } }, select: { payload: true } }),
+    stepRows(tenantId, quizId, since),
   ]);
 
-  type FeedbackRow = { feedback: string | null; _count: number };
   type TopProductRow = { resultProductId: string | null; _count: number };
-  type MetricPayloadRow = { payload: unknown };
 
-  const positive = (feedbackStats as FeedbackRow[]).find((f) => f.feedback === "positive")?._count ?? 0;
-  const negative = (feedbackStats as FeedbackRow[]).find((f) => f.feedback === "negative")?._count ?? 0;
-  const completionRate = started > 0 ? Math.round((completed / started) * 100) : 0;
-  const ctaRate = completed > 0 ? Math.round((ctaClicks / completed) * 100) : 0;
-
-  const viewsByStep = new Map<string, number>();
-  const answersByStep = new Map<string, number>();
-  for (const row of stepViews as MetricPayloadRow[]) {
-    const payload = row.payload as Record<string, unknown>;
-    const step = String(payload.step ?? payload.questionId ?? "unknown");
-    viewsByStep.set(step, (viewsByStep.get(step) ?? 0) + 1);
-  }
-  for (const row of stepAnswers as MetricPayloadRow[]) {
-    const payload = row.payload as Record<string, unknown>;
-    const step = String(payload.step ?? payload.questionId ?? "unknown");
-    answersByStep.set(step, (answersByStep.get(step) ?? 0) + 1);
-  }
-
-  const stepDropOff = [...new Set<string>([...viewsByStep.keys(), ...answersByStep.keys()])]
-    .map((step) => {
-      const views = viewsByStep.get(step) ?? 0;
-      const answers = answersByStep.get(step) ?? 0;
-      const dropOffRate = views > 0 ? Math.round(((views - answers) / views) * 100) : 0;
-      return { step, dropOffRate, views };
-    })
-    .filter((s) => s.views > 0)
-    .sort((a, b) => b.dropOffRate - a.dropOffRate)
+  const indicators = computeIndicators({ started, completed, recommendations, productClicks });
+  const unansweredSteps = buildSteps(stepData)
+    .map(({ step, views, answers }) => ({ step, views, answers }))
+    .filter((s) => s.views > s.answers)
+    .sort((a, b) => (b.views - b.answers) - (a.views - a.answers))
     .slice(0, 3);
 
   const productIds = (topProducts as TopProductRow[]).map((p) => p.resultProductId).filter(Boolean) as string[];
@@ -434,17 +357,17 @@ router.get("/metrics/ai-insights", verifyToken, adminQuizScope, asyncRoute(async
   const snapshot: MetricsSnapshot = {
     started,
     completed,
-    abandoned,
-    completionRate,
-    ctaClicks,
-    ctaRate,
-    feedbackPositive: positive,
-    feedbackNegative: negative,
+    recommendations,
+    productClicks,
+    recentAbandons: abandons.reliable,
+    completionRate: indicators.completionRate,
+    clicksPer100Recommendations: indicators.clicksPer100Recommendations,
+    consistent: indicators.consistency.consistent,
     topProducts: (topProducts as TopProductRow[]).map((p) => ({
       name: productMap[p.resultProductId ?? ""] ?? "Inconnu",
       count: p._count,
     })),
-    topDropOffSteps: stepDropOff,
+    unansweredSteps,
   };
 
   const aiInsights = await generateOpenAIInsights(snapshot, getQuiz(res).industry);

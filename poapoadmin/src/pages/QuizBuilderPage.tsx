@@ -505,15 +505,21 @@ export default function QuizBuilderPage() {
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 
-export function QuizBuilderContent({ quiz, embedded = false, visible = true, renderAppearance, renderPreview, renderPublication }: {
+export function QuizBuilderContent({ quiz, embedded = false, visible = true, session, externalPending = false, onPendingChange: reportPending, renderAppearance, renderPreview, renderPublication }: {
   quiz: Quiz;
+  /** Session de brouillon fournie par un éditeur parent (une seule session par quiz). */
+  session?: QuizEditorSession;
+  /** Modifications locales d'un autre panneau du même éditeur, pas encore appliquées. */
+  externalPending?: boolean;
+  onPendingChange?: (pending: boolean) => void;
   embedded?: boolean;
   visible?: boolean;
   renderAppearance?: (editor: QuizEditorSession, disabled: boolean, themeError: string) => ReactNode;
   renderPreview?: (editor: QuizEditorSession, pending: boolean) => ReactNode;
   renderPublication?: (editor: QuizEditorSession, pending: boolean, onBusyChange: (busy: boolean) => void) => ReactNode;
 }) {
-  const editor = useQuizEditorDraft(quiz.id);
+  const ownEditor = useQuizEditorDraft(session ? undefined : quiz.id);
+  const editor = session ?? ownEditor;
   const questions = editor.draft?.questions ?? [];
   const { loading } = editor;
   const [publicationBusy, setPublicationBusy] = useState(false);
@@ -543,7 +549,9 @@ export function QuizBuilderContent({ quiz, embedded = false, visible = true, ren
     type: "single",
   });
   const hasPending = Object.values(pending).some(Boolean) || (showNewForm && !!(newQuestion.text || newQuestion.helpText));
-  const unsaved = editor.dirty || hasPending;
+  const localPending = hasPending || externalPending;
+  const unsaved = editor.dirty || localPending;
+  useEffect(() => { reportPending?.(hasPending); }, [hasPending, reportPending]);
   let themeError = "";
   try { parseQuizTheme(editor.draft?.theme); }
   catch (err) { themeError = err instanceof Error ? err.message : "Thème invalide"; }
@@ -704,7 +712,7 @@ export function QuizBuilderContent({ quiz, embedded = false, visible = true, ren
 
   return (
     <div className="page">
-      <QuizDraftStatus dirty={unsaved} hasChanges={editor.state?.hasChanges ?? false}
+      <QuizDraftStatus publishHint={session ? "Vérifiez et publiez depuis la section Publication de l'éditeur." : undefined} dirty={unsaved} hasChanges={editor.state?.hasChanges ?? false}
         revision={editor.state?.revision ?? 0} saving={saving || importing || loading} conflict={editor.conflict} error={editor.error}
         onReload={() => {
           if (!unsaved || confirm("Recharger et perdre les modifications locales non enregistrées ?")) void editor.load();
@@ -714,10 +722,10 @@ export function QuizBuilderContent({ quiz, embedded = false, visible = true, ren
             void editor.discard().then((ok) => { if (ok) { setShowNewForm(false); setPending({}); } });
           }
         }} />
-      {hasPending && <p role="status">Terminez ou annulez les formulaires ouverts avant d'enregistrer le brouillon.</p>}
+      {localPending && <p role="status">Terminez ou annulez les formulaires ouverts avant d'enregistrer le brouillon.</p>}
       {themeError && <p id="theme-validation-error" className="form-error" role="alert">{themeError}</p>}
       <button type="button" className="btn-primary"
-        disabled={loading || saving || importing || !editor.draft || !editor.dirty || hasPending || editor.conflict || !!themeError}
+        disabled={loading || saving || importing || !editor.draft || !editor.dirty || localPending || editor.conflict || !!themeError}
         onClick={() => void editor.save()}>Enregistrer le brouillon</button>
       <div hidden={!visible} className="quiz-editor-panel"
         {...(embedded ? { role: "tabpanel", id: "editor-panel-questions", "aria-labelledby": "editor-tab-questions" } : {})}>
@@ -835,7 +843,7 @@ export function QuizBuilderContent({ quiz, embedded = false, visible = true, ren
           </div>
         )}
         {questions.map((question, index) => (
-          <div id={`editor-question-${question.id}`} key={`${editor.state?.revision}:${question.id}`} onDragOver={(e) => e.preventDefault()} onDrop={() => handleQuestionDrop(question.id)}>
+          <div id={`editor-question-${question.id}`} tabIndex={-1} key={`${editor.state?.revision}:${question.id}`} onDragOver={(e) => e.preventDefault()} onDrop={() => handleQuestionDrop(question.id)}>
             <QuestionCard
               question={question}
               impactLabels={impactLabels}
@@ -867,8 +875,8 @@ export function QuizBuilderContent({ quiz, embedded = false, visible = true, ren
       </fieldset>
       </div>
       {renderAppearance?.(editor, loading || saving || importing || !editor.draft, themeError)}
-      {renderPreview?.(editor, hasPending)}
-      {renderPublication?.(editor, hasPending, setPublicationBusy)}
+      {renderPreview?.(editor, localPending)}
+      {renderPublication?.(editor, localPending, setPublicationBusy)}
     </div>
   );
 }

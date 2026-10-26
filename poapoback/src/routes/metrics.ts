@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
-import { verifyToken, AuthRequest } from "../middleware/auth";
+import { verifyToken, verifySuperAdmin, AuthRequest } from "../middleware/auth";
 
 const router = Router();
 
@@ -88,10 +88,10 @@ router.post("/cleanup", verifyToken, async (req: AuthRequest, res: Response) => 
 /**
  * GET /api/metrics/count
  *
- * Affiche le nombre total de métriques.
- * Nécessite authentification.
+ * Affiche le nombre total de métriques de TOUS les tenants.
+ * Réservé au super-admin.
  */
-router.get("/count", verifyToken, async (req: AuthRequest, res: Response) => {
+router.get("/count", verifySuperAdmin, async (req: AuthRequest, res: Response) => {
   try {
     const count = await prisma.metric.count();
     const countByTenant = await prisma.metric.groupBy({

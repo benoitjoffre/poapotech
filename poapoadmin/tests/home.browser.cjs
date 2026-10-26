@@ -7,10 +7,12 @@ require("dotenv").config({ path: path.resolve(__dirname, "../../poapoback/.env")
 const { PrismaClient } = require("@prisma/client");
 const jwt = require("jsonwebtoken");
 const { chromium } = require(process.env.POAPO_PLAYWRIGHT_MODULE || "playwright");
+const { resolveStack } = require("./support/isolatedStack.cjs");
 
 const prisma = new PrismaClient();
-const api = process.env.POAPO_API_URL || "http://localhost:5050";
-const admin = process.env.POAPO_ADMIN_URL || "http://localhost:5174";
+let api;
+let admin;
+let stack;
 const tenantId = `home-browser-${randomUUID()}`;
 const foreignId = `${tenantId}-foreign`;
 const output = process.env.POAPO_SCREENSHOT_DIR;
@@ -19,6 +21,8 @@ let assertions = 0;
 function check(condition, message) { assert.ok(condition, message); assertions++; }
 
 async function main() {
+  stack = await resolveStack();
+  ({ api, admin } = stack);
   await prisma.tenant.create({ data: { id: tenantId, email: `${tenantId}@example.test`, name: "Boutique de démonstration" } });
   await prisma.tenant.create({ data: { id: foreignId, email: `${foreignId}@example.test`, name: "Boutique étrangère" } });
   const catalog = await prisma.catalog.create({ data: { tenantId, name: "Collection découverte", isDefault: true } });
@@ -78,7 +82,7 @@ async function main() {
   check(!(await page.locator("body").innerText()).includes("Produit secret"), "foreign products not visible");
   check(calls.filter((url) => url.includes("/metrics")).length === 0, "no per-quiz analytics requests");
   check(calls.filter((url) => /\/quizzes\/[^/]+\/draft/.test(url)).length === 0, "no per-quiz draft requests on home");
-  check(await page.locator(".home-create-card").getAttribute("href") === "/quizzes/new", "creation tile opens the existing creation flow");
+  check(await page.locator(".home-create-card").getAttribute("href") === "/experiences/new", "creation tile opens the existing creation flow");
   check(await page.locator(".dashboard-resource").count() === 4, "reusable resource cards rendered");
   for (const [quiz, label] of [[live, "Voir les résultats"], [draft, "Continuer l'édition"], [standalone, "Voir les résultats"]]) {
     const card = page.locator(".experience-card").filter({ has: page.getByRole("link", { name: `${label} : ${quiz.name}`, exact: true }) });
@@ -138,8 +142,8 @@ async function main() {
   await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Accueil", exact: true }).click();
   await page.getByRole("heading", { name: "Votre prochaine action" }).waitFor();
   await page.getByRole("link", { name: "Créer une expérience", exact: true }).click();
-  await page.getByRole("heading", { name: "Nouveau quiz", exact: true }).waitFor();
-  check(page.url().includes("/quizzes/new"), "creation uses available route");
+  await page.getByRole("heading", { name: "Créer une expérience", exact: true }).waitFor();
+  check(page.url().includes("/experiences/new"), "creation uses available route");
   for (const route of [`/quizzes/${draft.id}`, `/quiz-builder?quizId=${live.id}`, `/campaigns/${campaign.id}`, "/catalogs"]) {
     await page.goto(admin + route);
     await page.waitForLoadState("networkidle");
@@ -201,6 +205,7 @@ async function main() {
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; }).finally(async () => {
   if (browser) await browser.close();
+  stack?.stop();
   await prisma.tenant.deleteMany({ where: { id: { in: [tenantId, foreignId] } } });
   await prisma.$disconnect();
 });

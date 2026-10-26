@@ -5,18 +5,32 @@ export function quizPath(quiz: Pick<DashboardExperience, "id" | "catalog">, path
   return path === "/quizzes/" ? `${path}${encodeURIComponent(quiz.id)}?${query}` : `${path}?${query}`;
 }
 
-export function publicQuizLink(tenantId: string, quizId: string): string {
-  const base = String(import.meta.env.VITE_WIDGET_BASE_URL ??
+export function widgetBaseUrl(): string {
+  return String(import.meta.env.VITE_WIDGET_BASE_URL ??
     (import.meta.env.PROD ? "https://app.poapo-tech.com" : "http://localhost:5173")).replace(/\/$/, "");
+}
+
+export function publicQuizLink(tenantId: string, quizId: string): string {
+  const base = widgetBaseUrl();
   return `${base}/?${new URLSearchParams({ clientId: tenantId, quizId })}`;
 }
 
-/** Questions et brouillon : seule édition qui fonctionne aujourd'hui sans campagne. */
-export function questionsEditorPath(quiz: Pick<DashboardExperience, "id" | "catalog">): string {
-  return quizPath(quiz, "/quiz-builder");
+/** Éditeur unifié basé sur le quiz : aucune campagne requise. */
+export function experienceEditorPath(quizId: string, section?: string): string {
+  return `/experiences/${encodeURIComponent(quizId)}/edit${section ? `?section=${encodeURIComponent(section)}` : ""}`;
 }
 
-/** Éditeur complet (apparence, aperçu, publication) : dépend encore d'une campagne. */
+/** Éditeur historique ouvert depuis une campagne (Campaign Studio). */
 export function campaignEditorPath(campaignId: string): string {
   return `/campaigns/${encodeURIComponent(campaignId)}/quiz-editor`;
+}
+
+export function embedSnippet(tenantId: string, quizId: string): string {
+  const base = widgetBaseUrl();
+  return `<script src="${base}/poapo-widget.js" data-url="${base}" data-client-id="${tenantId}" data-quiz-id="${quizId}" async></script>`;
+}
+
+/** Assistant guidé de création, basé sur le quiz (aucune campagne requise). */
+export function experienceSetupPath(quizId: string, step?: number): string {
+  return `/experiences/${encodeURIComponent(quizId)}/setup${step ? `?step=${step}` : ""}`;
 }

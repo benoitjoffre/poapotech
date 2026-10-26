@@ -3,7 +3,7 @@ import type { Campaign, CampaignOccasion, CampaignStatus } from "@poapo/types";
 export const STATUS_LABELS: Record<CampaignStatus, string> = {
   DRAFT: "Brouillon",
   SCHEDULED: "Programmée",
-  ACTIVE: "En ligne",
+  ACTIVE: "En cours",
   PAUSED: "En pause",
   COMPLETED: "Terminée",
 };

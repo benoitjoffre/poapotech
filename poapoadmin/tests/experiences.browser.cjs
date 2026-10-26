@@ -61,7 +61,7 @@ async function main() {
   await cards.first().waitFor();
   check(await cards.count() === 5, "every quiz listed (4 fixtures + legacy default quiz), including those without campaign");
   check(!(await page.locator("body").innerText()).includes("Quiz secret étranger"), "foreign quiz not visible");
-  check(await page.getByRole("link", { name: /Créer une expérience/ }).getAttribute("href") === "/quizzes/new", "creation uses the existing quiz creation route");
+  check(await page.getByRole("link", { name: /Créer une expérience/ }).getAttribute("href") === "/experiences/new", "creation uses the existing quiz creation route");
   check(calls.filter((url) => /\/(metrics|draft)|\/api\/campaigns/.test(url)).length === 0, "no per-quiz or per-campaign requests (no N+1)");
   check(calls.filter((url) => url.includes("/api/experiences")).length <= 2, "one synthesis request (two under development StrictMode), not one per quiz");
   check(await page.locator(".dashboard-stat dd").allTextContents().then((values) => values.join(",") === "5,3,2,1"), "real totals, shared quiz counted once");
@@ -72,7 +72,7 @@ async function main() {
   check(await sharedCard.getByText("Accessible au public").count() === 1, "public availability");
   check(await sharedCard.getByText("Catalogue principal").count() === 1 && await sharedCard.getByText("1 question", { exact: true }).count() === 1, "catalogue and question count");
   const resume = sharedCard.getByRole("link", { name: /Reprendre le brouillon/ });
-  check((await resume.getAttribute("href")).startsWith(`/quiz-builder?quizId=${shared.id}`), "draft resumes through the existing quiz-scoped builder");
+  check((await resume.getAttribute("href")) === `/experiences/${shared.id}/edit`, "draft resumes through the unified quiz-scoped editor");
   check((await sharedCard.getByRole("link", { name: /Voir les résultats/ }).getAttribute("href")).startsWith(`/analytics?quizId=${shared.id}`), "results link");
   check((await sharedCard.getByRole("link", { name: /Intégration/ }).getAttribute("href")).startsWith(`/quizzes/${shared.id}`), "integration link");
   check((await sharedCard.getByRole("link", { name: /Prévisualiser/ }).getAttribute("href")).includes(`quizId=${shared.id}`), "preview opens the public quiz");
@@ -117,11 +117,11 @@ async function main() {
   check(await panel.locator(".xp-campaigns li").count() === 3, "associated campaigns listed");
   check(await panel.getByText("Programmée").count() === 1 && await panel.getByText("En pause").count() === 1, "campaign states");
   check(await panel.getByText(/Cette expérience est partagée/).count() === 1, "shared quiz warning");
-  check(await panel.getByRole("link", { name: /Éditeur complet via la campagne Vacances/ }).getAttribute("href") === `/campaigns/${campaigns[0].id}/quiz-editor`, "complete editor uses the existing campaign route only");
+  check(await panel.getByRole("link", { name: /Éditeur historique via la campagne Vacances/ }).getAttribute("href") === `/campaigns/${campaigns[0].id}/quiz-editor`, "legacy campaign editor route is still linked");
   check(new URL(page.url()).searchParams.get("experience") === shared.id, "selection stored in the URL");
   await cards.filter({ hasText: standalone.name }).getByRole("button", { name: /afficher les détails/ }).click();
   await panel.getByRole("heading", { level: 2, name: standalone.name, exact: true }).waitFor();
-  check(await panel.getByText(/Aucune campagne : l'expérience existe sans campagne/).count() === 1 && await panel.getByText(/prochaine étape/).count() === 1, "no-campaign detail states the editor limitation");
+  check(await panel.getByText(/Aucune campagne : l'expérience existe sans campagne/).count() === 1, "no-campaign detail states the absence of campaigns");
   check(await panel.getByRole("link", { name: "Éditer" }).getAttribute("href") !== null, "edit action available without campaign");
 
   // Keyboard.
@@ -201,7 +201,7 @@ async function main() {
     shopActive: true, period: { from: new Date().toISOString(), to: new Date().toISOString(), days: 30 }, experiences: [] } }));
   await emptyPage.goto(admin + "/quizzes");
   await emptyPage.getByRole("heading", { name: "Vous n'avez pas encore d'expérience" }).waitFor();
-  check(await emptyPage.getByRole("link", { name: "Créer ma première expérience" }).getAttribute("href") === "/quizzes/new", "empty tenant invites creation without campaign");
+  check(await emptyPage.getByRole("link", { name: "Créer ma première expérience" }).getAttribute("href") === "/experiences/new", "empty tenant invites creation without campaign");
   check(await emptyPage.locator(".dashboard-stat").count() === 0, "no fictional figures for an empty tenant");
   if (output) await emptyPage.screenshot({ path: path.join(output, "experiences-vide.png"), fullPage: true });
   await empty.close();

@@ -691,8 +691,27 @@ export interface Metric {
 export interface MetricsFunnel {
   started: number;
   completed: number;
+  /** Abandons émis par le widget corrigé (payload `reason`) ; ne contient pas les anciens événements. */
   abandoned: number;
+  /** Anciens `quiz_abandon` (émis à chaque changement de question) : non fiables, exclus de `abandoned`. */
+  legacyAbandonEvents?: number;
   completionRate: number;
+}
+
+export interface MetricIndicator {
+  value: number | null;
+  reliable: boolean;
+  reason: string | null;
+}
+
+export interface MetricIndicators {
+  started: number;
+  completed: number;
+  recommendations: number;
+  productClicks: number;
+  completionRate: MetricIndicator;
+  clicksPer100Recommendations: MetricIndicator;
+  consistency: { completedMinusRecommendations: number; consistent: boolean };
 }
 
 export interface MetricsCTA {
@@ -724,10 +743,64 @@ export interface MetricsTopProduct {
 export interface QuizMetricsResponse {
   period: { from: string | Date; to: string | Date };
   funnel: MetricsFunnel;
+  indicators?: MetricIndicators;
   cta: MetricsCTA;
   feedback: { positive: number; negative: number };
   topProducts: MetricsTopProduct[];
   steps: MetricsStep[];
+  variants: MetricsVariant[];
+}
+
+// ─────────────────────────────────────────────
+// Page Résultats (synthèse tenant-scopée)
+// ─────────────────────────────────────────────
+export interface ResultsCounts {
+  started: number;
+  completed: number;
+  recommendations: number;
+  productClicks: number;
+}
+
+export interface ResultsDailyPoint extends ResultsCounts { date: string }
+
+export interface ResultsExperienceRow extends ResultsCounts {
+  id: string;
+  name: string;
+  active: boolean;
+  catalogId: string;
+  catalogName: string;
+}
+
+export interface ResultsSummary {
+  period: { from: string; to: string; days: number };
+  totals: ResultsCounts;
+  previous: ResultsCounts;
+  daily: ResultsDailyPoint[];
+  experiences: ResultsExperienceRow[];
+  catalogs: { id: string; name: string }[];
+  /** Vrai si le périmètre dépasse `quizLimit` expériences : totaux et séries ne couvrent alors que les `quizLimit` premières. */
+  truncated: boolean;
+  quizLimit: number;
+}
+
+export interface ResultsQuestionStat {
+  questionId: string;
+  label: string;
+  views: number;
+  answers: number;
+  options: { answerId: string; label: string; count: number }[];
+}
+
+export interface ResultsExperienceDetail {
+  period: { from: string; to: string; days: number };
+  experience: { id: string; name: string; catalogId: string; catalogName: string };
+  totals: ResultsCounts;
+  daily: ResultsDailyPoint[];
+  questions: ResultsQuestionStat[];
+  /** Étapes de collecte dont l'identifiant ne correspond à aucune question actuelle. */
+  unmatchedSteps: number;
+  topProducts: { productId: string | null; name: string; count: number }[];
+  clickedProducts: { productId: string; name: string; count: number }[];
   variants: MetricsVariant[];
 }
 

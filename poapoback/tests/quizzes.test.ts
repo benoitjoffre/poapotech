@@ -68,8 +68,14 @@ before(async () => {
   ) as unknown as typeof prisma.catalog.findFirst);
   stub(prisma.catalog, "upsert", (async () => catalogs[0]) as unknown as typeof prisma.catalog.upsert);
   stub(prisma, "$transaction", async (fn: (tx: typeof prisma) => unknown) => fn(prisma));
-  stub(prisma, "$queryRaw", async (_sql: unknown, id: unknown, tenantId: unknown) =>
-    id === coffeeQuiz.id && tenantId === coffeeQuiz.tenantId ? [{ id }] : []);
+  stub(prisma, "$queryRaw", async (sql: unknown, id: unknown, tenantId: unknown) => {
+    // Agrégations de métriques : on enregistre le scope (tenant, quiz) transmis à PostgreSQL.
+    if (Array.isArray(sql) && sql.join("").includes('"Metric"')) {
+      metricScopes.push({ tenantId: id as string, quizId: tenantId as string });
+      return [];
+    }
+    return id === coffeeQuiz.id && tenantId === coffeeQuiz.tenantId ? [{ id }] : [];
+  });
   stub(prisma.quiz, "findFirstOrThrow", async () => coffeeQuiz);
   stub(prisma.quizProduct, "deleteMany", (async () => {
     writes.push("quizProduct.deleteMany");
@@ -119,6 +125,7 @@ before(async () => {
     return data;
   }) as typeof prisma.metric.create);
   stub(prisma.quizSession, "create", (async () => ({ id: "session-coffee" })) as typeof prisma.quizSession.create);
+  stub(prisma.quizSession, "count", (async () => 0) as typeof prisma.quizSession.count);
   stub(prisma.metric, "count", (async ({ where }: { where: { quizId?: string } }) => {
     metricScopes.push(where);
     return 2;

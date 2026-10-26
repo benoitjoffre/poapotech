@@ -1,0 +1,38 @@
+.xw-stepper { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 12px; }
+.xw-stepper ol { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; list-style: none; margin: 0; padding: 0; }
+.xw-step { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 4px; background: transparent; border: 0; border-radius: 10px; color: #45475b; font: inherit; cursor: pointer; text-align: center; }
+.xw-step:disabled { cursor: not-allowed; opacity: 0.55; }
+.xw-step[aria-current="step"] { background: #f0ecff; color: #3d25a8; font-weight: 600; }
+.xw-step-number { width: 28px; height: 28px; border-radius: 50%; display: inline-grid; place-items: center; background: #eef0f5; color: #2b2d42; font-weight: 600; }
+.xw-step[aria-current="step"] .xw-step-number { background: #6c47ff; color: #fff; }
+.xw-step.done .xw-step-number { background: #e3f6ee; color: #0b6b4a; }
+.xw-step-label { font-size: 0.8125rem; line-height: 1.25; overflow-wrap: anywhere; }
+.xw-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.xw-eyebrow { margin: 8px 0 0; font-weight: 600; color: #3d25a8; }
+.xw-footer { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: center; padding: 12px; background: #fff; border: 1px solid var(--border); border-radius: 12px; }
+.xw-footer .btn-primary { margin-left: auto; }
+.xw-error { flex: 1 0 100%; margin: 0; }
+.xw-intro, .xw-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.xw-examples { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; margin: 0; padding: 0; }
+.xw-note { margin: 0; padding: 10px 12px; background: #f7f5ff; border-left: 3px solid #6c47ff; border-radius: 6px; }
+.xw-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.xw-published { display: flex; flex-direction: column; gap: 10px; }
+.xw-catalogs { display: flex; flex-direction: column; gap: 8px; border: 0; padding: 0; margin: 0; }
+.xw-radio { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+.xw-create { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.xw-wizard :is(.xw-step, .btn-ghost, .btn-primary) { min-height: 40px; }
+.xw-published ul { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
+.xw-step-label { overflow-wrap: normal; }
+@media (max-width: 480px) {
+  .xw-step:not([aria-current="step"]) .xw-step-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .xw-stepper ol { display: flex; gap: 4px; }
+  .xw-stepper li { flex: 0 0 auto; }
+  .xw-stepper li:has([aria-current="step"]) { flex: 1 1 auto; min-width: 0; }
+  .xw-step[aria-current="step"] { flex-direction: row; justify-content: center; }
+}
+@media (max-width: 640px) {
+  .xw-step-label { font-size: 0.6875rem; }
+  .xw-step { padding: 6px 2px; }
+  .xw-stepper { padding: 8px; }
+  .xw-footer .btn-primary, .xw-footer .btn-ghost { flex: 1 1 100%; margin-left: 0; }
+}

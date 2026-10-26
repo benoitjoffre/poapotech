@@ -15,7 +15,7 @@ export function CampaignImage({ campaign }: { campaign: Pick<Campaign, "imageUrl
   );
 }
 
-/** Interrupteur en ligne / en pause. Il n'agit que sur le statut enregistré de la campagne. */
+/** Interrupteur en cours / en pause. Il n'agit que sur le statut enregistré de la campagne. */
 export function CampaignStatusToggle({
   campaign,
   disabled,
@@ -29,8 +29,8 @@ export function CampaignStatusToggle({
   let lockedReason = "";
   if (campaign.effectiveStatus === "SCHEDULED" && campaign.startsAt) lockedReason = `Démarrage programmé le ${formatDate(campaign.startsAt)}`;
   else if (campaign.effectiveStatus === "COMPLETED") lockedReason = "Campagne terminée";
-  else if (!online && !campaign.quiz.active) lockedReason = "Activez d'abord le quiz associé";
-  const label = lockedReason || (online ? "Mettre en pause" : "Mettre en ligne");
+  else if (!online && !campaign.quiz.active) lockedReason = "Activez d'abord le quiz associé (éditeur de l'expérience)";
+  const label = lockedReason || (online ? "Mettre en pause" : "Démarrer la campagne");
 
   return (
     <button

@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import type { ExperienceListItem } from "@poapo/types";
 import Icon from "../Icon";
-import { publicQuizLink, questionsEditorPath, quizPath } from "../../lib/experienceLinks";
+import { publicQuizLink, experienceEditorPath, quizPath } from "../../lib/experienceLinks";
 import { campaignCountLabel, questionCountLabel } from "../../lib/experiences";
 import ExperienceBadges from "./ExperienceBadges";
 import ExperienceStats from "./ExperienceStats";
@@ -9,24 +9,25 @@ import ExperienceStats from "./ExperienceStats";
 const modified = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", year: "numeric" });
 
 export function EditAction({ experience, className = "btn-primary" }: { experience: ExperienceListItem; className?: string }) {
-  return <Link className={className} to={questionsEditorPath(experience)}>
+  return <Link className={className} to={experienceEditorPath(experience.id)}>
     {experience.hasDraft ? "Reprendre le brouillon" : "Éditer"}
     <span className="sr-only"> : {experience.name}</span>
   </Link>;
 }
 
-export default function ExperienceCard({ experience, selected, onSelect, tenantId, days }: {
+export default function ExperienceCard({ experience, selected, onSelect, tenantId, days, shopActive }: {
   experience: ExperienceListItem;
   selected: boolean;
   onSelect: () => void;
   tenantId?: string;
   days: number;
+  shopActive?: boolean;
 }) {
   const link = (extra: string) => `${extra} : ${experience.name}`;
   return <article className={`xp-card${selected ? " selected" : ""}`}>
     <div className="xp-cover" aria-hidden="true"><Icon name="quiz" size={28} /></div>
     <div className="xp-card-main">
-      <ExperienceBadges experience={experience} />
+      <ExperienceBadges experience={experience} shopActive={shopActive} />
       <h3>
         <button type="button" className="xp-select" aria-pressed={selected} onClick={onSelect}>
           {experience.name}<span className="sr-only"> — afficher les détails</span>

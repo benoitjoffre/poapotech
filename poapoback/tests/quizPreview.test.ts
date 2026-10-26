@@ -158,8 +158,9 @@ test("mêmes données : même profil, requête moteur et recommandation que la s
   assert.equal(publicSessions, 0);
   const submitted = await request("/api/quiz/submit", { clientId: quiz.tenantId, quizId: quiz.id, answers: answersA, abVariant: "A" });
   assert.equal(submitted.status, 200);
-  const { sessionId, ...publicResult } = await submitted.json();
+  const { sessionId, feedbackToken, ...publicResult } = await submitted.json();
   assert.equal(sessionId, "public-session");
+  assert.equal(typeof feedbackToken, "string");
   assert.deepEqual(previewResult, publicResult);
   assert.deepEqual(engineRequests[0], engineRequests[1]);
   assert.ok(Math.abs((engineRequests[0].profile as { pace: number }).pace - 0.7) < 1e-10);

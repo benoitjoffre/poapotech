@@ -66,11 +66,11 @@ export default function HomePage() {
             {summary.experiences.length === 0 ? <div className="home-empty">
               <h3>Votre première expérience commence ici</h3>
               <p>Choisissez vos produits, préparez vos questions et aidez vos clients à trouver ce qui leur correspond.</p>
-              <Link className="btn-primary" to="/quizzes/new">Créer ma première expérience</Link>
+              <Link className="btn-primary" to="/experiences/new">Créer ma première expérience</Link>
             </div> : <div className="home-experiences">
               {summary.experiences.map((quiz) => <ExperienceCard key={quiz.id} experience={quiz}
                 tenantId={user?.tenantId} days={summary.period.days} />)}
-              <Link className="home-create-card" to="/quizzes/new">
+              <Link className="home-create-card" to="/experiences/new">
                 <Icon name="plus" size={32} /><strong>Créer une nouvelle expérience</strong>
                 <span>Un quiz personnalisé, avec ou sans campagne.</span><span className="btn-ghost">Commencer</span>
               </Link>

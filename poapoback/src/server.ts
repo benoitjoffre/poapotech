@@ -13,11 +13,13 @@ import catalogRouter from "./routes/catalog";
 import importRouter from "./routes/import";
 import adminTenantsRouter from "./routes/adminTenants";
 import metricsRouter from "./routes/metrics";
+import resultsRouter from "./routes/results";
 import quizzesRouter from "./routes/quizzes";
 import campaignsRouter from "./routes/campaigns";
 import dashboardRouter from "./routes/dashboard";
 import experiencesRouter from "./routes/experiences";
 import { quizErrorHandler } from "./services/quizzes";
+import { globalRateLimitMax } from "./rateLimitConfig";
 
 const app = express();
 
@@ -48,7 +50,7 @@ app.use(
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000, // 15 min
-    max: 200,
+    max: globalRateLimitMax(),
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: "Trop de requêtes, réessayez dans 15 minutes" },
@@ -81,6 +83,7 @@ app.use("/api/catalog", catalogRouter);
 app.use("/api/catalog/import", importRouter);
 app.use("/api/admin/tenants", adminTenantsRouter);
 app.use("/api/metrics", metricsRouter);
+app.use("/api/results", resultsRouter);
 
 // Health check
 app.get("/health", (_req, res) => {

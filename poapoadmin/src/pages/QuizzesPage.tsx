@@ -65,7 +65,7 @@ export default function QuizzesPage() {
     if (id) next.set("experience", id); else next.delete("experience");
     return next;
   }, { replace: true });
-  const createPath = catalogId ? `/quizzes/new?catalogId=${encodeURIComponent(catalogId)}` : "/quizzes/new";
+  const createPath = catalogId ? `/experiences/new?catalogId=${encodeURIComponent(catalogId)}` : "/experiences/new";
   const count = (predicate: (item: (typeof all)[number]) => boolean) => inCatalog.filter(predicate).length;
   const filtered = !!query || availability !== "all" || draft !== "all";
 
@@ -131,9 +131,9 @@ export default function QuizzesPage() {
               setQuery(""); setAvailability("all"); setDraft("all"); setCatalogId("");
             }}>Réinitialiser les filtres</button>}
           </div> : visible.map((item) => <ExperienceCard key={item.id} experience={item} selected={shown?.id === item.id}
-            onSelect={() => select(item.id)} tenantId={user?.tenantId} days={days} />)}
+            onSelect={() => select(item.id)} tenantId={user?.tenantId} days={days} shopActive={overview.shopActive} />)}
         </section>
-        {shown && <ExperienceDetails key={shown.id} experience={shown} tenantId={user?.tenantId} days={days} onClose={() => select(null)} />}
+        {shown && <ExperienceDetails key={shown.id} experience={shown} tenantId={user?.tenantId} days={days} shopActive={overview.shopActive} onClose={() => select(null)} />}
       </div>
     </>)}
   </div>;

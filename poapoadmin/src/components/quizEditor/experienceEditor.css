@@ -1,0 +1,60 @@
+.campaign-quiz-editor.experience-editor {
+  --primary: #6c47ff;
+  --primary-hover: #5233d9;
+  --primary-soft: #f0ecff;
+  --editor-secondary: #6c47ff;
+  max-width: 1400px;
+}
+.experience-editor .btn-primary { background: #6c47ff; color: #fff; }
+.experience-editor .btn-primary:hover:not(:disabled) { background: #5233d9; }
+.experience-editor .btn-primary:disabled { opacity: 0.55; }
+.experience-editor .quiz-editor-tab.active { color: #4a2fc2; }
+.experience-editor .quiz-editor-tab.active .quiz-editor-step { background: #6c47ff; color: #fff; }
+.experience-editor :is(button, a, input, select, [tabindex]):focus-visible { outline: 3px solid #5233d9; }
+.experience-editor .quiz-editor-tabs { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.experience-editor :is(h1, h2, h3, p, li, dd, a) { overflow-wrap: anywhere; }
+.xe-title-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; justify-content: space-between; }
+.xe-title-row > div:first-child { flex: 1 1 320px; min-width: 0; }
+.xe-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.xe-chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 12px 0 0; }
+.xe-state.local { background: #fff4d6; color: #6b4600; }
+.xe-state.applied { background: #ffe9d6; color: #7a3300; }
+.xe-state.saved { background: #ece7ff; color: #3d25a8; }
+.xe-state.published { background: #e3f6ee; color: #0b6b4a; }
+.xe-state.conflict { background: #fde3e3; color: #8a1010; }
+.xe-state.saving { background: #eef0f5; color: #45475b; }
+.xe-hint { margin-top: 8px; }
+.xe-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+.xe-main, .xe-side { min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.xe-side { position: sticky; top: 16px; }
+.xe-campaigns { padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; display: flex; flex-direction: column; gap: 10px; }
+.xe-campaigns h2 { font-size: 15px; }
+.xe-campaigns ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.xe-campaigns li { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; }
+.xe-muted { color: #5c6072; font-size: 12px; }
+.xe-fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.xe-warning { padding: 12px 14px; border: 1px solid #e8c36a; border-radius: 8px; background: #fff8e1; color: #5c3d00; font-size: 14px; }
+.xe-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin: 12px 0; }
+.xe-facts dt { font-size: 12px; color: #5c6072; }
+.xe-facts dd { margin: 2px 0 0; font-weight: 600; }
+.xe-coverage { list-style: none; margin: 0 0 12px; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 6px; }
+.xe-coverage li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; }
+.xe-low { color: #8a4b00; font-weight: 700; }
+.xe-tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.xe-apply { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.xe-apply .form-error { flex-basis: 100%; }
+@media (max-width: 1180px) {
+  .xe-layout { grid-template-columns: minmax(0, 1fr); }
+  .xe-side { position: static; }
+}
+@media (max-width: 768px) {
+  .experience-editor .quiz-editor-tabs { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .experience-editor .quiz-editor-tab { flex-direction: column; justify-content: center; gap: 4px; padding: 8px 4px; font-size: 12px; }
+  .xe-actions > * { flex: 1 1 auto; text-align: center; }
+}
+@media (max-width: 400px) {
+  .experience-editor .quiz-editor-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.experience-editor .axis-row { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); align-items: end; }
+.experience-editor .form-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); }
+.campaign-quiz-editor.experience-editor a:not(.btn-primary) { color: #4a2fc2; }

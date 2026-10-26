@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Question, QuizResult, SessionAnswer, MetricType, EmbedConfig, resolveQuizTheme } from "@poapo/types";
 import { useTenant } from "../contexts/TenantContext";
 import { filterVisibleQuestions, pickAbVariant } from "../lib/quiz";
+import { createAbandonTracker } from "../lib/abandonTracker";
 import QuizThemeStyle from "../components/QuizThemeStyle";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
@@ -37,6 +38,10 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
   const [hasTrackedStart, setHasTrackedStart] = useState(false);
   const [hasTrackedComplete, setHasTrackedComplete] = useState(false);
   const lastTrackedStepRef = useRef<string | null>(null);
+  const abVariantRef = useRef<string | null>(null);
+  const noBlockRef = useRef<(type: MetricType, payload?: Record<string, unknown>) => void>(() => undefined);
+  const [abandonTracker] = useState(() => createAbandonTracker((payload) =>
+    noBlockRef.current("quiz_abandon", { ...payload, abVariant: abVariantRef.current ?? "standard" })));
   const startTimeRef = useRef<number | null>(null);
 
   const questionById = useMemo(() => {
@@ -124,6 +129,9 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
       keepalive: true,
     }).catch(() => undefined);
   };
+
+  noBlockRef.current = trackEventNoBlock;
+  abVariantRef.current = abVariant;
 
   useEffect(() => {
     if (preview) {
@@ -214,6 +222,7 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
       if (preview) {
         setResult(await preview.submit(buildSessionAnswers(), abVariant));
         setHasTrackedComplete(true);
+        abandonTracker.complete();
         return;
       }
       const res = await fetch(`${apiBaseUrl}/api/quiz/submit`, {
@@ -230,6 +239,7 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
       if (!res.ok) throw new Error("Une erreur est survenue. Merci de reessayer.");
       const data = (await res.json()) as QuizResult & { sessionId?: string };
       setResult(data);
+      abandonTracker.complete();
       if (!hasTrackedComplete) {
         setHasTrackedComplete(true);
         void trackEvent("quiz_complete", { abVariant: abVariant ?? "standard" });
@@ -253,10 +263,12 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
     setHasTrackedComplete(false);
     lastTrackedStepRef.current = null;
     startTimeRef.current = null;
+    abandonTracker.reset();
   };
 
   const handleStart = () => {
     setHasStarted(true);
+    abandonTracker.start();
     if (!startTimeRef.current) startTimeRef.current = Date.now();
     if (!hasTrackedStart) {
       setHasTrackedStart(true);
@@ -278,14 +290,22 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
     });
   }, [hasStarted, isLoadingQuestions, result, questions, currentQuestionIndex, stepIndex]);
 
+  // Abandon : un seul événement, à la fermeture de la page ou au démontage d'un quiz démarré et non terminé.
   useEffect(() => {
-    if (!hasStarted) return;
+    abandonTracker.setStep(stepIndex);
+  }, [abandonTracker, stepIndex]);
+
+  useEffect(() => {
+    const onPageHide = () => abandonTracker.leave("pagehide");
+    const onPageShow = (event: PageTransitionEvent) => { if (event.persisted) abandonTracker.reopen(); };
+    window.addEventListener("pagehide", onPageHide);
+    window.addEventListener("pageshow", onPageShow);
     return () => {
-      if (!hasTrackedComplete) {
-        trackEventNoBlock("quiz_abandon", { stepIndex, at: new Date().toISOString() });
-      }
+      window.removeEventListener("pagehide", onPageHide);
+      window.removeEventListener("pageshow", onPageShow);
+      abandonTracker.leave("unmount");
     };
-  }, [hasStarted, hasTrackedComplete, stepIndex, clientId]);
+  }, [abandonTracker]);
 
   const profileAxes = result?.profileSummary?.axes ?? [];
   const productAttributes = result?.product?.attributes ?? {};

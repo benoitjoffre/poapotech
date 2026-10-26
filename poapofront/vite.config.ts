@@ -10,7 +10,7 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': 'http://localhost:5050',
+      '/api': process.env.POAPO_API_PROXY ?? 'http://localhost:5050',
     },
   },
 })

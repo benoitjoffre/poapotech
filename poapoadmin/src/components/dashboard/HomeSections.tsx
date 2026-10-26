@@ -10,7 +10,7 @@ export function HomeHero() {
       <span className="home-eyebrow">Bienvenue sur POAPO</span>
       <h1 id="home-title">Aidez vos clients à choisir les bons produits</h1>
       <p>Créez des expériences de recommandation personnalisées en quelques étapes.</p>
-      <Link className="btn-primary" to="/quizzes/new"><Icon name="plus" />Créer une expérience</Link>
+      <Link className="btn-primary" to="/experiences/new"><Icon name="plus" />Créer une expérience</Link>
     </div>
     <div className="home-hero-visual" aria-hidden="true">
       <div className="home-visual-orbit" />
@@ -45,7 +45,7 @@ export function NextActionCard({ action, experience, hasExperiences }: {
           ? "Votre brouillon est enregistré. Reprenez sa configuration sans modifier la version publique."
           : experience.correction}</p>
       </> : <p className="dashboard-muted">Choisissez vos produits et préparez les questions de votre quiz.</p>}
-      <Link className="btn-primary" to={experience ? quizPath(experience) : "/quizzes/new"}>Continuer</Link>
+      <Link className="btn-primary" to={experience ? quizPath(experience) : "/experiences/new"}>Continuer</Link>
     </div>
   </DashboardPanel>;
 }
@@ -70,11 +70,11 @@ export function HomeResources({ experience }: { experience?: DashboardExperience
       <Link to="/catalog">Préparer mes produits →</Link>
     </DashboardPanel>
     <DashboardPanel id="home-help-title" title="Pour bien démarrer" icon="book" className="home-guidance">
-      <ResourceLink to="/quizzes/new" icon="plus" title="Créer sa première expérience" description="Ouvrir le parcours de création" />
+      <ResourceLink to="/experiences/new" icon="plus" title="Créer sa première expérience" description="Ouvrir le parcours de création" />
       <ResourceLink to="/catalog/import" icon="box" title="Importer des produits" description="Depuis votre fichier CSV" />
-      <ResourceLink to={experience ? quizPath(experience, "/quiz-builder") : "/quizzes/new"} icon="builder"
+      <ResourceLink to={experience ? quizPath(experience, "/quiz-builder") : "/experiences/new"} icon="builder"
         title={experience ? "Personnaliser un quiz" : "Créer un quiz pour le personnaliser"} description="Préparer les questions et les réponses" />
-      <ResourceLink to={experience ? quizPath(experience) : "/quizzes/new"} icon="copy"
+      <ResourceLink to={experience ? quizPath(experience) : "/experiences/new"} icon="copy"
         title={experience ? "Intégrer un quiz" : "Créer un quiz pour l'intégrer"} description="Accéder au lien et au code d'intégration" />
       {experience && <p className="dashboard-muted">Quiz sélectionné : {experience.name}. L'apparence et la publication restent dans l'éditeur de campagne.</p>}
     </DashboardPanel>

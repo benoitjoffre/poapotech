@@ -1,4 +1,5 @@
-export default function QuizDraftStatus({ dirty, hasChanges, revision, saving, conflict, error, onReload, onDiscard }: {
+export default function QuizDraftStatus({ dirty, hasChanges, revision, saving, conflict, error, onReload, onDiscard, publishHint = "Vérifiez et publiez depuis l'éditeur de campagne." }: {
+  publishHint?: string;
   dirty: boolean;
   hasChanges: boolean;
   revision: number;
@@ -13,7 +14,7 @@ export default function QuizDraftStatus({ dirty, hasChanges, revision, saving, c
       {saving ? "Sauvegarde en cours…" : dirty ? "Modifications non enregistrées" :
         hasChanges ? `Brouillon enregistré · révision ${revision}` : "Aucune modification préparatoire enregistrée"}
     </p>
-    <p className="section-hint">L'enregistrement du brouillon ne modifie pas le contenu public. Vérifiez et publiez depuis l'éditeur de campagne.</p>
+    <p className="section-hint">L'enregistrement du brouillon ne modifie pas le contenu public. {publishHint}</p>
     {error && <div className="form-error" role="alert">{conflict ? "Conflit de révision. " : "Erreur de sauvegarde / chargement. "}{error} Vos modifications locales sont conservées.</div>}
     <div className="form-actions">
       <button type="button" className="btn-ghost" disabled={saving} onClick={onReload}>Recharger le brouillon serveur</button>
