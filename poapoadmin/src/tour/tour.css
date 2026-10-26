@@ -1,0 +1,32 @@
+.tour-root { position: fixed; inset: 0; z-index: 1000; }
+.tour-backdrop { position: absolute; inset: 0; }
+.tour-backdrop--dim { background: rgba(23, 21, 43, 0.62); }
+.tour-spot {
+  position: absolute; border-radius: 10px; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(23, 21, 43, 0.62), 0 0 0 3px var(--primary);
+  transition: top .2s ease, left .2s ease, width .2s ease, height .2s ease;
+}
+.tour-card {
+  position: absolute; box-sizing: border-box; width: min(360px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow-y: auto;
+  padding: 18px 20px; border-radius: 14px; background: #fff; color: var(--text);
+  box-shadow: 0 12px 40px rgba(23, 21, 43, 0.3); outline: none;
+  display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere;
+}
+.tour-card--center { top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(440px, calc(100vw - 24px)); }
+.tour-card:focus-visible { box-shadow: 0 12px 40px rgba(23, 21, 43, 0.3), 0 0 0 3px var(--primary-hover); }
+.tour-card :is(button):focus-visible { outline: 3px solid var(--primary-hover); outline-offset: 2px; }
+.tour-progress { font-size: 12px; font-weight: 600; color: #505065; margin: 0; }
+.tour-title { font-size: 17px; font-weight: 700; margin: 0; }
+.tour-title--lg { font-size: 20px; }
+.tour-body { font-size: 14px; color: #3a3850; display: flex; flex-direction: column; gap: 8px; }
+.tour-body p { margin: 0; }
+.tour-body ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.tour-note { font-size: 13px; color: #505065; padding: 8px 10px; border-radius: 8px; background: var(--primary-soft); }
+.tour-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.tour-nav { display: inline-flex; gap: 8px; margin-left: auto; }
+.tour-skip { background: none; border: 0; padding: 4px 2px; font: inherit; font-size: 13px; color: var(--primary-hover); text-decoration: underline; cursor: pointer; }
+.tour-close { position: absolute; top: 8px; right: 10px; width: 32px; height: 32px; border: 0; border-radius: 8px; background: none; font-size: 22px; line-height: 1; color: #505065; cursor: pointer; }
+.tour-close:hover { background: var(--primary-soft); }
+@media (prefers-reduced-motion: reduce) {
+  .tour-spot { transition: none; }
+}

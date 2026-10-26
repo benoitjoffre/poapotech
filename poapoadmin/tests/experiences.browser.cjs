@@ -47,7 +47,7 @@ async function main() {
 
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-  await context.addInitScript((value) => localStorage.setItem("poapo_admin_token", value), tokenFor(tenantId));
+  await context.addInitScript(([value, key]) => { localStorage.setItem("poapo_admin_token", value); localStorage.setItem(key, JSON.stringify({ status: "dismissed" })); }, [tokenFor(tenantId), `poapo_tour_v1:${tenantId}`]);
   const page = await context.newPage();
   const errors = [];
   const calls = [];
@@ -194,7 +194,7 @@ async function main() {
   // Provision the legacy default quiz once, so development StrictMode does not race two first-time requests.
   await fetch(`${process.env.POAPO_API_URL || "http://localhost:5050"}/api/auth/me`, { headers: { Authorization: `Bearer ${tokenFor(emptyId)}` } });
   const empty = await browser.newContext({ viewport: { width: 1440, height: 900 } });
-  await empty.addInitScript((value) => localStorage.setItem("poapo_admin_token", value), tokenFor(emptyId));
+  await empty.addInitScript(([value, key]) => { localStorage.setItem("poapo_admin_token", value); localStorage.setItem(key, JSON.stringify({ status: "dismissed" })); }, [tokenFor(emptyId), `poapo_tour_v1:${emptyId}`]);
   const emptyPage = await empty.newPage();
   // Any merchant page load provisions the legacy default quiz, so the empty state is exercised with an empty synthesis.
   await emptyPage.route("**/api/experiences", (route) => route.fulfill({ status: 200, json: {

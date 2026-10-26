@@ -56,7 +56,7 @@ async function main() {
 
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-  await context.addInitScript((value) => localStorage.setItem("poapo_admin_token", value), token(tenantId));
+  await context.addInitScript(([value, key]) => { localStorage.setItem("poapo_admin_token", value); localStorage.setItem(key, JSON.stringify({ status: "dismissed" })); }, [token(tenantId), `poapo_tour_v1:${tenantId}`]);
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));

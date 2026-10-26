@@ -24,6 +24,7 @@ import HelpArticlePage from "./pages/HelpArticlePage";
 import HomePage from "./pages/HomePage";
 import Icon from "./components/Icon";
 import { QuizProvider } from "./contexts/QuizContext";
+import { TourProvider } from "./tour/TourContext";
 
 function ProtectedRoute() {
   const { token, loading } = useAuth();
@@ -42,8 +43,10 @@ function AppLayout() {
   const { user, logout } = useAuth();
   const campaignEditor = useMatch("/campaigns/:campaignId/quiz-editor");
   const experienceEditor = useMatch("/experiences/*");
+  const tourUserId = user && !user.isSuperAdmin ? user.tenantId : null;
   const link = ({ isActive }: { isActive: boolean }) => `admin-side-link${isActive ? " active" : ""}`;
   return (
+    <TourProvider userId={tourUserId} suppressOffer={!!campaignEditor || !!experienceEditor}>
     <div className={`admin-layout${user?.isSuperAdmin ? "" : " merchant-layout"}${campaignEditor ? " campaign-editor-layout" : ""}`}>
       <aside className="admin-sidebar">
         <div className="admin-sidebar-brand">
@@ -54,11 +57,11 @@ function AppLayout() {
           {user?.isSuperAdmin ? (
             <NavLink className={link} to="/admin/tenants"><Icon name="users" />Administration des comptes</NavLink>
           ) : <>
-            <NavLink className={link} to="/" end><Icon name="home" />Accueil</NavLink>
-            <NavLink className={link} to="/catalog"><Icon name="box" />Mes produits</NavLink>
-            <NavLink className={({ isActive }) => link({ isActive: isActive || !!experienceEditor })} to="/quizzes"><Icon name="quiz" />Mes expériences</NavLink>
+            <NavLink className={link} data-tour="nav-home" to="/" end><Icon name="home" />Accueil</NavLink>
+            <NavLink className={link} data-tour="nav-products" to="/catalog"><Icon name="box" />Mes produits</NavLink>
+            <NavLink className={({ isActive }) => link({ isActive: isActive || !!experienceEditor })} data-tour="nav-experiences" to="/quizzes"><Icon name="quiz" />Mes expériences</NavLink>
             <NavLink className={link} to="/campaigns"><Icon name="megaphone" />Campagnes</NavLink>
-            <NavLink className={link} to="/analytics"><Icon name="chart" />Résultats</NavLink>
+            <NavLink className={link} data-tour="nav-results" to="/analytics"><Icon name="chart" />Résultats</NavLink>
             <NavLink className={link} to="/settings"><Icon name="gear" />Paramètres</NavLink>
             <NavLink className={link} to="/help"><Icon name="help" />Centre d'aide</NavLink>
           </>}
@@ -75,6 +78,7 @@ function AppLayout() {
         <Outlet />
       </main>
     </div>
+    </TourProvider>
   );
 }
 

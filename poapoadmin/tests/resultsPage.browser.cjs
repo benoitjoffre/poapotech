@@ -50,7 +50,7 @@ async function main() {
   browser = await chromium.launch({ headless: true });
   const open = async (id, width = 1440, url = "/analytics") => {
     const context = await browser.newContext({ viewport: { width, height: 1000 } });
-    await context.addInitScript((value) => localStorage.setItem("poapo_admin_token", value), sign(id));
+    await context.addInitScript(([value, key]) => { localStorage.setItem("poapo_admin_token", value); localStorage.setItem(key, JSON.stringify({ status: "dismissed" })); }, [sign(id), `poapo_tour_v1:${id}`]);
     const page = await context.newPage();
     await page.goto(`${admin}${url}`);
     return page;

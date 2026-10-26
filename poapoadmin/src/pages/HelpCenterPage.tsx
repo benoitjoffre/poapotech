@@ -1,10 +1,12 @@
 import { Link, useSearchParams } from "react-router-dom";
 import Icon from "../components/Icon";
+import { useTour } from "../tour/TourContext";
 import { HELP_ARTICLES, HELP_CATEGORIES, HELP_FAQ, searchArticles, searchFaq } from "../lib/help";
 import "./help.css";
 
 export default function HelpCenterPage() {
   const [params, setParams] = useSearchParams();
+  const tour = useTour();
   const query = params.get("q") ?? "";
   const searching = query.trim().length > 0;
   const articles = searchArticles(query);
@@ -27,6 +29,7 @@ export default function HelpCenterPage() {
             onClick={() => setQuery(query === c ? "" : c)}>{c}</button>
         </li>)}
       </ul>
+      <div><button type="button" className="btn-primary" data-tour-restart onClick={tour.start}>Relancer la visite guidée</button></div>
     </section>
 
     <section aria-labelledby="help-guides">

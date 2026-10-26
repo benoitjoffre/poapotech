@@ -50,7 +50,7 @@ async function main() {
 
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, permissions: ["clipboard-read", "clipboard-write"] });
-  await context.addInitScript((value) => localStorage.setItem("poapo_admin_token", value), bearer);
+  await context.addInitScript(([value, key]) => { localStorage.setItem("poapo_admin_token", value); localStorage.setItem(key, JSON.stringify({ status: "dismissed" })); }, [bearer, `poapo_tour_v1:${tenantId}`]);
   const page = await context.newPage();
   const errors = [];
   const embedCalls = [];
