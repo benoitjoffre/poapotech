@@ -19,8 +19,8 @@
 
   var iframeSrc = widgetUrl + "/?clientId=" + encodeURIComponent(clientId);
   if (quizId) iframeSrc += "&quizId=" + encodeURIComponent(quizId);
-  var accentColor = buttonColor || "#2e6f6d";
-  var label = buttonLabel || "Trouve un produit";
+  var accentColor = buttonColor || "#6C47FF";
+  var label = buttonLabel || "Découvrir mes recommandations";
 
   // ── Inject styles ──────────────────────────────────────────────
   var style = document.createElement("style");

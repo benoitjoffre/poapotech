@@ -2,6 +2,7 @@ import { Router, Response } from "express";
 import bcrypt from "bcrypt";
 import { prisma } from "../lib/prisma";
 import { verifySuperAdmin, AuthRequest } from "../middleware/auth";
+import { DEFAULT_PRIMARY_COLOR } from "@poapo/types";
 import type { TenantAdminCreateInput, TenantAdminUpdateInput } from "@poapo/types";
 import { asyncRoute, QuizError } from "../services/quizzes";
 
@@ -75,6 +76,7 @@ router.post("/", async (req: AuthRequest, res: Response) => {
       email,
       name: body.name?.trim() || null,
       active: body.active ?? true,
+      primaryColor: DEFAULT_PRIMARY_COLOR,
       passwordHash,
     },
     select: {

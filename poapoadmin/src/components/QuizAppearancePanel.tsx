@@ -78,7 +78,7 @@ export default function QuizAppearancePanel({ editor, branding, disabled, error,
             </label>
             <div className="appearance-color-inputs">
               <input type="color" aria-label={`${label} (sélecteur)`}
-                value={isQuizThemeColor(value) ? value : isQuizThemeColor(effective[key]) ? effective[key] : "#0d9488"}
+                value={isQuizThemeColor(value) ? value : isQuizThemeColor(effective[key]) ? effective[key] : "#6C47FF"}
                 onChange={(event) => change(key, event.target.value)} />
               <input className="field-input" id={`quiz-theme-${key}`} aria-label={`${label} (hexadécimal)`}
                 value={value} placeholder={effective[key]} maxLength={7} spellCheck={false}

@@ -95,11 +95,14 @@ export function parseQuizTheme(raw: unknown): QuizTheme | null {
   return Object.keys(theme).length ? theme : null;
 }
 
+/** Couleur de repli officielle POAPO. */
+export const DEFAULT_PRIMARY_COLOR = "#6C47FF";
+
 export const LEGACY_QUIZ_BACKGROUND = "radial-gradient(600px circle at center, rgba(16, 185, 129, 0.08), transparent 70%), radial-gradient(circle at top, #f7e9f7 0%, #f3f5fb 45%, #ffffff 100%)";
 
 /** Draft preview only until controlled publication exists. Never changes public CSS. */
 export function resolveQuizTheme(branding: QuizBranding, theme?: QuizTheme | null) {
-  const primaryColor = theme?.primaryColor ?? branding.primaryColor ?? "#0d9488";
+  const primaryColor = theme?.primaryColor ?? branding.primaryColor ?? DEFAULT_PRIMARY_COLOR;
   const headingFont = theme?.headingFont ?? "legacy-title";
   const bodyFont = theme?.bodyFont ?? "legacy-body";
   const buttonShape = theme?.buttonShape ?? "rounded";

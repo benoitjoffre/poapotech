@@ -16,7 +16,7 @@ test("thème historique : héritage marque et valeurs du widget sans personnalis
   assert.equal(theme.buttonRadius, "999px");
   assert.equal(theme.previousLabel, "Retour");
   assert.equal(theme.nextLabel, "Suivant");
-  assert.equal(resolveQuizTheme({}).primaryColor, "#0d9488");
+  assert.equal(resolveQuizTheme({}).primaryColor, "#6C47FF");
 });
 
 test("thème partiel et réinitialisation : les champs non définis suivent toujours la marque", () => {

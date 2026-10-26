@@ -32,6 +32,8 @@ export interface TenantBranding {
 
 export interface EmbedConfig {
   tenantId: string;
+  /** Nom de la boutique, pour la signature quand aucun logo n'est configuré. */
+  tenantName?: string | null;
   quizId: string;
   industry: string;
   axes: QuizAxis[];

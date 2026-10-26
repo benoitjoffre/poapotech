@@ -329,7 +329,12 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
       {!result && (
         <section className="intro">
           <div className="intro-logo">
-            {config?.logoUrl ? <img src={config.logoUrl} alt={config.quizTitle ?? "logo"} /> : <img src="/poapo_logo.svg" alt="poapo" />}
+            {config?.logoUrl ? <img src={config.logoUrl} alt={config.tenantName ?? config.quizTitle ?? "logo"} /> : (
+              <div className="intro-wordmark">
+                <span className="intro-wordmark-name">{config?.tenantName?.trim() || "POAPO"}</span>
+                {!config?.tenantName?.trim() && <span className="intro-wordmark-tagline">Trouvez ce qui vous correspond</span>}
+              </div>
+            )}
           </div>
           <div className={`intro-layout ${hasStarted ? "collapsed" : ""}`}>
             <div className="intro-copy">

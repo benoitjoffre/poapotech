@@ -5,7 +5,6 @@ import { QuizContent, type QuizPreviewRuntime } from "../../../poapofront/src/pa
 import QuizThemeStyle from "../../../poapofront/src/components/QuizThemeStyle";
 import baseStyles from "../../../poapofront/src/index.css?inline";
 import widgetStyles from "../../../poapofront/src/App.css?inline";
-import fallbackLogoUrl from "../../../poapofront/public/poapo_logo.svg?url";
 import type { QuizEditorSession } from "../hooks/useQuizEditorDraft";
 import { apiFetch } from "../lib/api";
 
@@ -20,7 +19,7 @@ function PreviewFrame({ snapshot, variant, run, mobile }: {
       quizId, abVariant: variant, theme,
       config: {
         tenantId: "", quizId, industry: draft.config.industry, axes: draft.config.axes,
-        primaryColor: theme.primaryColor, logoUrl: theme.logoUrl ?? fallbackLogoUrl,
+        primaryColor: theme.primaryColor, logoUrl: theme.logoUrl, tenantName: branding.name,
         quizTitle: draft.config.quizTitle, ctaText: draft.config.ctaText, active: draft.config.active,
       },
       questions: [...draft.questions].sort((a, b) => a.order - b.order)

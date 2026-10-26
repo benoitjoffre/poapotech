@@ -2,6 +2,7 @@ import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import nodemailer from "nodemailer";
+import { DEFAULT_PRIMARY_COLOR } from "@poapo/types";
 import { prisma } from "../lib/prisma";
 
 const MAGIC_LINK_EXPIRES_MIN = Number(process.env.MAGIC_LINK_EXPIRES_MIN ?? 15);
@@ -82,7 +83,7 @@ export async function sendMagicLink(email: string): Promise<void> {
 
   const tenant = await prisma.tenant.upsert({
     where: { email: normalizedEmail },
-    create: { email: normalizedEmail },
+    create: { email: normalizedEmail, primaryColor: DEFAULT_PRIMARY_COLOR },
     update: {},
   });
 

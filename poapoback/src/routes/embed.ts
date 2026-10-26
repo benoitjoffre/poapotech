@@ -19,6 +19,7 @@ router.get("/config", publicQuizScope, asyncRoute(async (req: Request, res: Resp
     where: { id: clientId },
     select: {
       id: true,
+      name: true,
       industry: true,
       active: true,
       primaryColor: true,
@@ -59,6 +60,7 @@ router.get("/config", publicQuizScope, asyncRoute(async (req: Request, res: Resp
   const effective = resolveQuizTheme(tenant, theme);
   res.json({
     tenantId: tenant.id,
+    tenantName: tenant.name,
     quizId: quiz.id,
     industry: quiz.industry,
     axes: parseAxes(quiz.axes),

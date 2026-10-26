@@ -16,12 +16,11 @@ interface BrandingForm {
 
 const DEFAULT_QUIZ_TITLE = "Trouve ton produit idéal";
 const DEFAULT_CTA_TEXT = "Découvrir ma sélection";
-const WIDGET_LABEL = "Trouve ton produit";
 
 const EMPTY: BrandingForm = {
   name: "",
   industry: "",
-  primaryColor: "#6c47ff",
+  primaryColor: "#6C47FF",
   logoUrl: "",
   quizTitle: DEFAULT_QUIZ_TITLE,
   ctaText: DEFAULT_CTA_TEXT,
@@ -53,7 +52,7 @@ export default function SettingsPage() {
         setForm({
           name: data.name ?? "",
           industry: data.industry ?? "",
-          primaryColor: data.primaryColor ?? "#6c47ff",
+          primaryColor: data.primaryColor ?? "#6C47FF",
           logoUrl: data.logoUrl ?? "",
           quizTitle: data.quizTitle || DEFAULT_QUIZ_TITLE,
           ctaText: data.ctaText || DEFAULT_CTA_TEXT,
@@ -127,8 +126,7 @@ export default function SettingsPage() {
   src="${widgetBaseUrl}/poapo-widget.js"
   data-client-id="${clientId}"
   data-url="${widgetBaseUrl}"
-  data-label="${WIDGET_LABEL}"
-  data-color="${form.primaryColor || "#6c47ff"}"
+  data-color="${form.primaryColor || "#6C47FF"}"
   async
 ></script>`;
 
