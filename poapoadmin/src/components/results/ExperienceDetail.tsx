@@ -59,6 +59,7 @@ export default function ExperienceDetail({ quizId, query }: { quizId: string; qu
               <li key={q.questionId}>
                 <div className="rs-row"><span>{q.label}</span><strong>{q.views}</strong></div>
                 <Bar value={q.views} max={maxViews} />
+                {q.partial && <p className="rs-muted">Choix multiple : les réponses ne sont comptées que depuis l'activation du suivi. Les chiffres de cette période sont incomplets.</p>}
                 {q.options.length > 0 && (
                   <details><summary>{q.answers} réponse{q.answers > 1 ? "s" : ""}</summary>
                     <ul className="rs-options">{q.options.map((o) => <li key={o.answerId}><span>{o.label}</span><span>{o.count}</span></li>)}</ul>

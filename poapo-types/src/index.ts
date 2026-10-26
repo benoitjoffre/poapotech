@@ -789,6 +789,8 @@ export interface ResultsQuestionStat {
   views: number;
   answers: number;
   options: { answerId: string; label: string; count: number }[];
+  /** Question à choix multiple dont le suivi des réponses est absent ou incomplet sur tout ou partie de la période. */
+  partial?: boolean;
 }
 
 export interface ResultsExperienceDetail {

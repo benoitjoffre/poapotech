@@ -8,6 +8,9 @@ from __future__ import annotations
 import os
 import json
 import math
+import threading
+import time
+from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 import numpy as np
@@ -28,7 +31,15 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 
 # ─── Initialisation ───────────────────────────────────────────────────────────
-app = FastAPI(title="Poapo AI Service", version="1.0.0")
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Le serveur n'accepte aucune requête tant que le modèle n'est pas chargé et préchauffé :
+    # le premier visiteur ne paie jamais le chargement à froid.
+    load_model()
+    yield
+
+
+app = FastAPI(title="Poapo AI Service", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -37,15 +48,25 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Chargement du modèle au démarrage (mis en cache en mémoire)
-print(f"[poapoai] Chargement du modèle {MODEL_NAME}...")
+# Modèle d'embeddings : chargé au démarrage (lifespan), mis en cache en mémoire.
 _model: SentenceTransformer | None = None
+_model_lock = threading.Lock()
+
+def load_model() -> SentenceTransformer:
+    """Charge le modèle une seule fois (thread-safe) et le préchauffe avec un premier encodage."""
+    global _model
+    with _model_lock:
+        if _model is None:
+            started = time.monotonic()
+            print(f"[poapoai] Chargement du modèle {MODEL_NAME}...")
+            model = SentenceTransformer(MODEL_NAME)
+            model.encode("warmup")
+            _model = model
+            print(f"[poapoai] Modèle prêt en {time.monotonic() - started:.1f}s")
+    return _model
 
 def get_model() -> SentenceTransformer:
-    global _model
-    if _model is None:
-        _model = SentenceTransformer(MODEL_NAME)
-    return _model
+    return _model if _model is not None else load_model()
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
@@ -601,7 +622,16 @@ def enrich_axes(req: EnrichAxesRequest):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": MODEL_NAME}
+    """Liveness : le processus répond (le modèle peut ne pas être encore chargé)."""
+    return {"status": "ok", "model": MODEL_NAME, "ready": _model is not None}
+
+
+@app.get("/ready")
+def ready():
+    """Readiness : 200 seulement quand le modèle est chargé et préchauffé."""
+    if _model is None:
+        raise HTTPException(status_code=503, detail={"code": "model_loading", "message": "Modèle en cours de chargement"})
+    return {"status": "ready", "model": MODEL_NAME}
 
 
 @app.post("/embed/product")

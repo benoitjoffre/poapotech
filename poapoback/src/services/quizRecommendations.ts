@@ -3,6 +3,9 @@ import { prisma } from "../lib/prisma";
 import { computeProfile } from "./scoring";
 import { QuizError } from "./quizzes";
 
+/** Le modèle est chargé au démarrage de poapoai : au-delà de ce délai le service est considéré indisponible. */
+export const RECOMMEND_TIMEOUT_MS = 10_000;
+
 export interface RecommendationInput {
   tenantId: string;
   catalogId: string;
@@ -19,13 +22,25 @@ export async function recommendQuiz(input: RecommendationInput) {
   if (input.productIds?.length === 0) throw new QuizError(422, "Aucun produit sélectionné pour ce quiz");
   const { impacts, ...scope } = input;
   const profile = computeProfile(input.axes, impacts);
-  const response = await fetch(`${aiUrl}/recommend`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...scope, profile }),
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!response.ok) throw new Error(`AI service error: ${response.status}`);
+  let response: Response;
+  try {
+    response = await fetch(`${aiUrl}/recommend`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...scope, profile }),
+      signal: AbortSignal.timeout(RECOMMEND_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+    console.error("[recommend]", timedOut ? "timeout" : "service unreachable", err);
+    throw timedOut
+      ? new QuizError(504, "Le moteur de recommandation met trop de temps à répondre. Réessayez dans un instant.")
+      : new QuizError(503, "Le moteur de recommandation est momentanément indisponible. Réessayez dans un instant.");
+  }
+  if (!response.ok) {
+    console.error("[recommend] AI service status", response.status);
+    throw new QuizError(response.status === 503 ? 503 : 502, "Le moteur de recommandation n'a pas pu calculer le résultat. Réessayez dans un instant.");
+  }
   const { productId, explanation, profileSummary } = await response.json() as {
     productId: string; explanation: string[]; profileSummary: Record<string, unknown>;
   };

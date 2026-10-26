@@ -5,6 +5,7 @@ import { Readable } from "stream";
 import { verifyToken, AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { catalogAxes, resolveAccountTenantId, resolveCatalog, toCatalogRef } from "../services/catalogs";
+import { triggerEmbeddings } from "../services/embeddings";
 import { asyncRoute } from "../services/quizzes";
 
 const router = Router();
@@ -192,6 +193,7 @@ router.post("/execute", verifyToken, asyncRoute(async (req: AuthRequest, res: Re
   const axisKeys = new Set((await catalogAxes(tenantId, catalog.id)).map((axis) => axis.key));
   let created = 0;
   let skipped = 0;
+  const createdIds: string[] = [];
   const errors: string[] = [];
 
   for (const row of rows) {
@@ -203,7 +205,7 @@ router.post("/execute", verifyToken, asyncRoute(async (req: AuthRequest, res: Re
         continue;
       }
 
-      await prisma.product.create({
+      const product = await prisma.product.create({
         data: {
           tenantId,
           catalogId: catalog.id,
@@ -222,6 +224,7 @@ router.post("/execute", verifyToken, asyncRoute(async (req: AuthRequest, res: Re
           featured: typeof data.featured === "boolean" ? data.featured : false,
         },
       });
+      createdIds.push(product.id);
       created++;
     } catch (err) {
       skipped++;
@@ -231,6 +234,8 @@ router.post("/execute", verifyToken, asyncRoute(async (req: AuthRequest, res: Re
     }
   }
 
+  // Embeddings locaux (poapoai, sans OpenAI) en arrière-plan : ils pèsent 60 % du score de recommandation.
+  triggerEmbeddings(createdIds, tenantId).catch(console.error);
   res.json({ created, skipped, errors, catalog: toCatalogRef(catalog) });
 }));
 

@@ -8,7 +8,7 @@ BODY_AXIS = {"key": "body", "label": "Corps", "lowLabel": "Léger", "highLabel":
 
 
 class RecommendationTests(unittest.TestCase):
-    def recommend(self, product_ids=None, rows=None, profile=None, axes=None, industry="Café", catalog_id=None):
+    def recommend(self, product_ids=None, rows=None, profile=None, axes=None, industry="Café", catalog_id=None, top_n=1):
         connection = MagicMock()
         cursor = connection.cursor.return_value
         cursor.fetchall.return_value = rows if rows is not None else [
@@ -22,7 +22,7 @@ class RecommendationTests(unittest.TestCase):
                 tenantId="tenant-a", catalogId=catalog_id, industry=industry,
                 profile=profile if profile is not None else {"body": 0.7},
                 axes=axes if axes is not None else [BODY_AXIS],
-                productIds=product_ids,
+                productIds=product_ids, topN=top_n,
             ))
         return result, cursor, model
 
@@ -83,6 +83,60 @@ class RecommendationTests(unittest.TestCase):
         result, _, _ = self.recommend(profile={"body": 0.2, "legacy": 0.9})
         self.assertEqual([axis["key"] for axis in result["profileSummary"]["axes"]], ["body"])
         self.assertEqual(result["profileSummary"]["axes"][0]["description"], "Léger")
+
+
+class ReadinessTests(unittest.TestCase):
+    def tearDown(self):
+        main._model = None
+
+    def test_ready_is_503_until_model_loaded(self):
+        main._model = None
+        with self.assertRaises(HTTPException) as caught:
+            main.ready()
+        self.assertEqual(caught.exception.status_code, 503)
+        self.assertFalse(main.health()["ready"])
+
+    def test_load_model_loads_once_and_warms_up(self):
+        main._model = None
+        fake = MagicMock()
+        with patch.object(main, "SentenceTransformer", return_value=fake) as ctor:
+            main.load_model()
+            main.load_model()
+            main.get_model()
+        ctor.assert_called_once_with(main.MODEL_NAME)
+        fake.encode.assert_called_once_with("warmup")
+        self.assertEqual(main.ready()["status"], "ready")
+        self.assertTrue(main.health()["ready"])
+
+    def test_lifespan_loads_model_before_serving(self):
+        import asyncio
+        main._model = None
+        fake = MagicMock()
+
+        async def run():
+            async with main.lifespan(main.app):
+                self.assertIs(main._model, fake)
+
+        with patch.object(main, "SentenceTransformer", return_value=fake):
+            asyncio.run(run())
+
+
+class MissingEmbeddingTests(unittest.TestCase):
+    recommend = RecommendationTests.recommend
+    """Axes seuls : sans embedding, le classement dépend uniquement de la proximité sur les axes."""
+
+    def test_axes_only_catalog_ranks_by_axes(self):
+        result, _, _ = self.recommend(profile={"body": 0.2}, top_n=3, rows=[
+            ("strong", None, {"body": 0.9}), ("light", None, {"body": 0.2}), ("mid", None, {"body": 0.5}),
+        ])
+        self.assertEqual([p["id"] for p in result["topN"]], ["light", "mid", "strong"])
+
+    def test_product_without_embedding_does_not_crash_next_to_embedded_one(self):
+        result, _, _ = self.recommend(top_n=2, rows=[
+            ("embedded", [1.0, 0.0], {"body": 0.7}), ("bare", None, {"body": 0.7}),
+        ])
+        scores = {p["id"]: p["score"] for p in result["topN"]}
+        self.assertGreater(scores["embedded"], scores["bare"])  # biais documenté (60 % sémantique)
 
 
 class ProductTextTests(unittest.TestCase):

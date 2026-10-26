@@ -221,7 +221,7 @@ test("axes et impacts locaux, sélection vide et erreurs moteur explicites", asy
   engineProduct = "foreign-product";
   assert.equal((await recommend(local)).status, 502);
   engineStatus = 503;
-  assert.equal((await recommend(local)).status, 500);
+  assert.equal((await recommend(local)).status, 503);
   assert.equal(publicSessions + forbiddenWrites, 0);
 });
 

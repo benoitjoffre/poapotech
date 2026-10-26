@@ -20,10 +20,22 @@ function stepAnswerRows(tenantId: string, quizId: string, from: Date, to: Date):
     LIMIT 2000`;
 }
 
+/** Première réponse à choix multiple enregistrée pour ce quiz (toutes périodes) : avant, ces réponses n'étaient pas suivies. */
+async function firstMultiAnswerAt(tenantId: string, quizId: string): Promise<Date | null> {
+  const rows = await prisma.$queryRaw<{ first: Date | null }[]>`
+    SELECT MIN(m."createdAt") AS "first"
+    FROM "Metric" m JOIN "Question" q ON q.id = m.payload->>'questionId'
+    WHERE m."tenantId" = ${tenantId} AND m."quizId" = ${quizId} AND m."type" = 'step_answer'
+      AND q."tenantId" = ${tenantId} AND q."quizId" = ${quizId} AND q."type" = 'multi'`;
+  return rows[0]?.first ?? null;
+}
+
 /** Libellés uniquement quand l'identifiant correspond à une question de ce quiz ; sinon l'étape est ignorée et comptée à part. */
 export function buildQuestionStats(
   rows: StepAnswerRow[],
-  questions: { id: string; text: string; answers: { id: string; text: string }[] }[],
+  questions: { id: string; text: string; type?: string; answers: { id: string; text: string }[] }[],
+  /** Début de la période et premier suivi des choix multiples : une question multiple est « partielle » si la période commence avant. */
+  multiTracking?: { from: Date; firstAt: Date | null },
 ): { questions: ResultsQuestionStat[]; unmatchedSteps: number } {
   const known = new Map(questions.map((q) => [q.id, q]));
   const stats = new Map<string, ResultsQuestionStat>();
@@ -38,6 +50,7 @@ export function buildQuestionStats(
       const answer = question.answers.find((a) => a.id === row.answerId);
       if (answer) entry.options.push({ answerId: answer.id, label: answer.text, count: row.count });
     }
+    if (question.type === "multi" && multiTracking && (!multiTracking.firstAt || multiTracking.firstAt > multiTracking.from)) entry.partial = true;
     stats.set(question.id, entry);
   }
   for (const entry of stats.values()) entry.options.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
@@ -55,12 +68,12 @@ export async function experienceDetail(tenantId: string, quizId: string, filters
   });
   if (!quiz) throw new QuizError(404, "Expérience introuvable");
   const { from, to } = filters;
-  const [counts, daily, questions, steps, sessionTop, clicks, variants] = await Promise.all([
+  const [counts, daily, questions, steps, sessionTop, clicks, variants, multiFirstAt] = await Promise.all([
     countsByQuiz(tenantId, [quizId], from, to),
     dailyCounts(tenantId, [quizId], from, to),
     prisma.question.findMany({
       where: { tenantId, quizId }, orderBy: [{ order: "asc" }, { id: "asc" }], take: 100,
-      select: { id: true, text: true, answers: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 50, select: { id: true, text: true } } },
+      select: { id: true, text: true, type: true, answers: { orderBy: [{ order: "asc" }, { id: "asc" }], take: 50, select: { id: true, text: true } } },
     }),
     stepAnswerRows(tenantId, quizId, from, to),
     prisma.quizSession.groupBy({
@@ -82,6 +95,7 @@ export async function experienceDetail(tenantId: string, quizId: string, filters
         AND "createdAt" >= ${from} AND "createdAt" < ${to}
         AND "type" IN ('quiz_start', 'quiz_complete', 'buy_click')
       GROUP BY 1, 2 LIMIT 400`,
+    firstMultiAnswerAt(tenantId, quizId),
   ]);
   const productIds = [...new Set([
     ...sessionTop.map((row) => row.resultProductId).filter((id): id is string => !!id),
@@ -91,7 +105,7 @@ export async function experienceDetail(tenantId: string, quizId: string, filters
     ? await prisma.product.findMany({ where: { tenantId, id: { in: productIds } }, select: { id: true, name: true } })
     : [];
   const names = new Map(products.map((p) => [p.id, p.name]));
-  const questionStats = buildQuestionStats(steps, questions);
+  const questionStats = buildQuestionStats(steps, questions, { from, firstAt: multiFirstAt });
   return {
     period: { from: from.toISOString(), to: to.toISOString(), days: filters.days },
     experience: { id: quiz.id, name: quiz.name, catalogId: quiz.catalogId, catalogName: quiz.catalog.name },

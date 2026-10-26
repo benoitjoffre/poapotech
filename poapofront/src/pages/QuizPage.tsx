@@ -240,6 +240,15 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
       const data = (await res.json()) as QuizResult & { sessionId?: string };
       setResult(data);
       abandonTracker.complete();
+      // Choix multiples : une seule émission par option retenue, à la validation (évite les doublons de bascule).
+      questions.forEach((question, idx) => {
+        const selection = answers[idx];
+        if (question.type !== "multi" || !Array.isArray(selection)) return;
+        selection.forEach((selectedIdx) => {
+          const answer = question.answers[selectedIdx];
+          if (answer) trackEventNoBlock("step_answer", { step: question.id, questionId: question.id, answerId: answer.id });
+        });
+      });
       if (!hasTrackedComplete) {
         setHasTrackedComplete(true);
         void trackEvent("quiz_complete", { abVariant: abVariant ?? "standard" });
