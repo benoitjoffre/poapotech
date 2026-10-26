@@ -32,7 +32,7 @@ export default function LoginPage() {
   }
 
   useEffect(() => {
-    if (token) navigate(user?.isSuperAdmin ? "/admin/tenants" : "/catalog", { replace: true });
+    if (token) navigate(user?.isSuperAdmin ? "/admin/tenants" : "/", { replace: true });
   }, [token, user, navigate]);
 
   const handleSubmitMagic = async (e: React.FormEvent) => {

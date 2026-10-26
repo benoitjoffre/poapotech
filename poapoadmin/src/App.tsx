@@ -17,6 +17,7 @@ import CampaignDetailPage from "./pages/CampaignDetailPage";
 import CampaignQuizGeneratorPage from "./pages/CampaignQuizGeneratorPage";
 import CampaignQuizEditorPage from "./pages/CampaignQuizEditorPage";
 import ProductEnrichmentPage from "./pages/ProductEnrichmentPage";
+import HomePage from "./pages/HomePage";
 import Icon from "./components/Icon";
 import { QuizProvider, useQuiz } from "./contexts/QuizContext";
 
@@ -40,22 +41,23 @@ function AppLayout() {
   const quizQuery = quiz ? `?quizId=${encodeURIComponent(quiz.id)}` : "";
   const link = ({ isActive }: { isActive: boolean }) => `admin-side-link${isActive ? " active" : ""}`;
   return (
-    <div className={`admin-layout${campaignEditor ? " campaign-editor-layout" : ""}`}>
+    <div className={`admin-layout${user?.isSuperAdmin ? "" : " merchant-layout"}${campaignEditor ? " campaign-editor-layout" : ""}`}>
       <aside className="admin-sidebar">
         <div className="admin-sidebar-brand">
           <span className="admin-nav-logo">POAPO</span>
-          <span className="admin-nav-label">Back-office</span>
+          <span className="admin-nav-label">{user?.isSuperAdmin ? "Administration" : "Votre espace commerçant"}</span>
         </div>
         <nav className="admin-side-nav" aria-label="Navigation principale">
-          <NavLink className={link} to="/catalogs"><Icon name="box" />Catalogues</NavLink>
-          <NavLink className={link} to="/catalog" reloadDocument><Icon name="box" />Produits</NavLink>
-          <NavLink className={link} to="/enrichment"><Icon name="sparkles" />Enrichissement IA</NavLink>
-          <NavLink className={link} to="/quizzes"><Icon name="quiz" />Quiz</NavLink>
-          <NavLink className={link} to={`/quiz-builder${quizQuery}`}><Icon name="builder" />Quiz Builder</NavLink>
-          <NavLink className={link} to="/campaigns"><Icon name="megaphone" />Campagnes</NavLink>
-          <NavLink className={link} to={`/analytics${quizQuery}`}><Icon name="chart" />Analytics</NavLink>
-          {user?.isSuperAdmin && <NavLink className={link} to="/admin/tenants" reloadDocument><Icon name="users" />Tenants</NavLink>}
-          <NavLink className={link} to="/settings" reloadDocument><Icon name="gear" />Paramètres</NavLink>
+          {user?.isSuperAdmin ? (
+            <NavLink className={link} to="/admin/tenants"><Icon name="users" />Administration des comptes</NavLink>
+          ) : <>
+            <NavLink className={link} to="/" end><Icon name="home" />Accueil</NavLink>
+            <NavLink className={link} to="/catalog"><Icon name="box" />Mes produits</NavLink>
+            <NavLink className={link} to="/quizzes"><Icon name="quiz" />Mes expériences</NavLink>
+            <NavLink className={link} to="/campaigns"><Icon name="megaphone" />Campagnes</NavLink>
+            <NavLink className={link} to={`/analytics${quizQuery}`}><Icon name="chart" />Résultats</NavLink>
+            <NavLink className={link} to="/settings"><Icon name="gear" />Paramètres</NavLink>
+          </>}
         </nav>
         <div className="admin-sidebar-user">
           <span className="admin-nav-email" title={user?.email}>{user?.email}</span>
@@ -75,7 +77,7 @@ function AppLayout() {
 function App() {
   const HomeRoute = () => {
     const { user } = useAuth();
-    return <Navigate to={user?.isSuperAdmin ? "/admin/tenants" : "/catalog"} replace />;
+    return user?.isSuperAdmin ? <Navigate to="/admin/tenants" replace /> : <HomePage />;
   };
 
   return (

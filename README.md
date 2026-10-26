@@ -60,6 +60,52 @@ npm run lint --workspace=poapofront
 npm run test:back
 ```
 
+### Merchant homepage
+
+Merchants now land on `/`, with six navigation destinations: Accueil, Mes
+produits, Mes expériences, Campagnes, Résultats and Paramètres. All previous
+routes remain available, and super-administrators retain separate navigation.
+The homepage uses the [read-only dashboard API](./poapoback/README.md#merchant-home-summary-sprint-a-step-1)
+without changing quiz creation, drafts, publication or public integration.
+Appearance and publication still use the existing campaign editor.
+The [validated UX plan](./docs/plan-refonte-ux.md) defines the target separation:
+an experience is an existing quiz, and campaigns are optional marketing
+operations that can share a quiz. Campaign-independent publication remains a
+future implementation requirement, not a capability delivered by this step.
+Campaign status must not be presented as a public-access control.
+
+The homepage follows the supplied dashboard composition with the POAPO purple
+identity: compact hero, four activity cards, experience cards plus a creation
+tile, product summary and a right-hand next-action/resources column.
+Generic typed [dashboard components](./poapoadmin/src/components/dashboard/DashboardCard.tsx)
+provide panels, statistics and resource links. The
+[experience card](./poapoadmin/src/components/dashboard/ExperienceCard.tsx)
+accepts its data and tenant context through props, without fetching or reading
+authentication state. [Homepage sections](./poapoadmin/src/components/dashboard/HomeSections.tsx)
+compose these building blocks; the page owns data loading and error states.
+No stock product imagery, fabricated trends, progress or video resources are
+introduced. The hero illustration is decorative, not an interactive preview.
+
+The existing authentication flow may create a default empty quiz/catalog for
+a new merchant; the homepage displays these real records rather than hiding
+them or creating its own defaults.
+
+With the local API, admin and PostgreSQL running, run the browser scenarios:
+
+```bash
+POAPO_PLAYWRIGHT_MODULE=/absolute/path/to/playwright \
+POAPO_SCREENSHOT_DIR=/absolute/path/to/screenshots \
+node poapoadmin/tests/home.browser.cjs
+```
+
+Both variables are optional: Playwright is resolved normally when the first
+is omitted, and screenshots are saved only when the second is provided.
+The scenarios use temporary isolated fixtures, remove them afterward, and
+check 320, 375, 768 and 1440 px layouts, keyboard navigation, legacy links,
+empty/error states and separate super-admin access.
+
+### AI service
+
 Run the AI unit tests with the project's Python environment activated:
 
 ```bash

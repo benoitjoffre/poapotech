@@ -46,6 +46,34 @@ database, follow the migration and backup instructions in the repository's
 Run the API tests from the repository root with `npm run test:back`, or from this
 directory with `npm test`.
 
+## Merchant home summary (Sprint A, step 1)
+
+`GET /api/dashboard` requires the existing merchant JWT. It uses only the
+authenticated tenant, rejects super-administrator accounts, and returns
+`Cache-Control: no-store`. The shared response contract is
+[`DashboardSummary`](../poapo-types/src/dashboard.ts).
+
+The read-only aggregation uses a repeatable-read transaction and a fixed set of
+queries, independent of quiz count. It returns the real shop identity, catalog
+and product counts, all quizzes (including those without campaigns), public
+availability, saved-draft metadata, and activity over the last 30 days.
+`quiz_start`, `quiz_complete` and `buy_click` are counted per quiz, never per
+campaign. Product clicks are not sales or recommendation views. Accessibility
+reflects the current tenant and quiz activation flags, not publication history
+or campaign status.
+
+The next action selects the most recently updated persisted draft (quiz ID
+breaks ties), then the oldest incomplete quiz, then creation. The incomplete
+check only detects missing active questions or eligible active products; it
+does not replace publication validation. No draft JSON is transferred and no
+business table or write is introduced.
+
+Run the PostgreSQL coverage from this directory against a local test database:
+
+```bash
+POAPO_TEST_DASHBOARD_DB=1 node --import tsx --test tests/dashboard.test.ts tests/dashboard.postgres.test.ts
+```
+
 ## Persistent quiz editor drafts (Sprint 3, step 1)
 
 `Quiz`, `Question`, `Answer` and `QuizProduct` remain the public source of truth.

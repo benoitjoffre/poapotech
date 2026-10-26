@@ -15,6 +15,7 @@ import adminTenantsRouter from "./routes/adminTenants";
 import metricsRouter from "./routes/metrics";
 import quizzesRouter from "./routes/quizzes";
 import campaignsRouter from "./routes/campaigns";
+import dashboardRouter from "./routes/dashboard";
 import { quizErrorHandler } from "./services/quizzes";
 
 const app = express();
@@ -72,6 +73,7 @@ app.use("/api/quiz", quizRouter);
 app.use("/api/quiz/builder", quizBuilderRouter);
 app.use("/api/quizzes", quizzesRouter);
 app.use("/api/campaigns", campaignsRouter);
+app.use("/api/dashboard", dashboardRouter);
 app.use("/api/catalogs", catalogsRouter);
 app.use("/api/catalog", catalogRouter);
 app.use("/api/catalog/import", importRouter);
