@@ -2948,3 +2948,18 @@ body {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Import CSV guidé ── */
+.import-example { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 8px 0 12px; }
+.import-summary { margin-top: 12px; padding: 10px 12px; border: 1px solid var(--border, #e5e7eb); border-radius: 8px; }
+.import-col { display: inline-block; margin: 2px 4px 2px 0; padding: 1px 6px; border-radius: 4px; background: var(--bg-muted, #f3f4f6); font-size: 12px; }
+.import-dest-note { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-top: 4px; font-size: 12px; }
+.import-tag { padding: 0 6px; border-radius: 999px; background: var(--bg-muted, #f3f4f6); color: var(--text-muted, #6b7280); }
+.import-tag-auto { background: #e0f2fe; color: #075985; }
+.import-warn { color: #92400e; font-size: 13px; margin: 6px 0; }
+.import-error { color: #b91c1c; font-size: 13px; margin: 6px 0; }
+.import-info { font-size: 13px; margin: 10px 0; }
+.import-row-conflict { background: #fef2f2; }
+.import-row-ignored { opacity: 0.8; }
+.import-issues { list-style: none; padding: 0; margin: 6px 0; max-height: 260px; overflow-y: auto; }
+.import-issues li { margin: 4px 0; }

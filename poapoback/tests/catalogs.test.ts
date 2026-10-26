@@ -310,3 +310,98 @@ test("import : l'analyse du fichier renvoie le catalogue cible", async () => {
   foreign.append("file", new Blob(["nom\nX\n"], { type: "text/csv" }), "produits.csv");
   assert.equal((await originalFetch(`${base}/api/catalog/import/parse`, { method: "POST", headers, body: foreign })).status, 404);
 });
+
+// ─── Import guidé : aperçu, validation, embeddings ───────────────────────────
+
+const guidedMapping = [
+  { sourceColumn: "nom", targetField: "name" },
+  { sourceColumn: "prix", targetField: "price" },
+  { sourceColumn: "confort", targetField: "attribute.comfort" },
+  { sourceColumn: "origine", targetField: null },
+];
+
+test("aperçu : aucune écriture, erreurs ligne par ligne, avertissements distincts", async () => {
+  const before = products.length;
+  const res = await request("/api/catalog/import/preview", "POST", {
+    catalogId: "catalog-heberg", mapping: guidedMapping,
+    rows: [
+      { nom: "Riad 2", prix: "90", confort: "0.8", origine: "Maroc" },
+      { nom: "Lodge", prix: "abc", confort: "0.5" },
+      { nom: "Cabane", prix: "50", confort: "7" },
+      { nom: "", prix: "10", confort: "0.1" },
+      { nom: "Gîte", prix: "40", confort: "" },
+    ],
+  });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(products.length, before);
+  assert.deepEqual([body.total, body.valid, body.invalid, body.canImport], [5, 2, 3, true]);
+  assert.deepEqual(body.issues.filter((i: Row) => i.severity === "error").map((i: Row) => i.line), [3, 4, 5]);
+  assert.ok(body.issues.some((i: Row) => i.severity === "warning" && i.line === 6));
+  assert.ok(body.mappingIssues.some((i: Row) => i.severity === "warning" && /origine/.test(i.message)));
+  assert.equal(body.sample.length, 2);
+  assert.equal(body.sample[0].product.attributes.comfort, 0.8);
+});
+
+test("aperçu et import : destinations en double et mapping sans nom refusés", async () => {
+  const dup = { catalogId: "catalog-heberg", rows: [{ a: "x", b: "y" }], mapping: [
+    { sourceColumn: "a", targetField: "name" }, { sourceColumn: "b", targetField: "name" }] };
+  const preview = await (await request("/api/catalog/import/preview", "POST", dup)).json();
+  assert.equal(preview.canImport, false);
+  const before = products.length;
+  assert.equal((await request("/api/catalog/import/execute", "POST", dup)).status, 400);
+  const noName = { catalogId: "catalog-heberg", rows: [{ a: "x" }], mapping: [{ sourceColumn: "a", targetField: "price" }] };
+  assert.equal((await request("/api/catalog/import/execute", "POST", noName)).status, 400);
+  assert.equal(products.length, before);
+});
+
+test("aperçu : isolation tenant/catalogue et corps invalide", async () => {
+  const body = { mapping: guidedMapping, rows: [{ nom: "X" }] };
+  assert.equal((await request("/api/catalog/import/preview", "POST", { ...body, catalogId: "catalog_tenant-b" })).status, 404);
+  assert.equal((await request("/api/catalog/import/preview", "POST", { ...body, catalogId: "catalog-heberg" }, null)).status, 401);
+  assert.equal((await request("/api/catalog/import/preview", "POST", { mapping: guidedMapping, rows: [] })).status, 400);
+  assert.equal((await request("/api/catalog/import/preview", "POST", { mapping: guidedMapping, rows: ["x"] })).status, 400);
+});
+
+test("import confirmé : seules les lignes valides sont créées, embeddings déclenchés après l'écriture", async () => {
+  process.env.AI_SERVICE_URL = "http://ai.invalid";
+  const embedded: string[] = [];
+  stub(prisma.product, "findUnique", (async ({ where }: { where: Row }) => products.find((p) => p.id === where.id) ?? null) as unknown as typeof prisma.product.findUnique);
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = (async (url: string, init?: { body?: string }) => {
+    if (String(url).endsWith("/embed/product")) { embedded.push(JSON.parse(init!.body!).id); return new Response("{}", { status: 503 }); }
+    return realFetch(url as never, init as never);
+  }) as typeof fetch;
+  try {
+    const res = await request("/api/catalog/import/execute", "POST", {
+      catalogId: "catalog-heberg", mapping: guidedMapping,
+      rows: [{ nom: "Riad 2", prix: "90", confort: "0.8" }, { nom: "Mauvais", prix: "abc" }],
+    });
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.deepEqual([body.created, body.skipped, body.embeddings], [1, 1, "queued"]);
+    assert.match(body.errors[0], /Ligne 3/);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const created = products.find((p) => p.name === "Riad 2")!;
+    assert.deepEqual([created.tenantId, created.catalogId, created.price], ["tenant-a", "catalog-heberg", 90]);
+    assert.deepEqual(embedded, [created.id]);
+    assert.ok(!products.some((p) => p.name === "Mauvais"));
+  } finally {
+    globalThis.fetch = realFetch;
+    delete process.env.AI_SERVICE_URL;
+  }
+});
+
+test("analyse : suggestions locales, fichier vide ou sans en-tête refusé", async () => {
+  const headers = { Authorization: `${SCHEME} ${jwt.sign({ tenantId: "tenant-a", email: "a@example.test" }, process.env.JWT_SECRET!)}` };
+  const send = async (csv: string) => {
+    const form = new FormData();
+    form.append("catalogId", "catalog-heberg");
+    form.append("file", new Blob([csv], { type: "text/csv" }), "p.csv");
+    return originalFetch(`${base}/api/catalog/import/parse`, { method: "POST", headers, body: form });
+  };
+  const ok = await (await send("Nom;Prix\nRiad;1\n".replace(/;/g, ","))).json();
+  assert.deepEqual(ok.suggestedMapping.map((m: Row) => m.targetField), ["name", "price"]);
+  assert.equal((await send("")).status, 400);
+  assert.equal((await send("nom,prix\n")).status, 400);
+});
