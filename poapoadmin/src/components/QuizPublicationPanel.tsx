@@ -3,7 +3,7 @@ import type { QuizEditorDraftResponse, QuizPublicationDiagnostic, QuizPublicatio
 import { ApiError, apiFetch } from "../lib/api";
 import type { QuizEditorSession } from "../hooks/useQuizEditorDraft";
 
-export default function QuizPublicationPanel({ editor, quizId, visible, pending, navigate, locate, onLocate, onPublished, onBusyChange }: {
+export default function QuizPublicationPanel({ editor, quizId, visible, pending, navigate, locate, onLocate, onPublished, onBusyChange, primaryAction }: {
   editor: QuizEditorSession; quizId: string; visible: boolean; pending: boolean;
   navigate?: (section: "questions" | "appearance", questionId?: string) => void;
   /** Éditeur unifié : localise un diagnostic dans n'importe quelle section sans quitter la page. */
@@ -11,6 +11,8 @@ export default function QuizPublicationPanel({ editor, quizId, visible, pending,
   onLocate?: (issue: QuizPublicationIssue) => void;
   onPublished: (result: QuizEditorDraftResponse, diagnostic: QuizPublicationDiagnostic) => void;
   onBusyChange: (busy: boolean) => void;
+  /** Action principale « Publier et rendre accessible » : prépare l'activation dans le brouillon, l'enregistre, puis réutilise la vérification et la publication ci-dessous. */
+  primaryAction?: { label: string; prepare: () => Promise<QuizEditorDraftResponse | null> };
 }) {
   const [diagnostic, setDiagnostic] = useState<QuizPublicationDiagnostic | null>(null);
   const [busy, setBusy] = useState(false);
@@ -22,38 +24,68 @@ export default function QuizPublicationPanel({ editor, quizId, visible, pending,
   const stale = diagnostic?.revision !== revision;
   const local = editor.dirty || pending;
   const disabled = busy || editor.loading || editor.saving || !editor.state || local || editor.conflict;
-  async function check() {
-    onBusyChange(true);
-    setBusy(true); setError(""); setSuccess(""); setConfirmed(false); setSharedConfirmed(false);
+  async function runCheck(rev: number | undefined): Promise<QuizPublicationDiagnostic | null> {
     try {
-      setDiagnostic(await apiFetch<QuizPublicationDiagnostic>(`/api/quizzes/${encodeURIComponent(quizId)}/publication/check`, {
-        method: "POST", body: JSON.stringify({ revision }),
-      }));
+      const result = await apiFetch<QuizPublicationDiagnostic>(`/api/quizzes/${encodeURIComponent(quizId)}/publication/check`, {
+        method: "POST", body: JSON.stringify({ revision: rev }),
+      });
+      setDiagnostic(result);
+      return result;
     } catch (err) {
       setDiagnostic(null);
       setError(err instanceof Error ? err.message : "Impossible de vérifier le quiz");
       if (err instanceof ApiError && err.status === 409) editor.fail(err);
-    } finally { setBusy(false); onBusyChange(false); }
+      return null;
+    }
+  }
+  async function runPublish(rev: number | undefined, checked: QuizPublicationDiagnostic): Promise<boolean> {
+    try {
+      const result = await apiFetch<QuizEditorDraftResponse>(`/api/quizzes/${encodeURIComponent(quizId)}/publication/publish`, {
+        method: "POST", body: JSON.stringify({
+          revision: rev, confirm: true,
+          ...(checked.campaigns.length > 1 && { confirmedCampaignIds: checked.campaigns.map((c) => c.id) }),
+        }),
+      });
+      editor.accept(result);
+      onPublished(result, checked);
+      setDiagnostic(null); setConfirmed(false); setSharedConfirmed(false);
+      setSuccess("Quiz publié avec succès. La version publique a été mise à jour ; le brouillon a été réinitialisé.");
+      return true;
+    } catch (err) {
+      setError(`${err instanceof Error ? err.message : "La publication a échoué"} Vos modifications restent enregistrées dans le brouillon : vous pouvez réessayer.`);
+      setDiagnostic(null);
+      if (err instanceof ApiError && err.status === 409) editor.fail(err);
+      return false;
+    }
+  }
+  async function check() {
+    onBusyChange(true);
+    setBusy(true); setError(""); setSuccess(""); setConfirmed(false); setSharedConfirmed(false);
+    await runCheck(revision);
+    setBusy(false); onBusyChange(false);
   }
   async function publish() {
     if (!diagnostic || disabled || stale || !confirmed || (diagnostic.campaigns.length > 1 && !sharedConfirmed)) return;
     setBusy(true); setError(""); setSuccess("");
     onBusyChange(true);
+    await runPublish(revision, diagnostic);
+    setBusy(false); onBusyChange(false);
+  }
+  // Enregistre l'activation dans le brouillon, vérifie, puis publie. Avec plusieurs campagnes
+  // partageant le quiz, on s'arrête sur la confirmation explicite existante.
+  async function publishAndActivate() {
+    if (!primaryAction || busy || editor.loading || editor.saving || editor.conflict || pending) return;
+    onBusyChange(true);
+    setBusy(true); setError(""); setSuccess(""); setConfirmed(false); setSharedConfirmed(false); setDiagnostic(null);
     try {
-      const result = await apiFetch<QuizEditorDraftResponse>(`/api/quizzes/${encodeURIComponent(quizId)}/publication/publish`, {
-        method: "POST", body: JSON.stringify({
-          revision, confirm: true,
-          ...(diagnostic.campaigns.length > 1 && { confirmedCampaignIds: diagnostic.campaigns.map((c) => c.id) }),
-        }),
-      });
-      editor.accept(result);
-      onPublished(result, diagnostic);
-      setDiagnostic(null); setConfirmed(false); setSharedConfirmed(false);
-      setSuccess("Quiz publié avec succès. La version publique a été mise à jour ; le brouillon a été réinitialisé.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "La publication a échoué");
-      setDiagnostic(null);
-      if (err instanceof ApiError && err.status === 409) editor.fail(err);
+      const saved = await primaryAction.prepare();
+      if (!saved) { setError("Le brouillon n'a pas pu être enregistré."); return; }
+      const checked = await runCheck(saved.revision);
+      if (!checked || !checked.valid || !checked.hasChanges || checked.campaigns.length > 1) {
+        if (checked && checked.campaigns.length > 1 && checked.valid) setConfirmed(true);
+        return;
+      }
+      await runPublish(saved.revision, checked);
     } finally { setBusy(false); onBusyChange(false); }
   }
   function issues(items: QuizPublicationIssue[]) {
@@ -73,6 +105,12 @@ export default function QuizPublicationPanel({ editor, quizId, visible, pending,
       Elle ne change aucun statut ni calendrier de campagne.</p>
     <p><strong>{editor.state?.hasChanges ? "Modifications préparatoires enregistrées" : "Aucun brouillon enregistré à publier"}</strong>
       {revision !== undefined && ` — révision ${revision}`}</p>
+    {primaryAction && <div className="publication-primary">
+      <button type="button" id="publish-and-activate" className="btn-primary" disabled={busy || editor.loading || editor.saving || !editor.state || editor.conflict || pending} onClick={() => void publishAndActivate()}>
+        {busy ? "Publication en cours…" : primaryAction.label}
+      </button>
+      <p className="section-hint">Enregistre votre brouillon, le vérifie, puis publie et active l'expérience en une seule étape. Aucune campagne n'est créée ni modifiée.</p>
+    </div>}
     {local && <p role="status" className="quiz-editor-shared">Terminez les formulaires et enregistrez vos modifications locales avant de vérifier ou publier.</p>}
     <button type="button" className="btn-primary" disabled={disabled} onClick={() => void check()}>
       {busy ? "Opération en cours…" : "Vérifier le quiz"}

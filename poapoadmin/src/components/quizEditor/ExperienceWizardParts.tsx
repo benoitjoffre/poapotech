@@ -4,6 +4,7 @@ import type { QuizPublicationDiagnostic } from "@poapo/types";
 import { axisExamples, addExampleAxis, WIZARD_STEPS, type AxisExample } from "../../lib/experienceWizard";
 import { embedSnippet, publicQuizLink } from "../../lib/experienceLinks";
 import type { PublicAvailability } from "../../lib/experiences";
+import type { PublicationStatus } from "../../lib/publicationStatus";
 import type { QuizConfigForm } from "./QuizConfigFields";
 
 export function WizardStepper({ step, maxReached, complete, onSelect }: {
@@ -98,6 +99,19 @@ export function WizardActivation({ form, setForm, disabled }: { form: QuizConfig
   </section>;
 }
 
+/** Statut de publication déduit de l'état renvoyé par l'API ; affiché avant toute confirmation de succès. */
+export function WizardPublicationStatus({ status, error, onRetry }: { status: PublicationStatus | null; error: string; onRetry: () => void }) {
+  if (!status) return <div className="xp-state" role="status">
+    {error ? <><p className="form-error" role="alert">{error}</p><button type="button" className="btn-ghost" onClick={onRetry}>Réessayer</button></> : "Lecture de l'état de publication…"}
+  </div>;
+  return <div className={`xw-status ${status.id}`} data-publication-status={status.id} role="status">
+    <p><strong>{status.label}</strong></p>
+    <p className="section-hint">{status.hint}</p>
+    {error && <p className="form-error" role="alert">{error} <button type="button" className="table-link" onClick={onRetry}>Réessayer</button></p>}
+    {status.id === "disabled" && status.reason === "Boutique désactivée" && <Link className="btn-ghost" to="/settings">Ouvrir les paramètres</Link>}
+  </div>;
+}
+
 export function WizardPublished({ tenantId, quizId, availability, published, onCopyError }: {
   tenantId: string; quizId: string; availability: PublicAvailability; published: QuizPublicationDiagnostic["summary"] | null; onCopyError?: (message: string) => void;
 }) {
@@ -114,9 +128,10 @@ export function WizardPublished({ tenantId, quizId, availability, published, onC
         {availability.accessible ? "Accessible au public" : `Non accessible au public : ${availability.reason?.toLowerCase()}`}
       </li>
     </ul>
-    {!availability.accessible && <p className="xw-note">La version est publiée mais personne ne peut encore l'ouvrir. Retournez à l'étape précédente pour activer l'expérience, ou activez votre boutique dans les paramètres.</p>}
+    {!availability.accessible && <p className="xw-note">La version est publiée mais personne ne peut encore l'ouvrir. Utilisez « Publier et rendre accessible », ou activez votre boutique dans les paramètres.</p>}
     <div className="xw-actions">
       {availability.accessible && <button type="button" className="btn-primary" onClick={() => copy("link", link)}>Copier le lien public</button>}
+      {availability.accessible && <a className="btn-ghost" href={link} target="_blank" rel="noreferrer">Tester l'expérience publiée</a>}
       <button type="button" className="btn-ghost" onClick={() => copy("code", embedSnippet(tenantId, quizId))}>Copier le code d'intégration</button>
       <Link className="btn-ghost" to={`/analytics?quizId=${encodeURIComponent(quizId)}`}>Voir les résultats</Link>
       <Link className="btn-ghost" to="/quizzes">Retour à Mes expériences</Link>

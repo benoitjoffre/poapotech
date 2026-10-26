@@ -54,8 +54,8 @@ export function useQuizEditorDraft(quizId: string | undefined) {
     return () => { cancelled = true; };
   }, [quizId, path, accept]);
 
-  const write = async (method: "PUT" | "DELETE", content = draft) => {
-    if (!state || !content || busy.current) return false;
+  const write = async (method: "PUT" | "DELETE", content = draft): Promise<QuizEditorDraftResponse | null> => {
+    if (!state || !content || busy.current) return null;
     busy.current = true;
     setSaving(true);
     setError("");
@@ -65,10 +65,10 @@ export function useQuizEditorDraft(quizId: string | undefined) {
         body: JSON.stringify({ revision: state.revision, ...(method === "PUT" && { draft: content }) }),
       });
       accept(next);
-      return true;
+      return next;
     } catch (err) {
       fail(err);
-      return false;
+      return null;
     } finally {
       busy.current = false;
       setSaving(false);
@@ -77,8 +77,10 @@ export function useQuizEditorDraft(quizId: string | undefined) {
 
   return {
     state, draft, setDraft, loading, saving, dirty, error, conflict, load, accept, fail,
-    save: (content = draft) => write("PUT", content),
-    discard: () => write("DELETE"),
+    save: async (content = draft) => (await write("PUT", content)) !== null,
+    /** Comme `save`, mais renvoie la réponse serveur (révision à jour) ou null en cas d'échec. */
+    persist: (content = draft) => write("PUT", content),
+    discard: async () => (await write("DELETE")) !== null,
   };
 }
 

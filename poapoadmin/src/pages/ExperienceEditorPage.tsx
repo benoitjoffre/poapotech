@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import type { Campaign, CampaignListResponse, Quiz, QuizBranding, QuizEditorDraft, QuizPublicationDiagnostic, QuizPublicationIssue } from "@poapo/types";
+import type { Campaign, CampaignListResponse, ExperiencesOverview, Quiz, QuizBranding, QuizEditorDraft, QuizPublicationDiagnostic, QuizPublicationIssue } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 import { useCatalogs } from "../lib/catalogs";
 import { publicQuizLink } from "../lib/experienceLinks";
@@ -18,9 +18,10 @@ import {
 import { recommendableProducts } from "../components/quizEditor/ExperienceProductsSummary";
 import { issueTarget } from "../lib/publicationIssues";
 import { publicAvailability } from "../lib/experiences";
+import { canPublishAndActivate, publicationStatus, type ServerPublicationState } from "../lib/publicationStatus";
 import { experienceEditorPath, experienceSetupPath } from "../lib/experienceLinks";
 import { parseStep, resumeStep, stepComplete, WIZARD_STEPS, type WizardProgress } from "../lib/experienceWizard";
-import { WizardActivation, WizardFooter, WizardPreferencesIntro, WizardProductsIntro, WizardPublished, WizardStepper } from "../components/quizEditor/ExperienceWizardParts";
+import { WizardActivation, WizardFooter, WizardPreferencesIntro, WizardProductsIntro, WizardPublished, WizardPublicationStatus, WizardStepper } from "../components/quizEditor/ExperienceWizardParts";
 import "../components/quizEditor/experienceEditor.css";
 import "../components/quizEditor/experienceWizard.css";
 import "../components/experiences/experiences.css";
@@ -140,6 +141,21 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
     setMaxReached((current) => Math.max(current, next));
     setWizardError("");
   }, []);
+  // État public réel renvoyé par l'API (jamais déduit de l'interface seule) ; rechargé après chaque publication.
+  const [server, setServer] = useState<ServerPublicationState | null>(null);
+  const [serverError, setServerError] = useState("");
+  const refreshServer = useCallback(async () => {
+    try {
+      const overview = await apiFetch<ExperiencesOverview>("/api/experiences");
+      const item = overview.experiences.find((entry) => entry.id === quiz.id);
+      if (!item) throw new Error("Expérience introuvable");
+      setServer({ shopActive: overview.shopActive, accessible: item.accessible, questionCount: item.questionCount, hasDraft: item.hasDraft });
+      setServerError("");
+    } catch (err) {
+      setServerError(err instanceof Error ? err.message : "Impossible de lire l'état de publication");
+    }
+  }, [quiz.id]);
+  useEffect(() => { void refreshServer(); }, [refreshServer]);
   const { products, loading: productsLoading, error: productsError, loadedFor } = useCatalogProducts(form.catalogId);
 
   // Le formulaire local repart du brouillon serveur à chaque chargement, sauvegarde, import ou abandon.
@@ -165,6 +181,23 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
     if (problem || !editor.draft) return;
     editor.setDraft((current) => current ? { ...current, config: toDraftConfig(form) } : current);
     setApplied(true);
+  };
+
+  const localChanges = formDirty || builderPending || editor.dirty;
+  const status = server ? publicationStatus({ ...server, hasDraft: server.hasDraft || !!editor.state?.hasChanges }, localChanges) : null;
+
+  // « Publier et rendre accessible » : l'activation est portée par le brouillon, enregistrée ici,
+  // puis appliquée atomiquement par la publication existante (jamais par le simple enregistrement).
+  const prepareActivation = async () => {
+    setWizardError("");
+    if (!editor.draft) return null;
+    const problem = validateConfig(form);
+    setFormError(problem);
+    if (problem) { setWizardError(problem); return null; }
+    const next = { ...editor.draft, config: { ...toDraftConfig(form), active: true } };
+    editor.setDraft(next);
+    setForm({ ...form, active: true });
+    return editor.persist(next);
   };
 
   const state = useMemo(() => {
@@ -277,6 +310,7 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
       </div>
       <ul className="xp-badges xe-chips" aria-label="Résumé de l'expérience">
         <li className={`xp-badge ${availability.accessible ? "public" : "inactive"}`}>Public : {availability.accessible ? "accessible" : `désactivé (${availability.reason?.toLowerCase()})`}</li>
+        {status && <li className={`xp-badge xe-publication ${status.id}`} data-publication={status.id}>{status.label}</li>}
         {config && config.active !== quiz.active && <li className="xp-badge draft">Activation préparée : effective à la publication</li>}
         <li className={`xp-badge xe-state ${state.id}`} data-state={state.id} role="status">{state.label}</li>
         <li className="xp-badge">Catalogue : {catalogName}</li>
@@ -318,9 +352,12 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
             visible={show("preview")} pending={pending} />}
           renderPublication={(session, pending, onBusyChange) => <QuizPublicationPanel editor={session} quizId={quiz.id}
             pending={pending} onBusyChange={onBusyChange} visible={show("publication")} navigate={goTo}
+            primaryAction={wizard && status && canPublishAndActivate(status, server?.shopActive ?? true)
+              ? { label: "Publier et rendre accessible", prepare: prepareActivation } : undefined}
             locate={locateIssue} onLocate={(issue) => { const target = locateIssue(issue); if (target) focusTarget(target.section, target.elementId); }}
             onPublished={(result, diagnostic) => {
               setPublished(diagnostic.summary);
+              void refreshServer();
               setQuiz((current) => ({
                 ...current, ...result.draft.config,
                 catalog: { ...current.catalog, id: diagnostic.summary.catalogId, name: diagnostic.summary.catalogName },
@@ -364,7 +401,9 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
           <WizardActivation form={form} setForm={setForm} disabled={!editor.draft || editor.saving} />
           {(formDirty || editor.dirty) && <button type="button" className="btn-primary" disabled={wizardBusy || editor.saving} onClick={() => void commit()}>Appliquer et enregistrer</button>}
           <p className="section-hint">L'activation est préparée dans le brouillon et ne devient effective qu'à la publication de la révision enregistrée.</p>
-          <WizardPublished tenantId={quiz.tenantId} quizId={quiz.id} availability={availability} published={published} />
+          <WizardPublicationStatus status={status} error={serverError} onRetry={() => void refreshServer()} />
+          {status && (status.id === "live" || status.id === "disabled") && !localChanges &&
+            <WizardPublished tenantId={quiz.tenantId} quizId={quiz.id} availability={server ? { accessible: server.accessible, label: status?.label ?? "", reason: status?.reason ?? null } : availability} published={published} />}
         </section>}
         {wizard && step !== null && <WizardFooter step={step} busy={wizardBusy || editor.saving}
           canContinue={step < WIZARD_STEPS.length} continueLabel="Enregistrer et continuer" error={wizardError}

@@ -36,3 +36,8 @@
   .xw-stepper { padding: 8px; }
   .xw-footer .btn-primary, .xw-footer .btn-ghost { flex: 1 1 100%; margin-left: 0; }
 }
+.xw-status { margin: 0; padding: 10px 12px; border-left: 3px solid #b8860b; background: #fff8e6; border-radius: 6px; }
+.xw-status.live { border-color: #1b8a4b; background: #eefaf2; }
+.xw-status.disabled { border-color: #c0392b; background: #fdf0ee; }
+.xw-status p { margin: 0 0 4px; }
+.publication-primary { margin: 12px 0; display: grid; gap: 6px; }
