@@ -129,6 +129,15 @@ before(async () => {
     products.push(row);
     return row;
   }) as unknown as typeof prisma.product.create);
+  stub(prisma.product, "createManyAndReturn", (async ({ data }: { data: Row[] }) => data.map((row) => {
+    const product = { id: `product-${++sequence}`, ...row };
+    products.push(product);
+    return { id: product.id };
+  })) as unknown as typeof prisma.product.createManyAndReturn);
+  stub(prisma.importBatch, "findUnique", (async () => null) as unknown as typeof prisma.importBatch.findUnique);
+  stub(prisma.importBatch, "findFirst", (async () => null) as unknown as typeof prisma.importBatch.findFirst);
+  stub(prisma.importBatch, "create", (async () => ({})) as unknown as typeof prisma.importBatch.create);
+  stub(prisma.importBatch, "update", (async () => ({})) as unknown as typeof prisma.importBatch.update);
   stub(prisma.product, "update", (async ({ where, data }: { where: Row; data: Row }) => {
     const row = products.find((p) => p.id === where.id)!;
     Object.assign(row, data);

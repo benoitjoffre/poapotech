@@ -48,6 +48,7 @@ export default function ImportPage() {
   );
   const catalogPath = catalogId ? `/catalog?catalogId=${encodeURIComponent(catalogId)}` : "/catalog";
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const importKey = useRef(crypto.randomUUID());
 
   const [step, setStep] = useState<Step>(1);
   const [file, setFile] = useState<File | null>(null);
@@ -131,6 +132,7 @@ export default function ImportPage() {
       });
       const data = (await res.json()) as ImportPreview & { error?: string };
       if (!res.ok) throw new Error(data.error ?? `Erreur ${res.status}`);
+      importKey.current = crypto.randomUUID();
       setPreview(data);
       setStep(3);
     } catch (err) {
@@ -141,17 +143,26 @@ export default function ImportPage() {
   };
 
   // Seule action qui écrit : déclenchée par le bouton de confirmation.
-  const handleExecute = async () => {
+  // La clé d'idempotence est liée à la prévisualisation : un rejeu (double clic, coupure réseau) ne recrée rien.
+  const handleExecute = async (allowDuplicate = false) => {
     if (!parsedData || !preview?.canImport) return;
+    if (allowDuplicate) importKey.current = crypto.randomUUID();
     setIsLoading(true);
     setError("");
     try {
       const res = await fetch("/api/catalog/import/execute", {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
-        body: JSON.stringify({ mapping, rows: parsedData.rows, catalogId }),
+        headers: { "Content-Type": "application/json", "Idempotency-Key": importKey.current, ...authHeaders },
+        body: JSON.stringify({ mapping, rows: parsedData.rows, catalogId, allowDuplicate }),
       });
-      const data = (await res.json()) as ImportResult & { error?: string };
+      const data = (await res.json()) as ImportResult & { error?: string; code?: string };
+      if (res.status === 409 && data.code === "duplicate_import") {
+        setIsLoading(false);
+        if (window.confirm("Ce fichier a déjà été importé dans ce catalogue. Importer à nouveau crée des doublons. Continuer ?")) {
+          await handleExecute(true);
+        }
+        return;
+      }
       if (!res.ok) throw new Error(data.error ?? `Erreur ${res.status}`);
       setResult(data);
     } catch (err) {
@@ -407,7 +418,7 @@ export default function ImportPage() {
 
           <div className="form-actions">
             <button type="button" className="btn-ghost" disabled={isLoading} onClick={() => navigate(catalogPath)}>Annuler sans importer</button>
-            <button type="button" className="btn-primary" disabled={isLoading || !preview.canImport} onClick={handleExecute}>
+            <button type="button" className="btn-primary" disabled={isLoading || !preview.canImport} onClick={() => handleExecute()}>
               {isLoading ? "Import en cours..." : `Confirmer l'import de ${plural(preview.valid, "produit")}`}
             </button>
           </div>

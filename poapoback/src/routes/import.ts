@@ -1,7 +1,9 @@
 import { Router, Response } from "express";
 import multer from "multer";
 import csvParser from "csv-parser";
+import { createHash, randomUUID } from "node:crypto";
 import { Readable } from "stream";
+import { Prisma } from "@prisma/client";
 import { verifyToken, AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { catalogAxes, resolveAccountTenantId, resolveCatalog, toCatalogRef } from "../services/catalogs";
@@ -149,6 +151,7 @@ router.post("/parse", verifyToken, upload.single("file"), asyncRoute(async (req:
 // ─── Évaluation commune (prévisualisation et import) ─────────────────────────
 const MAX_ROWS = 5000;
 const MAX_REPORTED_ISSUES = 100;
+const STALE_IMPORT_MS = 10 * 60 * 1000;
 
 type RowEvaluation = { line: number; data: Record<string, unknown> | null; issues: ImportIssue[] };
 
@@ -243,50 +246,111 @@ router.post("/execute", verifyToken, asyncRoute(async (req: AuthRequest, res: Re
     res.status(400).json({ error: blocking.map((i) => i.message).join(" "), issues: blocking });
     return;
   }
-  let created = 0;
-  let skipped = 0;
-  const createdIds: string[] = [];
-  const errors: string[] = [];
+  const fingerprint = createHash("sha256")
+    .update(`${catalog.id}\n${JSON.stringify(req.body.mapping)}\n${JSON.stringify(req.body.rows)}`)
+    .digest("hex");
+  const clientKey = String(req.get("Idempotency-Key") ?? req.body?.importKey ?? "").trim().slice(0, 200);
+  const allowDuplicate = req.body?.allowDuplicate === true;
+  const key = clientKey || `fp:${fingerprint}${allowDuplicate ? `:${randomUUID()}` : ""}`;
+  const scope = { tenantId, catalogId: catalog.id };
+  const inProgress = { error: "Cet import est déjà en cours.", code: "import_in_progress" };
 
-  for (const { line, data, issues } of evaluations) {
-    if (!data) {
-      skipped++;
-      if (errors.length < 5) errors.push(`Ligne ${line} : ${issues[0]?.message ?? "invalide"}`);
-      continue;
+  // Idempotence : un rejeu (double clic, coupure réseau) renvoie le résultat déjà obtenu sans recréer de produit.
+  const existing = await prisma.importBatch.findUnique({ where: { tenantId_catalogId_key: { ...scope, key } } });
+  if (existing) {
+    if (existing.fingerprint !== fingerprint) {
+      res.status(422).json({ error: "Cette clé d'import a déjà servi pour un fichier différent.", code: "idempotency_key_reused" });
+      return;
+    }
+    if (existing.status === "completed") {
+      res.json({ ...(existing.result as object), replayed: true });
+      return;
+    }
+    if (existing.status === "processing" && Date.now() - existing.updatedAt.getTime() < STALE_IMPORT_MS) {
+      res.status(409).json(inProgress);
+      return;
+    }
+    // Import interrompu ou en échec : l'insertion est atomique, aucun produit à nettoyer — on le reprend.
+    const claimed = await prisma.importBatch.updateMany({
+      where: { id: existing.id, updatedAt: existing.updatedAt },
+      data: { status: "processing" },
+    });
+    if (claimed.count === 0) {
+      res.status(409).json(inProgress);
+      return;
+    }
+  } else {
+    if (!allowDuplicate) {
+      const duplicate = await prisma.importBatch.findFirst({
+        where: { ...scope, fingerprint, status: "completed" },
+        orderBy: { createdAt: "desc" },
+      });
+      if (duplicate) {
+        res.status(409).json({
+          error: "Ce fichier a déjà été importé dans ce catalogue. Relancez avec allowDuplicate pour importer à nouveau.",
+          code: "duplicate_import",
+          previous: duplicate.result,
+          importedAt: duplicate.createdAt,
+        });
+        return;
+      }
     }
     try {
-      const product = await prisma.product.create({
-        data: {
+      await prisma.importBatch.create({ data: { ...scope, key, fingerprint } });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        res.status(409).json(inProgress);
+        return;
+      }
+      throw err;
+    }
+  }
+  const batchKey = { tenantId_catalogId_key: { ...scope, key } };
+
+  const valid = evaluations.filter((e) => e.data);
+  const errors = evaluations
+    .filter((e) => !e.data)
+    .slice(0, 5)
+    .map((e) => `Ligne ${e.line} : ${e.issues[0]?.message ?? "invalide"}`);
+  let createdIds: string[];
+  try {
+    // Tout ou rien : une interruption ne laisse jamais d'import partiel.
+    const products = await prisma.product.createManyAndReturn({
+      select: { id: true },
+      data: valid.map(({ data }) => {
+        const d = data as Record<string, unknown>;
+        return {
           tenantId,
           catalogId: catalog.id,
-          name: (data.name as string).trim(),
-          brand: typeof data.brand === "string" ? data.brand : null,
-          description: typeof data.description === "string" ? data.description : null,
-          price: typeof data.price === "number" ? data.price : null,
-          imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : null,
-          purchaseUrl: typeof data.purchaseUrl === "string" ? data.purchaseUrl : null,
-          tags: Array.isArray(data.tags) ? (data.tags as string[]) : [],
+          name: (d.name as string).trim(),
+          brand: typeof d.brand === "string" ? d.brand : null,
+          description: typeof d.description === "string" ? d.description : null,
+          price: typeof d.price === "number" ? d.price : null,
+          imageUrl: typeof d.imageUrl === "string" ? d.imageUrl : null,
+          purchaseUrl: typeof d.purchaseUrl === "string" ? d.purchaseUrl : null,
+          tags: Array.isArray(d.tags) ? (d.tags as string[]) : [],
           attributes:
-            typeof data.attributes === "object" && data.attributes !== null && !Array.isArray(data.attributes)
-              ? (data.attributes as object)
+            typeof d.attributes === "object" && d.attributes !== null && !Array.isArray(d.attributes)
+              ? (d.attributes as object)
               : {},
-          active: typeof data.active === "boolean" ? data.active : true,
-          featured: typeof data.featured === "boolean" ? data.featured : false,
-        },
-      });
-      createdIds.push(product.id);
-      created++;
-    } catch (err) {
-      skipped++;
-      if (errors.length < 5) errors.push(`Ligne ${line} : ${err instanceof Error ? err.message : String(err)}`);
-    }
+          active: typeof d.active === "boolean" ? d.active : true,
+          featured: typeof d.featured === "boolean" ? d.featured : false,
+        };
+      }),
+    });
+    createdIds = products.map((p) => p.id);
+  } catch (err) {
+    await prisma.importBatch.update({ where: batchKey, data: { status: "failed" } }).catch(console.error);
+    throw err;
   }
 
   // Embeddings locaux (poapoai, sans OpenAI) en arrière-plan : ils pèsent 60 % du score de recommandation.
   // Aucun état de préparation n'est exposé par l'API : on indique seulement si la demande a été lancée.
   const embeddings = createdIds.length === 0 ? "none" : process.env.AI_SERVICE_URL ? "queued" : "unavailable";
+  const result = { created: createdIds.length, skipped: evaluations.length - createdIds.length, errors, embeddings, catalog: toCatalogRef(catalog) };
+  await prisma.importBatch.update({ where: batchKey, data: { status: "completed", result: result as unknown as Prisma.InputJsonObject } });
   if (embeddings === "queued") triggerEmbeddings(createdIds, tenantId).catch(console.error);
-  res.json({ created, skipped, errors, embeddings, catalog: toCatalogRef(catalog) });
+  res.json(result);
 }));
 
 export default router;

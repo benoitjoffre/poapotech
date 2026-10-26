@@ -19,7 +19,7 @@ model Tenant {
   name         String?
   // Libellé libre de l'activité
   industry     String   @default("")
-  primaryColor String?  @default("#0d9488")
+  primaryColor String?  @default("#6C47FF")
   logoUrl      String?
   quizTitle    String?  @default("Trouve ton produit idéal")
   ctaText      String?  @default("Découvrir ma sélection")
@@ -28,14 +28,15 @@ model Tenant {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  magicTokens  MagicToken[]
-  products     Product[]
-  quizzes      Quiz[]
-  questions    Question[]
-  sessions     QuizSession[]
-  metrics      Metric[]
-  campaigns    Campaign[]
-  catalogs     Catalog[]
+  magicTokens   MagicToken[]
+  products      Product[]
+  quizzes       Quiz[]
+  questions     Question[]
+  sessions      QuizSession[]
+  metrics       Metric[]
+  campaigns     Campaign[]
+  catalogs      Catalog[]
+  importBatches ImportBatch[]
 }
 
 // ─────────────────────────────────────────────
@@ -51,13 +52,37 @@ model Catalog {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  products    Product[]
-  quizzes     Quiz[]
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  products      Product[]
+  quizzes       Quiz[]
+  importBatches ImportBatch[]
 
   @@unique([tenantId, id])
   @@unique([tenantId, name])
   @@index([tenantId])
+}
+
+// ─────────────────────────────────────────────
+// ImportBatch — idempotence des imports CSV (une ligne par tentative d'import)
+// ─────────────────────────────────────────────
+model ImportBatch {
+  id          String   @id @default(cuid())
+  tenantId    String
+  catalogId   String
+  // Clé d'idempotence fournie par le client, ou empreinte du contenu
+  key         String
+  // SHA-256 du catalogue, du mapping et des lignes
+  fingerprint String
+  status      String   @default("processing")
+  result      Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  catalog Catalog @relation(fields: [tenantId, catalogId], references: [tenantId, id], onDelete: Cascade)
+
+  @@unique([tenantId, catalogId, key])
+  @@index([tenantId, catalogId, fingerprint])
 }
 
 model Quiz {
@@ -80,15 +105,15 @@ model Quiz {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   // Clé composite : le catalogue appartient au même tenant que le quiz
-  catalog        Catalog       @relation(fields: [tenantId, catalogId], references: [tenantId, id], onDelete: NoAction)
-  questions      Question[]
-  sessions       QuizSession[]
-  metrics        Metric[]
-  products       QuizProduct[]
-  campaigns      Campaign[]
-  editorDraft    QuizEditorDraft?
+  catalog     Catalog          @relation(fields: [tenantId, catalogId], references: [tenantId, id], onDelete: NoAction)
+  questions   Question[]
+  sessions    QuizSession[]
+  metrics     Metric[]
+  products    QuizProduct[]
+  campaigns   Campaign[]
+  editorDraft QuizEditorDraft?
 
   @@unique([tenantId, id])
   @@unique([catalogId, id])
@@ -131,9 +156,9 @@ model Campaign {
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
-  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   // Clé composite : une campagne ne peut référencer qu'un quiz de son propre tenant
-  quiz          Quiz             @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
+  quiz   Quiz   @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
 
   @@index([tenantId, status])
   @@index([tenantId, quizId])
@@ -162,7 +187,7 @@ model MagicToken {
   used      Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tokenHash])
 }
@@ -171,30 +196,30 @@ model MagicToken {
 // Product (catalogue)
 // ─────────────────────────────────────────────
 model Product {
-  id            String    @id @default(cuid())
-  tenantId      String
-  catalogId     String
-  name          String
-  brand         String?
-  description   String?
-  price         Float?
-  imageUrl      String?
-  purchaseUrl   String?
-  active        Boolean   @default(true)
-  featured      Boolean   @default(false)
-  tags          String[]
+  id          String   @id @default(cuid())
+  tenantId    String
+  catalogId   String
+  name        String
+  brand       String?
+  description String?
+  price       Float?
+  imageUrl    String?
+  purchaseUrl String?
+  active      Boolean  @default(true)
+  featured    Boolean  @default(false)
+  tags        String[]
   // Caractéristiques propres à l'activité : valeurs des axes du quiz (0–1) et attributs libres
-  attributes    Json      @default("{}")
+  attributes  Json     @default("{}")
   // AI embedding stored as JSON array (pgvector via raw SQL for queries)
-  embedding     Json?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  embedding   Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   // Clé composite : le catalogue appartient au même tenant que le produit
-  catalog       Catalog   @relation(fields: [tenantId, catalogId], references: [tenantId, id], onDelete: NoAction)
-  sessions      QuizSession[]
-  quizzes       QuizProduct[]
+  catalog  Catalog       @relation(fields: [tenantId, catalogId], references: [tenantId, id], onDelete: NoAction)
+  sessions QuizSession[]
+  quizzes  QuizProduct[]
 
   @@unique([catalogId, id])
   @@index([tenantId])
@@ -210,22 +235,22 @@ model Question {
   tenantId          String
   quizId            String
   text              String
-  helpText          String?      // hint affiché sous la question
+  helpText          String? // hint affiché sous la question
   type              QuestionType @default(single)
-  imageUrl          String?      // illustration optionnelle
+  imageUrl          String? // illustration optionnelle
   order             Int          @default(0)
   active            Boolean      @default(true)
   // Conditional display: show only if a specific answer was selected
-  conditionAnswerId String?      // null = always shown
+  conditionAnswerId String? // null = always shown
   // A/B testing: assign question to a named variant ("A", "B", null = all)
   abVariant         String?
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
 
-  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  quiz              Quiz         @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
-  answers           Answer[]     @relation("QuestionAnswers")
-  conditionAnswer   Answer?      @relation("QuestionCondition", fields: [conditionAnswerId], references: [id], onDelete: SetNull)
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quiz            Quiz     @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
+  answers         Answer[] @relation("QuestionAnswers")
+  conditionAnswer Answer?  @relation("QuestionCondition", fields: [conditionAnswerId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, order])
   @@index([quizId, order])
@@ -233,17 +258,17 @@ model Question {
 }
 
 model Answer {
-  id         String     @id @default(cuid())
+  id         String   @id @default(cuid())
   questionId String
   text       String
-  emoji      String?    // emoji ou icône courte
-  imageUrl   String?    // image illustrant la réponse
-  order      Int        @default(0)
-  active     Boolean    @default(true)
+  emoji      String? // emoji ou icône courte
+  imageUrl   String? // image illustrant la réponse
+  order      Int      @default(0)
+  active     Boolean  @default(true)
   // Impacts sur les axes du quiz : { <clé d'axe>: delta }
-  impacts    Json       @default("{}")
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  impacts    Json     @default("{}")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   question            Question   @relation("QuestionAnswers", fields: [questionId], references: [id], onDelete: Cascade)
   conditionalQuestion Question[] @relation("QuestionCondition")
@@ -255,22 +280,22 @@ model Answer {
 // Quiz Session
 // ─────────────────────────────────────────────
 model QuizSession {
-  id              String    @id @default(cuid())
+  id              String        @id @default(cuid())
   tenantId        String
   quizId          String
   // Stored as JSON: [{ questionId, answerId }]
-  answers         Json      @default("[]")
+  answers         Json          @default("[]")
   resultProductId String?
   feedback        FeedbackType?
   feedbackReasons String[]
-  decisionTime    Int?      // seconds
-  abVariant       String?   // A/B variant assigned to this session
+  decisionTime    Int? // seconds
+  abVariant       String? // A/B variant assigned to this session
   completedAt     DateTime?
-  createdAt       DateTime  @default(now())
+  createdAt       DateTime      @default(now())
 
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  quiz            Quiz      @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
-  resultProduct   Product?  @relation(fields: [resultProductId], references: [id])
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quiz          Quiz     @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
+  resultProduct Product? @relation(fields: [resultProductId], references: [id])
 
   @@index([tenantId])
   @@index([tenantId, createdAt])
@@ -288,8 +313,8 @@ model Metric {
   payload   Json       @default("{}")
   createdAt DateTime   @default(now())
 
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  quiz      Quiz       @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  quiz   Quiz   @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
 
   @@index([tenantId, type])
   @@index([tenantId, createdAt])
