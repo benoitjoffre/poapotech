@@ -13,6 +13,7 @@ import "../components/quizEditor/experienceWizard.css";
 export default function ExperienceCreatePage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const manual = params.get("mode") === "manual";
   const { catalogs, loading, error: catalogsError, reload } = useCatalogs();
   const requested = params.get("catalogId") ?? "";
   const [chosen, setChosen] = useState(requested);
@@ -46,8 +47,26 @@ export default function ExperienceCreatePage() {
     }
   }
 
-  return <div className="page experience-editor xw-create">
+  if (!manual) return <div className="page experience-editor xw-create">
     <Link className="table-link" to="/quizzes">← Retour aux expériences</Link>
+    <h1 className="page-title">Créer une expérience</h1>
+    <p className="section-hint">Choisissez comment démarrer. Vous pourrez tout modifier avant de publier.</p>
+    <div className="xw-card">
+      <Link className="btn-primary" to="/experiences/new/express">Création express — recommandée</Link>
+      <p className="section-hint">POAPO analyse votre catalogue et prépare les critères, les questions et les réponses. Vous relisez, testez, puis enregistrez un brouillon.</p>
+    </div>
+    <div className="xw-card">
+      <Link className="btn-ghost" to="/experiences/new/express?mode=template">Partir d'un modèle</Link>
+      <p className="section-hint">Café, parfum, voyage ou mode : un jeu de critères et de questions types, adapté à ce que contiennent réellement vos produits.</p>
+    </div>
+    <div className="xw-card">
+      <Link className="btn-ghost" to="/experiences/new?mode=manual">Création manuelle — avancée</Link>
+      <p className="section-hint">Vous définissez vous-même les axes, les questions et les impacts, avec l'assistant en cinq étapes. L'import CSV reste disponible depuis le catalogue.</p>
+    </div>
+  </div>;
+
+  return <div className="page experience-editor xw-create">
+    <Link className="table-link" to="/experiences/new">← Autres façons de créer</Link>
     <h1 className="page-title">Créer une expérience</h1>
     <p className="section-hint">Un assistant en cinq étapes vous guide : produits, préférences, questions, apparence puis publication. Aucune campagne n'est nécessaire.</p>
     {loading && <div className="loading-block" role="status">Chargement de vos catalogues…</div>}

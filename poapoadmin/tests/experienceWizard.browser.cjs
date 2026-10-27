@@ -52,7 +52,7 @@ async function main() {
   const next = () => page.getByRole("button", { name: "Enregistrer et continuer" });
 
   // 1. Nouveau commerçant : un seul catalogue, sélectionné automatiquement, aucune campagne.
-  await page.goto(`${admin}/experiences/new`);
+  await page.goto(`${admin}/experiences/new?mode=manual`);
   await page.getByRole("heading", { name: "Créer une expérience", level: 1 }).waitFor();
   await page.getByText("sélectionné automatiquement").waitFor();
   eq(await page.locator('input[type="radio"]').count(), 0, "catalogue unique : pas de choix");
@@ -192,7 +192,7 @@ async function main() {
 
   // 9. Catalogues multiples : choix explicite ; catalogue étranger inaccessible.
   const second = await prisma.catalog.create({ data: { tenantId, name: "Cafés" } });
-  await page.goto(`${admin}/experiences/new`);
+  await page.goto(`${admin}/experiences/new?mode=manual`);
   await page.getByRole("heading", { name: "Créer une expérience", level: 1 }).waitFor();
   await page.locator('input[type="radio"]').first().waitFor();
   eq(await page.locator('input[type="radio"]').count(), 2, "deux catalogues : choix explicite");

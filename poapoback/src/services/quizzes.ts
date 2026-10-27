@@ -1,3 +1,4 @@
+import { AuthError } from "./auth0";
 import type { RequestHandler, ErrorRequestHandler, Response } from "express";
 import { Prisma } from "@prisma/client";
 import type { QuizAxis } from "@poapo/types";
@@ -137,6 +138,10 @@ export const adminQuizScope: RequestHandler = (req: AuthRequest, res, next) => {
 export const quizErrorHandler: ErrorRequestHandler = (err: unknown, _req, res, _next) => {
   if (err instanceof QuizError) {
     res.status(err.status).json({ error: err.message, ...("diagnostic" in err && { diagnostic: err.diagnostic }) });
+    return;
+  }
+  if (err instanceof AuthError) {
+    res.status(err.status).json({ error: err.message, ...(err.code && { code: err.code }) });
     return;
   }
   // Clé étrangère composite refusée par PostgreSQL (ex. catalogues mélangés lors d'une écriture concurrente).

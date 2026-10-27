@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import multer from "multer";
 import csvParser from "csv-parser";
+import { detectCsvSeparator } from "../services/csv";
 import { createHash, randomUUID } from "node:crypto";
 import { Readable } from "stream";
 import { Prisma } from "@prisma/client";
@@ -39,7 +40,7 @@ function parseCSVBuffer(buffer: Buffer): Promise<{ headers: string[]; rows: Reco
     const stream = Readable.from([buffer]);
 
     stream
-      .pipe(csvParser())
+      .pipe(csvParser({ separator: detectCsvSeparator(buffer) }))
       .on("data", (row: Record<string, string>) => rows.push(row))
       .on("end", () => {
         const headers = rows.length > 0 ? Object.keys(rows[0]) : [];

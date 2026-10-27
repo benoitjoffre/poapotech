@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function LoginPage() {
-  const { token, user, login } = useAuth();
+  const { token, user, login, auth0, signIn, loading } = useAuth();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState("");
@@ -32,7 +32,7 @@ export default function LoginPage() {
   }
 
   useEffect(() => {
-    if (token) navigate(user?.isSuperAdmin ? "/admin/tenants" : "/", { replace: true });
+    if (token && user) navigate(user.onboardingRequired ? "/onboarding" : user.isSuperAdmin ? "/admin/tenants" : "/", { replace: true });
   }, [token, user, navigate]);
 
   const handleSubmitMagic = async (e: React.FormEvent) => {
@@ -83,6 +83,22 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
+
+  if (auth0) {
+    return (
+      <div className="login-page">
+        <div className="login-card">
+          <div className="login-logo">poapo</div>
+          <div className="login-title">Votre espace commerçant</div>
+          <p style={{ margin: "1rem 0" }}>Connectez-vous ou créez votre compte pour configurer votre boutique.</p>
+          <div style={{ display: "grid", gap: "0.5rem" }}>
+            <button type="button" className="btn-primary" disabled={loading} onClick={() => void signIn(false)}>Se connecter</button>
+            <button type="button" className="btn-primary" style={{ opacity: 0.8 }} disabled={loading} onClick={() => void signIn(true)}>Créer mon compte</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="login-page">

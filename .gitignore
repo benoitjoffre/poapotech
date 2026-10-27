@@ -31,3 +31,4 @@ Thumbs.db
 
 # Cache du modèle d'embeddings (téléchargé au build)
 poapoai/.hf-cache/
+**/.env.local

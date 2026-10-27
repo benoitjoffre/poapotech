@@ -112,16 +112,7 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
     const url = `${apiBaseUrl}/api/quiz/track`;
     const body = JSON.stringify({ clientId, quizId, type, payload });
 
-    try {
-      if (typeof navigator !== "undefined" && "sendBeacon" in navigator) {
-        const blob = new Blob([body], { type: "application/json" });
-        const sent = navigator.sendBeacon(url, blob);
-        if (sent) return;
-      }
-    } catch {
-      // fallback below
-    }
-
+    // fetch keepalive plutôt que sendBeacon : le beacon est toujours « avec credentials », refusé par Access-Control-Allow-Origin: * (API publique).
     void fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

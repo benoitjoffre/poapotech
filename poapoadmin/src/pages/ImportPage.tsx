@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getToken } from "../lib/api";
+import { apiUrl, authHeader } from "../lib/api";
 import EmbeddingStatus from "../components/EmbeddingStatus";
 import { useQuiz } from "../contexts/QuizContext";
 import { catalogAxes, CatalogSelect, useCatalogSelection } from "../lib/catalogs";
@@ -61,7 +61,6 @@ export default function ImportPage() {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [result, setResult] = useState<ImportResult | null>(null);
 
-  const authHeaders = { Authorization: `Bearer ${getToken() ?? ""}` };
   const duplicates = useMemo(() => duplicateTargets(mapping), [mapping]);
   const hasNameField = mapping.some((m) => m.targetField === "name");
   const ignoredColumns = mapping.filter((m) => !m.targetField);
@@ -100,7 +99,7 @@ export default function ImportPage() {
     formData.append("file", file);
     if (catalogId) formData.append("catalogId", catalogId);
     try {
-      const res = await fetch("/api/catalog/import/parse", { method: "POST", headers: authHeaders, body: formData });
+      const res = await fetch(apiUrl("/api/catalog/import/parse"), { method: "POST", headers: await authHeader(), body: formData });
       const data = (await res.json()) as ParsedData & { error?: string };
       if (!res.ok) throw new Error(data.error ?? `Erreur ${res.status}`);
       if (data.total === 0) throw new Error("Le fichier ne contient aucune ligne de données sous l'en-tête.");
@@ -126,9 +125,9 @@ export default function ImportPage() {
     setIsLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/catalog/import/preview", {
+      const res = await fetch(apiUrl("/api/catalog/import/preview"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", ...authHeaders },
+        headers: { "Content-Type": "application/json", ...(await authHeader()) },
         body: JSON.stringify({ mapping, rows: parsedData.rows, catalogId }),
       });
       const data = (await res.json()) as ImportPreview & { error?: string };
@@ -151,9 +150,9 @@ export default function ImportPage() {
     setIsLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/catalog/import/execute", {
+      const res = await fetch(apiUrl("/api/catalog/import/execute"), {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Idempotency-Key": importKey.current, ...authHeaders },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": importKey.current, ...(await authHeader()) },
         body: JSON.stringify({ mapping, rows: parsedData.rows, catalogId, allowDuplicate }),
       });
       const data = (await res.json()) as ImportResult & { error?: string; code?: string };

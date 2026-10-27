@@ -331,6 +331,10 @@ export interface AuthToken {
   tenantId: string;
   email: string;
   isSuperAdmin?: boolean;
+  /** Identité Auth0 valide sans boutique : l'administration affiche l'onboarding. */
+  onboardingRequired?: boolean;
+  emailVerified?: boolean;
+  role?: "OWNER" | "ADMIN" | "MEMBER";
   iat?: number;
   exp?: number;
 }
@@ -836,6 +840,100 @@ export interface MappingSuggestion {
   mappings: ColumnMapping[];
   sampleRows: Record<string, string>[];
   confidence: number;
+}
+
+// ─────────────────────────────────────────────
+// Création express — brouillon d'expérience généré de façon déterministe
+// ─────────────────────────────────────────────
+export type ExpressSector = "coffee" | "perfume" | "travel" | "fashion" | "generic";
+/** reliable : au moins 2 critères séparent réellement les produits ; limited : 1 critère ou similarité sémantique seule ; insufficient : rien ne départage les produits. */
+export type ExpressReliability = "reliable" | "limited" | "insufficient";
+export type ExpressQuestionCount = 3 | 5 | 7;
+
+export interface ExpressAxis extends QuizAxis {
+  description: string;
+  /** Pourquoi ce critère est proposé (données du catalogue, modèle sectoriel, axe existant). */
+  justification: string;
+  /** data : valeurs renseignées sur les produits ; semantic : aucune valeur produit, départage par les descriptions seulement. */
+  evidence: "data" | "semantic";
+  reused: boolean;
+  valuedProducts: number;
+  spread: number;
+}
+
+export interface ExpressAnswer {
+  text: string;
+  emoji?: string | null;
+  /** Deltas appliqués au profil (départ à 0,5, borné 0–1), uniquement sur des axes du brouillon. */
+  impacts: Record<string, number>;
+}
+
+export interface ExpressQuestion {
+  text: string;
+  helpText?: string | null;
+  answers: ExpressAnswer[];
+}
+
+export interface ExpressDraft {
+  name: string;
+  quizTitle: string;
+  ctaText: string;
+  industry: string;
+  axes: ExpressAxis[];
+  questions: ExpressQuestion[];
+}
+
+export interface ExpressAxisCandidate {
+  key: string;
+  label: string;
+  valuedProducts: number;
+  spread: number;
+  discriminant: boolean;
+  used: boolean;
+  note: string | null;
+}
+
+export interface ExpressAnalysis {
+  catalogId: string;
+  catalogName: string;
+  productCount: number;
+  /** Produits dont l'embedding est prêt (départage sémantique possible). */
+  semanticProducts: number;
+  sector: ExpressSector;
+  sectorLabel: string;
+  sectorDetected: boolean;
+  reliability: ExpressReliability;
+  /** Messages à afficher tels quels : limites, données manquantes, critères écartés. */
+  messages: string[];
+  candidates: ExpressAxisCandidate[];
+  /** Critères typiques du secteur absents des produits : à renseigner (enrichissement) pour fiabiliser. */
+  missingForSector: { key: string; label: string }[];
+}
+
+export interface ExpressProposal {
+  analysis: ExpressAnalysis;
+  /** null si le catalogue ne permet aucune proposition honnête (enrichissement requis). */
+  draft: ExpressDraft | null;
+  /** Questions compatibles avec les critères du brouillon, non utilisées : pour remplacer une question. */
+  alternatives: ExpressQuestion[];
+}
+
+export interface ExpressValidation {
+  reliability: ExpressReliability;
+  warnings: string[];
+}
+
+export interface ExpressPreviewResponse {
+  reliability: ExpressReliability;
+  profileSummary: ProfileSummary;
+  recommendations: { product: { id: string; name: string; brand: string | null; imageUrl: string | null; price: number | null }; score: number }[];
+}
+
+export interface ExpressSaveResponse extends ExpressValidation {
+  quizId: string;
+  quizName: string;
+  questionCount: number;
+  answerCount: number;
 }
 
 // ─────────────────────────────────────────────

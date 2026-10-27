@@ -1,6 +1,6 @@
 import type { JsonValue, ProductAttributes, QuizAxis } from "@poapo/types";
 
-const AXIS_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
+export const AXIS_KEY_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,39}$/;
 const MAX_AXES = 12;
 
 export class AxisValidationError extends Error {

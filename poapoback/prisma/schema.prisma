@@ -25,9 +25,13 @@ model Tenant {
   ctaText      String?  @default("Découvrir ma sélection")
   embedDomain  String?
   active       Boolean  @default(true)
+  // Plan commercial (entitlements, voir services/entitlements.ts) ; aucune limite n'est appliquée aujourd'hui.
+  plan         String   @default("FREE")
+  websiteUrl   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  memberships   Membership[]
   magicTokens   MagicToken[]
   products      Product[]
   quizzes       Quiz[]
@@ -382,4 +386,37 @@ enum MetricType {
   buy_click
   feedback
   decision_time
+}
+
+// ─────────────────────────────────────────────
+// Identité Auth0 : User (sub Auth0) ↔ Tenant via Membership.
+// Un User n'a qu'une appartenance aujourd'hui (unique userId) ; le modèle autorise le multi-boutiques plus tard.
+// ─────────────────────────────────────────────
+enum MembershipRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+model User {
+  id          String   @id @default(cuid())
+  auth0Sub    String   @unique
+  email       String
+  createdAt   DateTime @default(now())
+  lastLoginAt DateTime?
+
+  memberships Membership[]
+}
+
+model Membership {
+  id        String         @id @default(cuid())
+  userId    String         @unique
+  tenantId  String
+  role      MembershipRole @default(OWNER)
+  createdAt DateTime       @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
 }

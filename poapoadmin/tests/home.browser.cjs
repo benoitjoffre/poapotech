@@ -198,7 +198,7 @@ async function main() {
   check(await superPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), "superadmin mobile navigation does not overflow");
   await superContext.close();
   const anonymous = await browser.newPage();
-  await anonymous.goto(admin + "/");
+  await anonymous.goto(admin + "/catalog");
   await anonymous.getByRole("button", { name: "Recevoir le lien de connexion" }).waitFor();
   check(new URL(anonymous.url()).pathname === "/login", "anonymous visitor redirected");
   console.log(`PASS: ${assertions} browser assertions; screenshots: ${output || "not requested"}`);

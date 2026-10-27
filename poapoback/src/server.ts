@@ -17,11 +17,15 @@ import quizzesRouter from "./routes/quizzes";
 import campaignsRouter from "./routes/campaigns";
 import dashboardRouter from "./routes/dashboard";
 import experiencesRouter from "./routes/experiences";
+import expressQuizRouter from "./routes/expressQuiz";
 import { quizErrorHandler } from "./services/quizzes";
 import { corsPolicy } from "./services/cors";
 import { checkReadiness } from "./services/readiness";
 import { startEmbeddingWorker } from "./services/embeddings";
 import { globalRateLimitMax } from "./rateLimitConfig";
+import { assertProductionEnv } from "./services/productionEnv";
+
+assertProductionEnv();
 
 const app = express();
 // Derrière le proxy Render : IP réelle du visiteur pour le rate limiting.
@@ -83,6 +87,7 @@ app.use("/api/quizzes", quizzesRouter);
 app.use("/api/campaigns", campaignsRouter);
 app.use("/api/dashboard", dashboardRouter);
 app.use("/api/experiences", experiencesRouter);
+app.use("/api/express-quiz", expressQuizRouter);
 app.use("/api/catalogs", catalogsRouter);
 app.use("/api/catalog", catalogRouter);
 app.use("/api/catalog/import", importRouter);

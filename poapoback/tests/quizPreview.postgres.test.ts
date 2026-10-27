@@ -78,8 +78,8 @@ test("PostgreSQL + Python : aperçu sans écritures, catalogue local et parité 
     assert.deepEqual(await snapshot(), before);
     const publicResponse = await request("/api/quiz/submit", { clientId: id, quizId: quiz.id, answers });
     assert.equal(publicResponse.status, 200, await publicResponse.clone().text());
-    const { sessionId, ...publicResult } = await publicResponse.json();
-    assert.ok(sessionId);
+    const { sessionId, feedbackToken, ...publicResult } = await publicResponse.json();
+    assert.ok(sessionId && feedbackToken);
     assert.deepEqual(publicResult, previewResult);
     assert.equal(await prisma.quizSession.count({ where: { tenantId: id } }), 1);
     assert.equal(await prisma.metric.count({ where: { tenantId: id } }), 0);

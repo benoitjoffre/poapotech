@@ -30,6 +30,8 @@ async function startIsolatedStack() {
   });
   const admin = run("poapoadmin", [vite, "--port", String(ports.admin), "--strictPort"], {
     POAPO_API_PROXY: urls.api, VITE_WIDGET_BASE_URL: urls.widget,
+    // Recettes historiques : connexion de développement, sans l'Auth0 d'un éventuel .env.local (les recettes Auth0 les définissent).
+    VITE_AUTH0_DOMAIN: process.env.VITE_AUTH0_DOMAIN ?? "", VITE_AUTH0_CLIENT_ID: process.env.VITE_AUTH0_CLIENT_ID ?? "", VITE_AUTH0_AUDIENCE: process.env.VITE_AUTH0_AUDIENCE ?? "",
   });
   const widget = run("poapofront", [vite, "--port", String(ports.widget), "--strictPort"], { POAPO_API_PROXY: urls.api, VITE_API_BASE_URL: urls.api });
   const stop = () => { for (const child of children) if (child.exitCode === null) child.kill("SIGTERM"); };

@@ -10,7 +10,7 @@ import type {
   ReorderPayload,
   Quiz,
 } from "@poapo/types";
-import { ApiError, getToken } from "../lib/api";
+import { ApiError, apiUrl, authHeader } from "../lib/api";
 import { parseQuizTheme } from "@poapo/types";
 import { QuizSelector, useQuiz } from "../contexts/QuizContext";
 import { useQuizEditorDraft, type QuizEditorSession } from "../hooks/useQuizEditorDraft";
@@ -576,11 +576,9 @@ export function QuizBuilderContent({ quiz, embedded = false, visible = true, ses
       formData.append("file", importFile);
       formData.append("revision", String(editor.state.revision));
 
-      const token = getToken();
-      const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
-      const res = await fetch(`${baseUrl}/api/quiz/builder/questions/import-csv?quizId=${encodeURIComponent(quiz.id)}`, {
+      const res = await fetch(apiUrl(`/api/quiz/builder/questions/import-csv?quizId=${encodeURIComponent(quiz.id)}`), {
         method: "POST",
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        headers: await authHeader(),
         body: formData,
       });
 

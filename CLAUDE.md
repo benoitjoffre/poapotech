@@ -34,3 +34,12 @@
 
 - Summarize changes in 5 lines maximum.
 - Mention only relevant risks and failures.
+
+## Response guidelines
+
+- Keep responses concise.
+- Avoid printing entire files unless explicitly requested.
+- Summarize code changes instead of reproducing them.
+- Limit final reports to 500 words.
+- For large tasks, work incrementally.
+- Prefer modifying files directly rather than outputting code.

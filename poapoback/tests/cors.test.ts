@@ -71,3 +71,16 @@ test("origines de l'administration autorisées avec credentials ; sans Origin la
   assert.equal(res.headers.get("access-control-allow-credentials"), "true");
   assert.equal((await fetch(`${base}/api/catalog/products`)).status, 200);
 });
+
+test("embedDomain : le site parent déclaré est contrôlé, jamais l'origine de l'iframe", async () => {
+  const { isEmbedParentAllowed } = await import("../src/services/embedDomain");
+  assert.equal(isEmbedParentAllowed(null, "https://x.test", env), true);
+  assert.equal(isEmbedParentAllowed("https://ma-marque.com", undefined, env), true); // intégration existante sans parentOrigin
+  assert.equal(isEmbedParentAllowed("ma-marque.com", "https://ma-marque.com", env), true);
+  assert.equal(isEmbedParentAllowed("ma-marque.com", "https://www.ma-marque.com", env), true);
+  assert.equal(isEmbedParentAllowed("ma-marque.com", "https://pirate.test", env), false);
+  assert.equal(isEmbedParentAllowed("ma-marque.com", "https://ma-marque.com.pirate.test", env), false);
+  assert.equal(isEmbedParentAllowed("a.com, *.b.com", "https://shop.b.com", env), true);
+  assert.equal(isEmbedParentAllowed("a.com", "https://admin.example.test", env), true); // aperçu admin
+  assert.equal(isEmbedParentAllowed("a.com", "pas une url", env), false);
+});

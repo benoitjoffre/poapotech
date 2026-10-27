@@ -24,6 +24,7 @@
   widgetUrl = widgetUrl.replace(/\/$/, "");
 
   var iframeSrc = widgetUrl + "/?clientId=" + encodeURIComponent(clientId);
+  iframeSrc += "&parentOrigin=" + encodeURIComponent(window.location.origin);
   if (quizId) iframeSrc += "&quizId=" + encodeURIComponent(quizId);
   var accentColor = buttonColor || "#6C47FF";
   var label = buttonLabel || "Découvrir mes recommandations";

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Router } from "express";
 import multer from "multer";
 import csvParser from "csv-parser";
+import { detectCsvSeparator } from "../services/csv";
 import { Readable } from "node:stream";
 import { prisma } from "../lib/prisma";
 import { verifyToken, type AuthRequest } from "../middleware/auth";
@@ -30,7 +31,7 @@ function parseBool(raw: string | undefined, fallback = true): boolean {
 function parseCSVBuffer(buffer: Buffer): Promise<Record<string, string>[]> {
   return new Promise((resolve, reject) => {
     const rows: Record<string, string>[] = [];
-    Readable.from([buffer]).pipe(csvParser())
+    Readable.from([buffer]).pipe(csvParser({ separator: detectCsvSeparator(buffer) }))
       .on("data", (row: Record<string, string>) => rows.push(row))
       .on("end", () => resolve(rows)).on("error", reject);
   });

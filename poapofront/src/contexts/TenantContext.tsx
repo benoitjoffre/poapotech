@@ -19,6 +19,15 @@ const TenantContext = createContext<TenantContextValue>({
   error: "",
 });
 
+/** Site hôte de l'iframe : ancestorOrigins (fourni par le navigateur), sinon referrer, sinon valeur passée par poapo-widget.js. */
+function parentOrigin(): string | null {
+  if (window.parent === window) return null;
+  const ancestor = window.location.ancestorOrigins?.[0];
+  if (ancestor && ancestor !== "null") return ancestor;
+  try { if (document.referrer) return new URL(document.referrer).origin; } catch { /* referrer invalide */ }
+  return new URLSearchParams(window.location.search).get("parentOrigin");
+}
+
 export function TenantProvider({ children }: { children: ReactNode }) {
   const clientId = new URLSearchParams(window.location.search).get("clientId");
   const requestedQuizId = new URLSearchParams(window.location.search).get("quizId");
@@ -35,6 +44,8 @@ export function TenantProvider({ children }: { children: ReactNode }) {
       try {
         const params = new URLSearchParams({ clientId });
         if (requestedQuizId !== null) params.set("quizId", requestedQuizId);
+        const parent = parentOrigin();
+        if (parent) params.set("parentOrigin", parent);
         const res = await fetch(`${apiBaseUrl}/api/embed/config?${params}`);
         if (!res.ok) throw new Error("Ce quiz est introuvable ou désactivé.");
         const data = (await res.json()) as EmbedConfig;

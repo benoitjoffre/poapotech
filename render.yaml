@@ -43,6 +43,10 @@ services:
         sync: false # URL du widget (poapo-widget)
       - key: ADMIN_URL
         sync: false # URL de l'administration (poapo-admin)
+      - key: AUTH0_DOMAIN
+        sync: false # ex. poapo.eu.auth0.com — voir docs/auth0.md
+      - key: AUTH0_AUDIENCE
+        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT
@@ -103,6 +107,12 @@ services:
         sync: false # https://poapo-api.onrender.com
       - key: VITE_WIDGET_BASE_URL
         sync: false # URL de poapo-widget
+      - key: VITE_AUTH0_DOMAIN
+        sync: false
+      - key: VITE_AUTH0_CLIENT_ID
+        sync: false
+      - key: VITE_AUTH0_AUDIENCE
+        sync: false
 
   # ── Widget public + script d'intégration poapo-widget.js (site statique) ─────
   - type: web

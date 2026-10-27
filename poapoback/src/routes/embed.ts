@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { prisma } from "../lib/prisma";
 import { asyncRoute, publicQuizScope, getQuiz } from "../services/quizzes";
+import { isEmbedParentAllowed } from "../services/embedDomain";
 import { parseAxes } from "../services/axes";
 import { parseQuizTheme, resolveQuizTheme } from "@poapo/types";
 
@@ -40,19 +41,11 @@ router.get("/config", publicQuizScope, asyncRoute(async (req: Request, res: Resp
     return;
   }
 
-  // Vérification du domaine d'origine si embedDomain est configuré
-  const origin = req.headers.origin ?? req.headers.referer ?? "";
-  if (tenant.embedDomain && origin) {
-    try {
-      const originHost = new URL(origin).hostname;
-      const allowedHost = new URL(tenant.embedDomain.startsWith("http") ? tenant.embedDomain : `https://${tenant.embedDomain}`).hostname;
-      if (originHost !== allowedHost) {
-        res.status(403).json({ error: "Domaine non autorisé" });
-        return;
-      }
-    } catch {
-      // URL mal formée — on laisse passer en dev
-    }
+  // Site intégrateur déclaré par le widget (pas l'en-tête Origin, qui est celui de l'iframe). Voir services/embedDomain.ts.
+  const parentOrigin = typeof req.query.parentOrigin === "string" ? req.query.parentOrigin : undefined;
+  if (!isEmbedParentAllowed(tenant.embedDomain, parentOrigin)) {
+    res.status(403).json({ error: "Domaine non autorisé" });
+    return;
   }
 
   const quiz = getQuiz(res);

@@ -1,4 +1,4 @@
-import { Navigate, NavLink, Outlet, Route, Routes, useMatch } from "react-router-dom";
+import { Navigate, NavLink, Outlet, Route, Routes, useLocation, useMatch } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import CatalogPage from "./pages/CatalogPage";
@@ -12,6 +12,7 @@ import TenantsAdminPage from "./pages/TenantsAdminPage";
 import QuizzesPage from "./pages/QuizzesPage";
 import QuizFormPage from "./pages/QuizFormPage";
 import ExperienceCreatePage from "./pages/ExperienceCreatePage";
+import ExpressCreationPage from "./pages/ExpressCreationPage";
 import CampaignsPage from "./pages/CampaignsPage";
 import CampaignFormPage from "./pages/CampaignFormPage";
 import CampaignDetailPage from "./pages/CampaignDetailPage";
@@ -22,13 +23,19 @@ import ProductEnrichmentPage from "./pages/ProductEnrichmentPage";
 import HelpCenterPage from "./pages/HelpCenterPage";
 import HelpArticlePage from "./pages/HelpArticlePage";
 import HomePage from "./pages/HomePage";
+import OnboardingPage from "./pages/OnboardingPage";
+import LandingPage from "./landing/LandingPage";
 import Icon from "./components/Icon";
 import { QuizProvider } from "./contexts/QuizContext";
 import { TourProvider } from "./tour/TourContext";
 
 function ProtectedRoute() {
-  const { token, loading } = useAuth();
+  const { token, user, loading } = useAuth();
+  const { pathname } = useLocation();
   if (loading) return <div className="loading-screen">Chargement...</div>;
+  if (token && user?.onboardingRequired) return <Navigate to="/onboarding" replace />;
+  // Visiteur non connecté sur la racine : landing publique (les autres pages restent privées).
+  if (!token && pathname === "/") return <LandingPage />;
   return token ? <QuizProvider><Outlet /></QuizProvider> : <Navigate to="/login" replace />;
 }
 
@@ -91,7 +98,9 @@ function App() {
   return (
     <AuthProvider>
       <Routes>
+        <Route path="/welcome" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/onboarding" element={<OnboardingPage />} />
         <Route element={<ProtectedRoute />}>
           <Route element={<AppLayout />}>
             <Route path="/" element={<HomeRoute />} />
@@ -106,6 +115,7 @@ function App() {
             <Route path="/quizzes/new" element={<QuizFormPage />} />
             <Route path="/quizzes/:quizId" element={<QuizFormPage />} />
             <Route path="/experiences/new" element={<ExperienceCreatePage />} />
+            <Route path="/experiences/new/express" element={<ExpressCreationPage />} />
             <Route path="/experiences/:quizId/setup" element={<ExperienceSetupPage />} />
             <Route path="/experiences/:quizId/edit" element={<ExperienceEditorPage />} />
             <Route path="/campaigns" element={<CampaignsPage />} />
