@@ -25,13 +25,17 @@ model Tenant {
   ctaText      String?  @default("Découvrir ma sélection")
   embedDomain  String?
   active       Boolean  @default(true)
-  // Plan commercial (entitlements, voir services/entitlements.ts) ; aucune limite n'est appliquée aujourd'hui.
+  // OBSOLÈTE : ne plus lire ni écrire. La source de vérité des droits est Subscription (services/subscriptions.ts).
   plan         String   @default("FREE")
   websiteUrl   String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   memberships   Membership[]
+  subscription  Subscription?
+  subscriptionEvents SubscriptionEvent[]
+  usageCounters UsageCounter[]
+  recommendationRequests RecommendationRequest[]
   magicTokens   MagicToken[]
   products      Product[]
   quizzes       Quiz[]
@@ -419,4 +423,88 @@ model Membership {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
+}
+
+// ─────────────────────────────────────────────
+// Abonnements (sans paiement) : une seule source de vérité pour les droits d'une boutique.
+// Le plan effectif se calcule à la lecture (voir services/subscriptions.ts) : une échéance dépassée vaut STARTER,
+// sans écriture ni suppression de données.
+// ─────────────────────────────────────────────
+enum SubscriptionPlan {
+  STARTER
+  PRO
+  BUSINESS
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELED
+}
+
+enum SubscriptionSource {
+  SIGNUP // création de boutique (STARTER)
+  PROMO // attribué par le super-admin
+  LEGACY // boutique antérieure aux abonnements (pilote)
+  STRIPE // réservé : facturation future
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  tenantId             String             @unique
+  plan                 SubscriptionPlan   @default(STARTER)
+  status               SubscriptionStatus @default(ACTIVE)
+  source               SubscriptionSource @default(SIGNUP)
+  startsAt             DateTime           @default(now())
+  endsAt               DateTime?
+  // Réservés à l'intégration Stripe future ; jamais renseignés aujourd'hui.
+  stripeCustomerId     String?            @unique
+  stripeSubscriptionId String?            @unique
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+// Journal append-only des changements d'abonnement.
+model SubscriptionEvent {
+  id         String              @id @default(cuid())
+  tenantId   String
+  actor      String // email du super-admin, ou "system"
+  action     String // CREATED | PLAN_CHANGED
+  fromPlan   SubscriptionPlan?
+  toPlan     SubscriptionPlan
+  fromSource SubscriptionSource?
+  toSource   SubscriptionSource
+  endsAt     DateTime?
+  createdAt  DateTime            @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+}
+
+// Consommation mensuelle (période UTC « YYYY-MM »), incrémentée atomiquement.
+model UsageCounter {
+  tenantId        String
+  period          String
+  recommendations Int    @default(0)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@id([tenantId, period])
+}
+
+// Idempotence des recommandations servies : une clé = une consommation. `response` permet de rejouer un retry.
+model RecommendationRequest {
+  id             String   @id @default(cuid())
+  tenantId       String
+  idempotencyKey String
+  fingerprint    String
+  response       Json?
+  createdAt      DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([createdAt])
 }

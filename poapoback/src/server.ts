@@ -11,6 +11,8 @@ import catalogsRouter from "./routes/catalogs";
 import catalogRouter from "./routes/catalog";
 import importRouter from "./routes/import";
 import adminTenantsRouter from "./routes/adminTenants";
+import subscriptionRouter from "./routes/subscription";
+import { startRetentionJob } from "./services/recommendationRetention";
 import metricsRouter from "./routes/metrics";
 import resultsRouter from "./routes/results";
 import quizzesRouter from "./routes/quizzes";
@@ -92,6 +94,7 @@ app.use("/api/catalogs", catalogsRouter);
 app.use("/api/catalog", catalogRouter);
 app.use("/api/catalog/import", importRouter);
 app.use("/api/admin/tenants", adminTenantsRouter);
+app.use("/api/subscription", subscriptionRouter);
 app.use("/api/metrics", metricsRouter);
 app.use("/api/results", resultsRouter);
 
@@ -107,6 +110,7 @@ const port = Number(process.env.PORT ?? 5050);
 app.listen(port, () => {
   console.log(`[poapoback] API listening on http://localhost:${port}`);
   startEmbeddingWorker();
+  startRetentionJob();
 });
 
 export default app;

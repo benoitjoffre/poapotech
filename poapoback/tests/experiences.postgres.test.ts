@@ -19,9 +19,12 @@ test("PostgreSQL : synthèse « Mes expériences » isolée, sans double comptag
   const secret = process.env.JWT_SECRET;
   process.env.JWT_SECRET = "experiences-test-only";
   try {
-    for (const tenantId of [id, other]) await prisma.tenant.create({
+    for (const tenantId of [id, other]) {
+      await prisma.tenant.create({
       data: { id: tenantId, email: `${tenantId}@example.test`, name: tenantId },
     });
+      await prisma.subscription.create({ data: { tenantId: tenantId, plan: "BUSINESS", source: "LEGACY" } }); // fixtures : hors quotas
+    }
     const app = express();
     app.use("/api/experiences", experiencesRouter);
     app.use(quizErrorHandler);

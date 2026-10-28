@@ -11,7 +11,7 @@ import type {
   ProductEnrichmentResult,
   QuizAxis,
 } from "@poapo/types";
-import { apiFetch } from "../lib/api";
+import { ApiError, apiFetch } from "../lib/api";
 import { CatalogSelect, useCatalogSelection } from "../lib/catalogs";
 import {
   buildUpdates,
@@ -41,6 +41,7 @@ export default function ProductEnrichmentPage() {
   const [context, setContext] = useState<ProductEnrichmentContext | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [notIncluded, setNotIncluded] = useState(false);
   const [axisKeys, setAxisKeys] = useState<string[]>([]);
   const [missingOnly, setMissingOnly] = useState(true);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -76,7 +77,8 @@ export default function ProductEnrichmentPage() {
       setSelected(new Set());
     } catch (err) {
       setContext(null);
-      setError((err as Error).message);
+      if (err instanceof ApiError && err.code === "feature_not_included") setNotIncluded(true);
+      else setError((err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -299,6 +301,12 @@ export default function ProductEnrichmentPage() {
       </section>
 
       {(catalogsLoading || loading) && <div className="loading-block">Chargement...</div>}
+      {notIncluded && (
+        <div className="analytics-warning" role="status" data-testid="enrichment-locked">
+          L'enrichissement IA du catalogue est réservé aux formules Pro et Business. Vous pouvez toujours renseigner les caractéristiques de vos produits{" "}
+          <Link to="/catalog">à la main</Link> et créer vos expériences en mode express. <Link to="/settings/subscription">Voir mon abonnement</Link>
+        </div>
+      )}
       {(catalogsError || error) && <div className="form-error" role="alert">{catalogsError || error}</div>}
       {noAxisQuiz && (
         <div className="gen-warnings">

@@ -75,6 +75,10 @@
   .merchant-layout .admin-side-link:hover { background: #5433d6; }
   .merchant-layout .admin-side-link:focus-visible { outline-color: white; }
   .merchant-layout .admin-sidebar-user { border-color: #ffffff30; }
+  .merchant-layout .sidebar-plan { border-color: #ffffff30; color: #ffffffe6; }
+  .merchant-layout .sidebar-plan:hover { background: #5433d6; }
+  .merchant-layout .sidebar-plan-row.is-full { color: #fcd34d; }
+  .merchant-layout .sidebar-plan-row.is-critical { color: #ffb4a8; }
   .merchant-layout .admin-sidebar-user .btn-ghost { color: white; background: transparent; border-color: #ffffff50; }
   .merchant-layout .admin-sidebar-user .btn-ghost:hover { background: #5433d6; }
 }

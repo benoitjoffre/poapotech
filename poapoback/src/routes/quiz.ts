@@ -7,6 +7,7 @@ import { publicQuizScope, adminQuizScope, getQuiz, asyncRoute } from "../service
 import { parseAxes } from "../services/axes";
 import { recommendQuiz } from "../services/quizRecommendations";
 import { QuizError } from "../services/quizzes";
+import { EntitlementError, findReplay, parseIdempotencyKey, recordServedRecommendation, requireFeature, submissionFingerprint } from "../services/entitlements";
 import { validateTrackEvent, validateFeedback, signFeedbackToken, verifyFeedbackToken } from "../services/analyticsEvents";
 import { abandonCounts, buildSteps, buildVariants, computeIndicators, stepRows, variantRows } from "../services/quizMetrics";
 import { localInsightsFromSnapshot, type MetricsSnapshot } from "../services/quizInsights";
@@ -116,6 +117,14 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
     return;
   }
 
+  let idempotencyKey: string | null;
+  try {
+    idempotencyKey = parseIdempotencyKey((body as { idempotencyKey?: unknown }).idempotencyKey);
+  } catch (err) {
+    res.status(400).json({ error: (err as Error).message });
+    return;
+  }
+
   const aiUrl = process.env.AI_SERVICE_URL;
   if (!aiUrl) {
     res.status(503).json({ error: "Service IA non disponible" });
@@ -124,6 +133,13 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
 
   try {
     const quiz = getQuiz(res);
+    const fingerprint = submissionFingerprint(quiz.id, answers);
+    // Retry d'une soumission déjà servie : même réponse, aucune consommation ; clé réutilisée avec un autre contenu : 422.
+    const replay = await findReplay<object>(clientId, idempotencyKey, fingerprint);
+    if (replay) {
+      res.json(replay);
+      return;
+    }
     const productIds = quiz.useAllProducts ? undefined : quiz.products.map((product) => product.productId);
     if (productIds && productIds.length === 0) {
       res.status(422).json({ error: "Aucun produit sélectionné pour ce quiz" });
@@ -147,8 +163,9 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
       axes, productIds, impacts: answerDocs.map((ans) => ans.impacts),
     });
 
-    // Persister la session
-    const session = await prisma.quizSession.create({
+    // La session et la consommation du quota sont créées dans la même transaction (rien n'est consommé en cas d'échec).
+    const { response } = await recordServedRecommendation({ tenantId: clientId, key: idempotencyKey, fingerprint, create: async (tx) => {
+    const session = await tx.quizSession.create({
       data: {
         tenantId: clientId,
         quizId: quiz.id,
@@ -160,8 +177,15 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
       },
     });
 
-    res.json({ sessionId: session.id, feedbackToken: signFeedbackToken(session.id, clientId, quiz.id), quizId: quiz.id, industry: quiz.industry, product, explanation, profileSummary });
+    return { sessionId: session.id, feedbackToken: signFeedbackToken(session.id, clientId, quiz.id), quizId: quiz.id, industry: quiz.industry, product, explanation, profileSummary };
+    } });
+    res.json(response);
   } catch (err) {
+    if (err instanceof EntitlementError) {
+      // Réponse publique : code stable et message neutre, sans fuite de plan ni de limite.
+      res.status(429).json({ error: "Les recommandations sont momentanément indisponibles pour cette boutique.", code: err.code });
+      return;
+    }
     if (err instanceof QuizError) {
       res.status(err.status).json({ error: err.message });
       return;
@@ -231,7 +255,7 @@ router.post("/feedback", publicQuizScope, asyncRoute(async (req: Request, res: R
 // ─── Protected — dashboard métriques ────────────────────────────────────────
 
 // GET /api/quiz/metrics
-router.get("/metrics", verifyToken, adminQuizScope, asyncRoute(async (req: AuthRequest, res: Response) => {
+router.get("/metrics", verifyToken, requireFeature("advancedAnalytics", ["GET"]), adminQuizScope, asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
   const quizId = getQuiz(res).id;
   const since = req.query.since ? new Date(req.query.since as string) : new Date(Date.now() - 30 * 24 * 3600 * 1000); // 30j par défaut
@@ -316,7 +340,7 @@ router.get("/metrics", verifyToken, adminQuizScope, asyncRoute(async (req: AuthR
 }));
 
 // GET /api/quiz/metrics/ai-insights
-router.get("/metrics/ai-insights", verifyToken, adminQuizScope, asyncRoute(async (req: AuthRequest, res: Response) => {
+router.get("/metrics/ai-insights", verifyToken, requireFeature("advancedAnalytics", ["GET"]), adminQuizScope, asyncRoute(async (req: AuthRequest, res: Response) => {
   const tenantId = req.tenant!.tenantId;
   const quizId = getQuiz(res).id;
   const since = req.query.since ? new Date(req.query.since as string) : new Date(Date.now() - 30 * 24 * 3600 * 1000);

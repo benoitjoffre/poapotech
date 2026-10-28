@@ -5,6 +5,8 @@ import { verifySuperAdmin, AuthRequest } from "../middleware/auth";
 import { DEFAULT_PRIMARY_COLOR } from "@poapo/types";
 import type { TenantAdminCreateInput, TenantAdminUpdateInput } from "@poapo/types";
 import { asyncRoute, QuizError } from "../services/quizzes";
+import { ensureStarterSubscription, listSubscriptionEvents, parsePlanChange, setPromotionalPlan } from "../services/subscriptions";
+import { subscriptionOverview } from "../services/entitlements";
 
 const router = Router();
 
@@ -71,7 +73,8 @@ router.post("/", async (req: AuthRequest, res: Response) => {
     passwordHash = await bcrypt.hash(body.password, 12);
   }
 
-  const created = await prisma.tenant.create({
+  const created = await prisma.$transaction(async (db) => {
+    const tenant = await db.tenant.create({
     data: {
       email,
       name: body.name?.trim() || null,
@@ -90,6 +93,9 @@ router.post("/", async (req: AuthRequest, res: Response) => {
       ctaText: true,
       primaryColor: true,
     },
+    });
+    await ensureStarterSubscription(db, tenant.id);
+    return tenant;
   });
 
   res.status(201).json(created);
@@ -131,6 +137,20 @@ router.put("/:id", asyncRoute(async (req: AuthRequest, res: Response) => {
   });
 
   res.json(updated);
+}));
+
+// GET /api/admin/tenants/:id/subscription — abonnement effectif + journal
+router.get("/:id/subscription", asyncRoute(async (req: AuthRequest, res: Response) => {
+  const id = String(req.params.id);
+  if (!(await prisma.tenant.findUnique({ where: { id }, select: { id: true } }))) throw new QuizError(404, "Tenant introuvable");
+  res.json({ subscription: await subscriptionOverview(id), events: await listSubscriptionEvents(id) });
+}));
+
+// PUT /api/admin/tenants/:id/subscription — attribution promotionnelle (seul chemin de changement de plan)
+router.put("/:id/subscription", asyncRoute(async (req: AuthRequest, res: Response) => {
+  const id = String(req.params.id);
+  await setPromotionalPlan(id, parsePlanChange(req.body), req.tenant?.email ?? "super-admin");
+  res.json({ subscription: await subscriptionOverview(id), events: await listSubscriptionEvents(id) });
 }));
 
 // PUT /api/admin/tenants/:id/password

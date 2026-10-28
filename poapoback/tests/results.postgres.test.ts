@@ -20,7 +20,10 @@ test("PostgreSQL : résultats par expérience, quiz partagé, périodes, catalog
   process.env.JWT_SECRET = "results-db-test-only";
   let server: Server | undefined;
   try {
-    for (const tenantId of [id, other, empty]) await prisma.tenant.create({ data: { id: tenantId, email: `${tenantId}@example.test`, name: tenantId } });
+    for (const tenantId of [id, other, empty]) {
+      await prisma.tenant.create({ data: { id: tenantId, email: `${tenantId}@example.test`, name: tenantId } });
+      await prisma.subscription.create({ data: { tenantId: tenantId, plan: "BUSINESS", source: "LEGACY" } }); // fixtures : hors quotas
+    }
     const [catA, catB, catOther] = await Promise.all([
       prisma.catalog.create({ data: { tenantId: id, name: "Voyage" } }),
       prisma.catalog.create({ data: { tenantId: id, name: "Café" } }),

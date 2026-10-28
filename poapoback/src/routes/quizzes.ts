@@ -2,6 +2,7 @@ import { Router } from "express";
 import type { QuizAxis, QuizInput } from "@poapo/types";
 import { prisma } from "../lib/prisma";
 import { verifyToken } from "../middleware/auth";
+import { assertResourceQuota, withTenantLock } from "../services/entitlements";
 import type { AuthRequest } from "../middleware/auth";
 import {
   asyncRoute,
@@ -172,8 +173,10 @@ router.put(
 
     const body = req.body;
     const tenantId = req.tenant!.tenantId;
-    const updatedQuiz = await prisma.$transaction(async (db) => {
+    // Verrou boutique avant verrou quiz (ordre constant) : deux activations concurrentes ne dépassent pas le quota.
+    const updatedQuiz = await withTenantLock(tenantId, async (db) => {
       const quiz = await lockQuiz(db, tenantId, req.params.id);
+      if (body.active === true && !quiz.active) await assertResourceQuota(db, tenantId, "publishedExperiences");
       if (body.active === true) await assertPublishedQuizValid(quiz, db);
       return db.quiz.update({
         where: { id: quiz.id },

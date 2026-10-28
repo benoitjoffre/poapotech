@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type { PaginatedResponse, TenantAdminCreateInput, TenantAdminItem, TenantAdminUpdateInput } from "@poapo/types";
 import { apiFetch } from "../lib/api";
+import TenantSubscriptionPanel from "../components/TenantSubscriptionPanel";
 
 const PAGE_SIZE = 20;
 
@@ -11,6 +12,7 @@ export default function TenantsAdminPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [openSubscription, setOpenSubscription] = useState<string | null>(null);
 
   const [newEmail, setNewEmail] = useState("");
   const [newName, setNewName] = useState("");
@@ -177,7 +179,8 @@ export default function TenantsAdminPage() {
               </thead>
               <tbody>
                 {data.map((tenant) => (
-                  <tr key={tenant.id}>
+                  <Fragment key={tenant.id}>
+                  <tr>
                     <td>{tenant.email}</td>
                     <td>{tenant.name ?? "-"}</td>
                     <td>
@@ -195,9 +198,17 @@ export default function TenantsAdminPage() {
                         <button type="button" className="btn-ghost" onClick={() => void resetPassword(tenant)}>
                           Reset MDP
                         </button>
+                        <button type="button" className="btn-ghost" aria-expanded={openSubscription === tenant.id}
+                          onClick={() => setOpenSubscription(openSubscription === tenant.id ? null : tenant.id)}>
+                          Abonnement
+                        </button>
                       </div>
                     </td>
                   </tr>
+                  {openSubscription === tenant.id && (
+                    <tr><td colSpan={5}><TenantSubscriptionPanel tenantId={tenant.id} /></td></tr>
+                  )}
+                  </Fragment>
                 ))}
                 {data.length === 0 && (
                   <tr>

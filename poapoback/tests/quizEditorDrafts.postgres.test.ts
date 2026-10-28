@@ -22,6 +22,7 @@ test("PostgreSQL : API des brouillons, CAS concurrent, FK tenant, abandon et con
   process.env.JWT_SECRET = "isolated-postgres-draft-test";
   try {
     const tenant = await prisma.tenant.create({ data: { id, email: `${id}@example.test` } });
+    await prisma.subscription.create({ data: { tenantId: id, plan: "BUSINESS", source: "LEGACY" } }); // fixtures : hors quotas
     const catalog = await prisma.catalog.create({ data: { tenantId: id, name: "Catalogue test", isDefault: true } });
     const product = await prisma.product.create({ data: {
       tenantId: id, catalogId: catalog.id, name: "Produit test", tags: [], attributes: { pace: 0.4 },

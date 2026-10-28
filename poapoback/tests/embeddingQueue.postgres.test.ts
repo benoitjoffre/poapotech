@@ -39,6 +39,7 @@ test("PostgreSQL : file d'embeddings — reprise, échecs visibles, bail, versio
     const products: Record<string, string> = {};
     for (const [i, tenantId] of tenants.entries()) {
       await prisma.tenant.create({ data: { id: tenantId, email: `${tenantId}@example.test` } });
+      await prisma.subscription.create({ data: { tenantId: tenantId, plan: "BUSINESS", source: "LEGACY" } }); // fixtures : hors quotas
       const catalog = await prisma.catalog.create({ data: { tenantId, name: "Principal", isDefault: true } });
       const axis = [{ key: i ? "tenant_b_axis" : "tenant_a_axis", label: "Axe" }];
       await prisma.quiz.create({ data: { tenantId, catalogId: catalog.id, name: "Quiz", quizTitle: "Q", ctaText: "Go", axes: axis } });

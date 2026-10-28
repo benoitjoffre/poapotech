@@ -57,6 +57,8 @@ before(async () => {
   stub(prisma.tenant, "findUnique", (async () => ({
     id: "tenant-a", industry: "", active: true, quizTitle: "Mon quiz", ctaText: "Acheter",
   })) as typeof prisma.tenant.findUnique);
+  // Abonnement BUSINESS : ces tests couvrent le métier, pas les quotas (voir subscriptions.postgres.test.ts).
+  stub(prisma.subscription, "findUnique", (async () => ({ plan: "BUSINESS", status: "ACTIVE", source: "LEGACY", startsAt: new Date(0), endsAt: null })) as unknown as typeof prisma.subscription.findUnique);
   stub(prisma.quiz, "upsert", (async () => defaultQuiz) as typeof prisma.quiz.upsert);
   stub(prisma.quiz, "findUnique", (async ({ where }: { where: { id: string } }) =>
     where.id === defaultQuiz.id ? defaultQuiz : null
@@ -74,6 +76,7 @@ before(async () => {
       metricScopes.push({ tenantId: id as string, quizId: tenantId as string });
       return [];
     }
+    if (Array.isArray(sql) && sql.join("").includes('"UsageCounter"')) return [{ recommendations: 1 }];
     return id === coffeeQuiz.id && tenantId === coffeeQuiz.tenantId ? [{ id }] : [];
   });
   stub(prisma.quiz, "findFirstOrThrow", async () => coffeeQuiz);

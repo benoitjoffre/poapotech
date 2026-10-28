@@ -25,6 +25,7 @@ async function main() {
   const { api, admin } = stack;
   for (const id of [tenantId, otherTenantId]) {
     await prisma.tenant.create({ data: { id, email: `${id}@example.test`, primaryColor: "#6C47FF" } });
+    await prisma.subscription.create({ data: { tenantId: id, plan: "PRO", source: "PROMO" } }); // campagnes réservées à PRO/BUSINESS
   }
   const catalog = await prisma.catalog.create({ data: { tenantId, name: "Voyages", isDefault: true } });
   const catalog2 = await prisma.catalog.create({ data: { tenantId, name: "Cadeaux" } });

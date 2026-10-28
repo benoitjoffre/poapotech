@@ -35,6 +35,7 @@ test("PostgreSQL : publication contrôlée, concurrence et activation", {
     const tenantId = `publication-${randomUUID()}`;
     tenants.push(tenantId);
     await prisma.tenant.create({ data: { id: tenantId, email: `${tenantId}@example.test`, primaryColor: "#246753" } });
+    await prisma.subscription.create({ data: { tenantId: tenantId, plan: "BUSINESS", source: "LEGACY" } }); // fixtures : hors quotas
     const catalog = await prisma.catalog.create({ data: { tenantId, name: "Voyages", isDefault: true } });
     const product = await prisma.product.create({ data: { tenantId, catalogId: catalog.id, name: "Voyage", tags: [],
       attributes: { pace: 0.3 } } });

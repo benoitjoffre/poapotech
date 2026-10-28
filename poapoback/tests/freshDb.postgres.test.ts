@@ -35,6 +35,7 @@ test("Base neuve : tenant → catalogue → import idempotent → embeddings →
   try {
     const tenant = await prisma.tenant.create({ data: { id: tenantId, email: `${tenantId}@example.test` } });
     await prisma.tenant.create({ data: { id: otherTenantId, email: `${otherTenantId}@example.test` } });
+    await prisma.subscription.create({ data: { tenantId: tenant.id, plan: "BUSINESS", source: "LEGACY" } }); // fixtures : hors quotas
     assert.equal(tenant.primaryColor, DEFAULT_PRIMARY_COLOR);
     const token = jwt.sign({ tenantId, email: tenant.email }, process.env.JWT_SECRET!);
     const call = (path: string, method = "GET", body?: unknown, headers: Record<string, string> = {}) =>

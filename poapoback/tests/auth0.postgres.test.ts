@@ -93,11 +93,12 @@ test("inscription, email non vérifié, idempotence, isolation, catalogue, recon
   const again = await call("/api/auth/onboarding", a, "POST", body);
   assert.deepEqual([again.status, (await again.json()).created], [200, false]);
   const me = await (await call("/api/auth/me", a)).json();
-  assert.deepEqual([me.tenantId, me.role, me.entitlements.maxCatalogs], [tenant.id, "OWNER", null]);
+  assert.deepEqual([me.tenantId, me.role, me.entitlements.maxCatalogs], [tenant.id, "OWNER", 1]); // STARTER : 1 catalogue (le catalogue par défaut compte)
+  assert.deepEqual([me.entitlements.plan, me.subscription.plan, me.subscription.status], ["STARTER", "STARTER", "ACTIVE"]);
   // Premier catalogue (route existante) ; isolation avec un second commerçant.
-  const cat = await call("/api/catalogs", a, "POST", { name: "Mon catalogue" });
-  assert.equal(cat.status, 201);
-  const catId = (await cat.json()).id;
+  const quota = await call("/api/catalogs", a, "POST", { name: "Second catalogue" });
+  assert.deepEqual([quota.status, (await quota.json()).code], [403, "quota_exceeded"]);
+  const catId = (await (await call("/api/catalogs", a)).json())[0].id;
   const b = await token(subB, emailB);
   const rb = await call("/api/auth/onboarding", b, "POST", { shopName: "Boutique B", industry: "Vin" });
   created.push((await rb.json()).tenantId);

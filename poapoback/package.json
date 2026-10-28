@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "test": "node --import tsx --test tests/*.test.ts",
     "db:generate": "prisma generate",
+    "retention:purge": "tsx src/scripts/purgeRecommendationRequests.ts",
     "db:migrate": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:studio": "prisma studio"

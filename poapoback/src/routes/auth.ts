@@ -3,7 +3,7 @@ import { sendMagicLink, verifyMagicToken, loginWithPassword, setPassword } from 
 import { verifyToken, verifyIdentity, AuthRequest, AuthRequestWithIdentity, SUPER_ADMIN_TENANT_ID } from "../middleware/auth";
 import { AuthError, legacyAuthEnabled } from "../services/auth0";
 import { createShop, validateOnboarding } from "../services/accounts";
-import { entitlementsFor } from "../services/entitlements";
+import { entitlementsFor, subscriptionOverview } from "../services/entitlements";
 import { prisma } from "../lib/prisma";
 import type { TenantBranding } from "@poapo/types";
 import { ensureDefaultQuiz, asyncRoute, QuizError } from "../services/quizzes";
@@ -102,6 +102,7 @@ router.get("/me", verifyIdentity, asyncRoute(async (req: AuthRequestWithIdentity
     ...(isSuperAdmin && { isSuperAdmin: true }),
     ...(req.role && { role: req.role }),
     entitlements: await entitlementsFor(tenant.id),
+    subscription: await subscriptionOverview(tenant.id),
   });
 }));
 

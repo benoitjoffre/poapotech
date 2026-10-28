@@ -150,6 +150,7 @@ before(async () => {
   }) as unknown as typeof prisma.answer.create);
   stub(prisma, "$transaction", (async (fn: (tx: typeof prisma) => unknown) => fn(prisma)) as unknown as typeof prisma.$transaction);
 
+  stub(prisma.subscription, "findUnique", (async () => ({ plan: "BUSINESS", status: "ACTIVE", source: "LEGACY", startsAt: new Date(0), endsAt: null })) as unknown as typeof prisma.subscription.findUnique);
   const app = express();
   app.use(express.json());
   app.use("/api/campaigns", campaignsRouter);

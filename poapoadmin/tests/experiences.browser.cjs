@@ -20,7 +20,10 @@ function check(condition, message) { assert.ok(condition, message); assertions++
 const tokenFor = (id) => jwt.sign({ tenantId: id, email: `${id}@example.test` }, process.env.JWT_SECRET);
 
 async function main() {
-  for (const id of [tenantId, emptyId, foreignId]) await prisma.tenant.create({ data: { id, email: `${id}@example.test`, name: id } });
+  for (const id of [tenantId, emptyId, foreignId]) {
+    await prisma.tenant.create({ data: { id, email: `${id}@example.test`, name: id } });
+    await prisma.subscription.create({ data: { tenantId: id, plan: "BUSINESS", source: "LEGACY" } }); // fixtures : hors quotas
+  }
   const main = await prisma.catalog.create({ data: { tenantId, name: "Catalogue principal", isDefault: true } });
   const soins = await prisma.catalog.create({ data: { tenantId, name: "Catalogue Soins" } });
   const foreignCatalog = await prisma.catalog.create({ data: { tenantId: foreignId, name: "Catalogue secret" } });

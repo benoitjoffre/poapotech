@@ -6,11 +6,12 @@ import { verifyToken, AuthRequest } from "../middleware/auth";
 import { ensureDefaultCatalog, parseCatalogInput, resolveAccountTenantId, serializeCatalog } from "../services/catalogs";
 import { asyncRoute, QuizError } from "../services/quizzes";
 import productEnrichmentRouter from "./productEnrichment";
+import { assertResourceQuota, requireFeature, withTenantLock } from "../services/entitlements";
 
 // Gestion des catalogues d'un tenant : chaque produit et chaque quiz appartient à un seul catalogue.
 const router = Router();
 router.use(verifyToken);
-router.use("/:catalogId/enrichment", productEnrichmentRouter);
+router.use("/:catalogId/enrichment", requireFeature("aiEnrichment", ["GET", "POST", "PUT", "PATCH", "DELETE"]), productEnrichmentRouter);
 
 async function tenantOf(req: AuthRequest): Promise<string> {
   const tenantId = await resolveAccountTenantId(req);
@@ -80,9 +81,12 @@ router.post("/", asyncRoute(async (req: AuthRequest, res: Response) => {
   const data = parseCatalogInput(req.body, true);
   // Le catalogue par défaut doit exister avant tout autre : les anciennes API s'y rattachent.
   await ensureDefaultCatalog(tenantId);
-  const catalog = await prisma.catalog
-    .create({ data: { tenantId, name: data.name!, description: data.description ?? null, isDefault: false } })
-    .catch(duplicateName);
+  const catalog = await withTenantLock(tenantId, async (db) => {
+    await assertResourceQuota(db, tenantId, "catalogs");
+    return db.catalog
+      .create({ data: { tenantId, name: data.name!, description: data.description ?? null, isDefault: false } })
+      .catch(duplicateName);
+  });
   res.status(201).json((await summarize(tenantId, [catalog.id]))(catalog));
 }));
 

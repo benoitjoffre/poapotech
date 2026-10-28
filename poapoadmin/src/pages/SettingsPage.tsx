@@ -237,6 +237,12 @@ export default function SettingsPage() {
         </div>
       </form>
 
+      <section className="form-section">
+        <h2 className="section-title">Mon abonnement</h2>
+        <p className="section-hint">Formule, quotas et fonctionnalités disponibles.</p>
+        <Link className="btn-ghost" to="/settings/subscription">Voir mon abonnement</Link>
+      </section>
+
       <form className="product-form" onSubmit={handlePasswordSubmit}>
         <section className="form-section">
           <h2 className="section-title">Mot de passe de connexion</h2>

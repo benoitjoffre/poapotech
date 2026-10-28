@@ -20,7 +20,10 @@ test("PostgreSQL : agrégats métriques, abandons fiables/anciens, feedback et i
   process.env.JWT_SECRET = "analytics-db-test-only";
   let server: Server | undefined;
   try {
-    for (const tenantId of [id, other]) await prisma.tenant.create({ data: { id: tenantId, email: `${tenantId}@example.test`, name: tenantId } });
+    for (const tenantId of [id, other]) {
+      await prisma.tenant.create({ data: { id: tenantId, email: `${tenantId}@example.test`, name: tenantId } });
+      await prisma.subscription.create({ data: { tenantId: tenantId, plan: "BUSINESS", source: "LEGACY" } }); // fixtures : hors quotas
+    }
     const catalogs = await Promise.all([id, other].map((tenantId) => prisma.catalog.create({ data: { tenantId, name: "Principal" } })));
     const [quiz, foreign] = await Promise.all([id, other].map((tenantId, index) => prisma.quiz.create({
       data: { tenantId, catalogId: catalogs[index].id, name: "Quiz", quizTitle: "Titre", ctaText: "Voir", active: true },

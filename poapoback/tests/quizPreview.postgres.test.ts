@@ -20,6 +20,7 @@ test("PostgreSQL + Python : aperçu sans écritures, catalogue local et parité 
   process.env.JWT_SECRET = "preview-engine-test";
   try {
     await prisma.tenant.create({ data: { id, email: `${id}@example.test` } });
+    await prisma.subscription.create({ data: { tenantId: id, plan: "BUSINESS", source: "LEGACY" } }); // fixtures : hors quotas
     const catalog = await prisma.catalog.create({ data: { tenantId: id, name: "Odyssey test" } });
     const otherCatalog = await prisma.catalog.create({ data: { tenantId: id, name: "Autre catalogue" } });
     const product = await prisma.product.create({ data: {

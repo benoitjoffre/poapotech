@@ -43,6 +43,8 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
   const [abandonTracker] = useState(() => createAbandonTracker((payload) =>
     noBlockRef.current("quiz_abandon", { ...payload, abVariant: abVariantRef.current ?? "standard" })));
   const startTimeRef = useRef<number | null>(null);
+  // Clé d'idempotence d'une soumission logique : réutilisée par les retries tant que les réponses sont identiques.
+  const submitKeyRef = useRef<{ signature: string; key: string } | null>(null);
 
   const questionById = useMemo(() => {
     const map = new Map<string, Question>();
@@ -216,18 +218,28 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
         abandonTracker.complete();
         return;
       }
+      const submission = buildSessionAnswers();
+      const signature = JSON.stringify(submission);
+      if (submitKeyRef.current?.signature !== signature) submitKeyRef.current = { signature, key: newIdempotencyKey() };
       const res = await fetch(`${apiBaseUrl}/api/quiz/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId,
           quizId,
-          answers: buildSessionAnswers(),
+          answers: submission,
+          idempotencyKey: submitKeyRef.current.key,
           decisionTime: startTimeRef.current ? Date.now() - startTimeRef.current : undefined,
           abVariant: abVariant ?? undefined,
         }),
       });
-      if (!res.ok) throw new Error("Une erreur est survenue. Merci de reessayer.");
+      if (!res.ok) {
+        const failure = (await res.json().catch(() => ({}))) as { code?: string };
+        throw new Error(failure.code === "quota_exceeded"
+          ? "Cette sélection personnalisée est momentanément indisponible. Merci de réessayer plus tard."
+          : "Une erreur est survenue. Merci de reessayer.");
+      }
+      submitKeyRef.current = null;
       const data = (await res.json()) as QuizResult & { sessionId?: string };
       setResult(data);
       abandonTracker.complete();
@@ -253,6 +265,7 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
   };
 
   const handleRestart = () => {
+    submitKeyRef.current = null;
     setResult(null);
     setError("");
     setAnswersByQuestionId({});
@@ -600,6 +613,14 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
       )}
     </div>
   );
+}
+
+/** Clé d'idempotence (16–100 caractères [A-Za-z0-9_-]) ; repli hors contexte sécurisé où randomUUID est absent. */
+function newIdempotencyKey(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 export default function QuizPage() {

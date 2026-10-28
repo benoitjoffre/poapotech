@@ -4,6 +4,7 @@ import type { CampaignListResponse, CampaignOccasion, CampaignStatus } from "@po
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma";
 import { SUPER_ADMIN_TENANT_ID, verifyToken } from "../middleware/auth";
+import { requireFeature } from "../services/entitlements";
 import type { AuthRequest } from "../middleware/auth";
 import { asyncRoute, QuizError, quizInclude, resolveQuiz } from "../services/quizzes";
 import {
@@ -41,7 +42,7 @@ const requireTenant: RequestHandler = (req: AuthRequest, _res, next) => {
   next();
 };
 
-router.use(verifyToken, requireTenant);
+router.use(verifyToken, requireTenant, requireFeature("campaigns"));
 router.use("/:id/quiz-generation", quizGenerationRouter);
 
 function tenantOf(req: AuthRequest) {

@@ -111,6 +111,8 @@ before(async () => {
   stub(prisma, "$queryRaw", async (_sql: unknown, quizId: unknown, tenantId: unknown) =>
     quizzes.filter((q) => q.id === quizId && q.tenantId === tenantId).map((q) => ({ id: q.id })));
   stub(prisma.tenant, "findUnique", (async () => null) as typeof prisma.tenant.findUnique);
+  // Abonnement incluant les campagnes (la garde de fonctionnalité lit Subscription).
+  stub(prisma.subscription, "findUnique", (async () => ({ plan: "BUSINESS", status: "ACTIVE", source: "LEGACY", startsAt: new Date(0), endsAt: null })) as unknown as typeof prisma.subscription.findUnique);
   stub(prisma.tenant, "findUniqueOrThrow", async () => ({ primaryColor: "#246753", logoUrl: null }));
   stub(prisma.quiz, "findFirstOrThrow", async ({ where }: { where: { id: string; tenantId: string } }) => {
     const quiz = quizzes.find((q) => q.id === where.id && q.tenantId === where.tenantId);

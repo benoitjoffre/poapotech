@@ -20,9 +20,12 @@ test("PostgreSQL : accueil isolé, données réelles et lecture seule", {
   const secret = process.env.JWT_SECRET;
   process.env.JWT_SECRET = "dashboard-test-only";
   try {
-    for (const tenantId of [id, other]) await prisma.tenant.create({
+    for (const tenantId of [id, other]) {
+      await prisma.tenant.create({
       data: { id: tenantId, email: `${tenantId}@example.test`, name: tenantId === id ? "La boutique test" : "Autre boutique" },
     });
+      await prisma.subscription.create({ data: { tenantId: tenantId, plan: "BUSINESS", source: "LEGACY" } }); // fixtures : hors quotas
+    }
     const app = express();
     app.use("/api/dashboard", dashboardRouter);
     app.use(quizErrorHandler);

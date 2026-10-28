@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Quiz, QuizMetricsAIResponse, QuizMetricsResponse } from "@poapo/types";
-import { apiFetch } from "../../lib/api";
+import { Link } from "react-router-dom";
+import { ApiError, apiFetch } from "../../lib/api";
 
 function formatRate(value: number): string {
   return `${value.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`;
@@ -27,6 +28,7 @@ export default function AdvancedAnalytics({ quiz, since: currentSince }: { quiz:
   const [aiRequested, setAiRequested] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [locked, setLocked] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -35,7 +37,8 @@ export default function AdvancedAnalytics({ quiz, since: currentSince }: { quiz:
       const data = await apiFetch<QuizMetricsResponse>(`/api/quiz/metrics?quizId=${encodeURIComponent(quiz.id)}&since=${encodeURIComponent(currentSince)}`);
       setMetrics(data);
     } catch (err) {
-      setError((err as Error).message);
+      if (err instanceof ApiError && err.code === "feature_not_included") setLocked(true);
+      else setError((err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -71,6 +74,15 @@ export default function AdvancedAnalytics({ quiz, since: currentSince }: { quiz:
   const clicksPer100 = indicators?.clicksPer100Recommendations;
   const unavailable = "Indicateur non fourni par le serveur.";
   const legacyAbandons = funnel?.legacyAbandonEvents ?? 0;
+
+  if (locked) {
+    return (
+      <div className="analytics-warning" role="status" data-testid="advanced-locked">
+        Les analytics avancés ne sont pas inclus dans votre formule. Les résultats essentiels restent disponibles.{" "}
+        <Link to="/settings/subscription">Voir mon abonnement</Link>
+      </div>
+    );
+  }
 
   return (
     <div className="results-advanced">

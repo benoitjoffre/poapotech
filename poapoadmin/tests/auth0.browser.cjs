@@ -10,6 +10,7 @@ const { startMockAuth0 } = require("./support/mockAuth0.cjs");
 const { startIsolatedStack } = require("./support/isolatedStack.cjs");
 
 const run = randomUUID().slice(0, 8);
+const DEFAULT_CATALOG = "Catalogue principal";
 const audience = "https://api.poapo.test";
 const users = {
   alice: { sub: `auth0|alice-${run}`, email: `alice-${run}@example.test`, verified: true },
@@ -69,12 +70,13 @@ async function createShop(page, name) {
   await page.getByRole("button", { name: "Passer la visite" }).click();
   ok(await page.getByRole("link", { name: "Mes produits", exact: true }).isVisible() && await page.getByRole("link", { name: "Mes expériences", exact: true }).isVisible(), "accès produits et expériences");
 
-  // Premier catalogue.
+  // Catalogue par défaut présent ; STARTER limité à 1 catalogue : la création d'un second est refusée avec un message clair.
   await page.goto(stack.admin + "/catalogs");
+  await page.getByText(DEFAULT_CATALOG).first().waitFor();
   await page.locator("#catalog-name").fill("Mon premier catalogue");
   await page.getByRole("button", { name: "Créer le catalogue" }).click();
-  await page.getByText("Mon premier catalogue").first().waitFor();
-  ok(await prisma.catalog.count({ where: { tenantId: tenant.id, name: "Mon premier catalogue" } }) === 1, "premier catalogue créé");
+  await page.getByRole("alert").filter({ hasText: /Limite de catalogues/ }).waitFor();
+  ok(await prisma.catalog.count({ where: { tenantId: tenant.id } }) === 1, "STARTER : second catalogue refusé");
 
   // Import CSV : envoi de fichier authentifié par le jeton Auth0 (appel hors apiFetch).
   await page.goto(stack.admin + "/catalog/import");
@@ -83,11 +85,11 @@ async function createShop(page, name) {
   await page.getByText(/nom/i).first().waitFor();
   ok(await page.getByText(/Erreur 401|Missing authorization/).count() === 0, "import CSV authentifié via Auth0");
   await page.goto(stack.admin + "/catalogs");
-  await page.getByText("Mon premier catalogue").first().waitFor();
+  await page.getByText(DEFAULT_CATALOG).first().waitFor();
 
   // Rechargement (session silencieuse) puis déconnexion / reconnexion.
   await page.reload();
-  await page.getByText("Mon premier catalogue").first().waitFor();
+  await page.getByText(DEFAULT_CATALOG).first().waitFor();
   ok(true, "session conservée après rechargement");
   await page.getByRole("button", { name: "Déconnexion" }).click();
   await page.getByRole("heading", { level: 1, name: /Moins de choix au hasard/ }).waitFor(); // retour sur la landing publique
@@ -97,7 +99,7 @@ async function createShop(page, name) {
   await signIn(page, "alice");
   await page.waitForURL(stack.admin + "/");
   await page.goto(stack.admin + "/catalogs");
-  await page.getByText("Mon premier catalogue").first().waitFor();
+  await page.getByText(DEFAULT_CATALOG).first().waitFor();
   ok(await prisma.tenant.count({ where: { email: users.alice.email } }) === 1, "reconnexion sans nouvelle boutique");
 
   // Second commerçant : isolation.
@@ -108,7 +110,7 @@ async function createShop(page, name) {
   await pb.waitForURL(stack.admin + "/");
   await pb.goto(stack.admin + "/catalogs");
   await pb.locator("#catalog-name").waitFor();
-  ok(await pb.getByText("Mon premier catalogue").count() === 0, "bob ne voit pas le catalogue d'alice");
+  ok(await prisma.catalog.count({ where: { tenantId: { not: tenant.id }, name: "Mon premier catalogue" } }) === 0 && (await prisma.catalog.findMany({ where: { tenant: { email: users.bob.email } } })).every((c) => c.tenantId !== tenant.id), "bob ne voit pas le catalogue d'alice");
   const bobTenant = await prisma.tenant.findUniqueOrThrow({ where: { email: users.bob.email } });
   ok(bobTenant.id !== tenant.id, "deux boutiques distinctes");
 

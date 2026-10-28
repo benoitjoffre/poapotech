@@ -21,7 +21,10 @@ const shot = async (page, name) => { if (process.env.POAPO_SHOTS_DIR) await page
 async function main() {
   stack = await resolveStack();
   const { admin } = stack;
-  for (const id of [tenantId, emptyTenant]) await prisma.tenant.create({ data: { id, email: `${id}@example.test`, name: "La Belle Boutique" } });
+  for (const id of [tenantId, emptyTenant]) {
+    await prisma.tenant.create({ data: { id, email: `${id}@example.test`, name: "La Belle Boutique" } });
+    await prisma.subscription.create({ data: { tenantId: id, plan: "BUSINESS", source: "LEGACY" } });
+  }
   const [voyage, cafe] = await Promise.all([
     prisma.catalog.create({ data: { tenantId, name: "Catalogue Odyssey" } }),
     prisma.catalog.create({ data: { tenantId, name: "Catalogue Café" } }),

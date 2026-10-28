@@ -2,6 +2,7 @@ import { Prisma, type MembershipRole } from "@prisma/client";
 import { DEFAULT_PRIMARY_COLOR } from "@poapo/types";
 import { prisma } from "../lib/prisma";
 import { AuthError, type Auth0Identity } from "./auth0";
+import { ensureStarterSubscription } from "./subscriptions";
 
 export interface ResolvedAccount { userId: string; tenantId: string; role: MembershipRole; email: string }
 
@@ -67,6 +68,7 @@ export async function createShop(id: Auth0Identity, input: OnboardingInput): Pro
       const tenant = await tx.tenant.create({
         data: { email, name: input.shopName, industry: input.industry, websiteUrl: input.websiteUrl, primaryColor: DEFAULT_PRIMARY_COLOR },
       });
+      await ensureStarterSubscription(tx, tenant.id);
       const user = await tx.user.upsert({ where: { auth0Sub: id.sub }, update: {}, create: { auth0Sub: id.sub, email } });
       const m = await tx.membership.create({ data: { userId: user.id, tenantId: tenant.id, role: "OWNER" } });
       return { userId: user.id, tenantId: tenant.id, role: m.role, email };

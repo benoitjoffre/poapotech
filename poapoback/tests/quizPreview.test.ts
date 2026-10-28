@@ -60,6 +60,10 @@ before(async () => {
   stub(prisma.quiz, "findFirst", async ({ where }: Prisma.QuizFindFirstArgs = {}) =>
     where?.id === quiz.id && where.tenantId === quiz.tenantId ? quiz : null);
   stub(prisma.tenant, "findUnique", async () => ({ active: true }));
+  // Abonnement BUSINESS + transaction/SQL bruts neutralisés (quota, verrous) : ces tests couvrent le métier, pas PostgreSQL.
+  stub(prisma.subscription, "findUnique", (async () => ({ plan: "BUSINESS", status: "ACTIVE", source: "LEGACY", startsAt: new Date(0), endsAt: null })) as unknown as typeof prisma.subscription.findUnique);
+  stub(prisma, "$transaction", (async (fn: (tx: typeof prisma) => unknown) => fn(prisma)) as unknown as typeof prisma.$transaction);
+  stub(prisma, "$queryRaw", (async () => [{ recommendations: 1 }]) as unknown as typeof prisma.$queryRaw);
   stub(prisma.tenant, "findUniqueOrThrow", async () => ({ name: "Marque", primaryColor: "#246753", logoUrl: null }));
   stub(prisma.question, "findMany", async ({ where }: Prisma.QuestionFindManyArgs = {}) =>
     where?.quizId === quiz.id ? structuredClone(questions) : []);

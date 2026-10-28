@@ -137,7 +137,11 @@ export const adminQuizScope: RequestHandler = (req: AuthRequest, res, next) => {
 
 export const quizErrorHandler: ErrorRequestHandler = (err: unknown, _req, res, _next) => {
   if (err instanceof QuizError) {
-    res.status(err.status).json({ error: err.message, ...("diagnostic" in err && { diagnostic: err.diagnostic }) });
+    res.status(err.status).json({
+      error: err.message,
+      ...("diagnostic" in err && { diagnostic: err.diagnostic }),
+      ...("code" in err && { code: err.code, ...("details" in err && { details: err.details }) }),
+    });
     return;
   }
   if (err instanceof AuthError) {

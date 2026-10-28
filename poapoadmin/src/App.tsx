@@ -5,6 +5,8 @@ import CatalogPage from "./pages/CatalogPage";
 import CatalogsPage from "./pages/CatalogsPage";
 import ProductFormPage from "./pages/ProductFormPage";
 import SettingsPage from "./pages/SettingsPage";
+import SidebarPlan from "./components/SidebarPlan";
+import SubscriptionPage from "./pages/SubscriptionPage";
 import ImportPage from "./pages/ImportPage";
 import QuizBuilderPage from "./pages/QuizBuilderPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
@@ -73,6 +75,7 @@ function AppLayout() {
             <NavLink className={link} to="/help"><Icon name="help" />Centre d'aide</NavLink>
           </>}
         </nav>
+        {user && !user.isSuperAdmin && <SidebarPlan />}
         <div className="admin-sidebar-user">
           <span className="admin-nav-email" title={user?.email}>{user?.email}</span>
           <button type="button" className="btn-ghost btn-sm" onClick={logout}>
@@ -131,6 +134,7 @@ function App() {
             <Route path="/help" element={<HelpCenterPage />} />
             <Route path="/help/:slug" element={<HelpArticlePage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/subscription" element={<SubscriptionPage />} />
           </Route>
         </Route>
         <Route path="*" element={<Navigate to="/catalog" replace />} />

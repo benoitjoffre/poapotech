@@ -18,6 +18,7 @@ async function main() {
   const tenant = await prisma.tenant.create({ data: {
     id: tenantId, email: `${tenantId}@example.test`, primaryColor: "#246753",
   } });
+  await prisma.subscription.create({ data: { tenantId, plan: "BUSINESS", source: "LEGACY" } });
   const catalog = await prisma.catalog.create({ data: { tenantId, name: "Odyssey recette", isDefault: true } });
   const product = await prisma.product.create({ data: {
     tenantId, catalogId: catalog.id, name: "Voyage Odyssey de recette", tags: ["calme"],

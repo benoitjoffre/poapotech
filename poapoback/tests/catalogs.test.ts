@@ -82,6 +82,10 @@ before(async () => {
     return null;
   }) as unknown as typeof prisma.tenant.findUnique);
 
+  // Abonnement BUSINESS + transaction/SQL bruts neutralisés (quota, verrous) : ces tests couvrent le métier, pas PostgreSQL.
+  stub(prisma.subscription, "findUnique", (async () => ({ plan: "BUSINESS", status: "ACTIVE", source: "LEGACY", startsAt: new Date(0), endsAt: null })) as unknown as typeof prisma.subscription.findUnique);
+  stub(prisma, "$transaction", (async (fn: (tx: typeof prisma) => unknown) => fn(prisma)) as unknown as typeof prisma.$transaction);
+  stub(prisma, "$queryRaw", (async () => [{ recommendations: 1 }]) as unknown as typeof prisma.$queryRaw);
   stub(prisma.catalog, "findFirst", (async ({ where }: { where: Row }) =>
     catalogs.find((catalog) => matches(catalog, where)) ?? null
   ) as unknown as typeof prisma.catalog.findFirst);

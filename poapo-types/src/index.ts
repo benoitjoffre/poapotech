@@ -950,3 +950,28 @@ export interface PaginatedResponse<T> {
   page: number;
   pageSize: number;
 }
+
+// ── Abonnement (GET /api/subscription) ──
+export type SubscriptionPlanId = "STARTER" | "PRO" | "BUSINESS";
+export type SubscriptionQuotaKey = "catalogs" | "publishedExperiences" | "recommendationsPerMonth";
+export type SubscriptionFeatureKey = "aiEnrichment" | "advancedAnalytics" | "campaigns";
+
+export interface SubscriptionOverview {
+  plan: SubscriptionPlanId;
+  planLabel: string;
+  status: "ACTIVE" | "EXPIRED" | "CANCELED";
+  source: "SIGNUP" | "PROMO" | "LEGACY" | "STRIPE";
+  /** Accès offert en cours de validité (« Offert pendant le pilote »). */
+  promotional: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  /** Plan stocké lorsque l'accès offert a expiré. */
+  previousPlan: SubscriptionPlanId | null;
+  /** null = illimité. */
+  limits: Record<SubscriptionQuotaKey, number | null>;
+  features: Record<SubscriptionFeatureKey, boolean>;
+  usage: Record<SubscriptionQuotaKey, number>;
+  usagePeriod: { period: string; resetsAt: string };
+  plans: { id: SubscriptionPlanId; label: string; limits: Record<SubscriptionQuotaKey, number | null>; features: Record<SubscriptionFeatureKey, boolean> }[];
+  featureLabels: Record<SubscriptionFeatureKey, string>;
+}

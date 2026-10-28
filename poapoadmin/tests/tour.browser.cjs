@@ -19,6 +19,7 @@ async function main() {
   stack = await resolveStack();
   const { admin } = stack;
   await prisma.tenant.create({ data: { id: tenantId, email: `${tenantId}@example.test`, name: "Boutique visite" } });
+  await prisma.subscription.create({ data: { tenantId, plan: "BUSINESS", source: "LEGACY" } });
   await prisma.catalog.create({ data: { tenantId, name: "Catalogue visite", isDefault: true } });
   const token = jwt.sign({ tenantId, email: `${tenantId}@example.test` }, process.env.JWT_SECRET);
   const counts = async () => [await prisma.quiz.count({ where: { tenantId } }), await prisma.campaign.count({ where: { tenantId } })];
