@@ -1,13 +1,19 @@
-# Blueprint Render pour POAPO. Rien n'est créé tant que ce fichier n'est pas importé dans Render.
-# Plans : "free" partout par défaut pour ne créer aucune ressource payante par erreur. Voir docs/deploiement-render.md
-# (mémoire du service Python, durée de vie de la base gratuite, mise en veille) avant la mise en ligne.
+# Blueprint Render pour POAPO — ENVIRONNEMENT DE RECETTE (tout en offre gratuite).
+# Rien n'est créé tant que ce fichier n'est pas importé dans Render (Dashboard → New → Blueprint).
+# Syntaxe vérifiée contre le schéma officiel https://render.com/schema/render.yaml.json.
+# Procédure, contraintes de l'offre gratuite et checklist : docs/deploiement-render.md. Aucun secret dans ce fichier :
+# les variables « sync: false » sont saisies dans le Dashboard au premier import, les secrets internes sont générés par Render.
+#
+# ⚠ Recette uniquement : la base gratuite expire 30 jours après sa création (puis 14 jours de grâce) et n'a aucune sauvegarde ;
+#   les services gratuits s'endorment après 15 min d'inactivité (réveil ≈ 1 min) ; poapo-ai dépasse la mémoire de l'offre gratuite
+#   (≈ 760 Mo mesurés pour 512 Mo disponibles) : voir docs/deploiement-render.md avant de compter sur les recommandations.
 databases:
   - name: poapo-db
     region: frankfurt
     plan: free
     databaseName: poapo
     user: poapo
-    # pgvector : CREATE EXTENSION vector est exécuté par la migration baseline.
+    # pgvector : CREATE EXTENSION vector est exécuté par la migration baseline (supporté par Render Postgres ≥ 13).
 
 services:
   # ── API Node (Express + Prisma) ───────────────────────────────────────────────
@@ -16,12 +22,14 @@ services:
     runtime: node
     region: frankfurt
     plan: free
+    autoDeployTrigger: "off" # déploiement manuel uniquement (Dashboard → Manual Deploy)
     buildCommand: >-
       npm ci --include=dev &&
       npm run build -w poapo-types &&
       npx prisma generate --schema poapoback/prisma/schema.prisma &&
       npm run build -w poapoback
-    # Les migrations sont appliquées au démarrage (sans preDeployCommand, réservé aux offres payantes).
+    # Les migrations (prisma migrate deploy : additives, jamais de reset) sont appliquées au démarrage car preDeployCommand
+    # n'est pas disponible sur l'offre gratuite. Sur une offre payante : déplacer la commande dans preDeployCommand.
     startCommand: cd poapoback && npx prisma migrate deploy && node dist/server.js
     healthCheckPath: /health
     envVars:
@@ -31,43 +39,35 @@ services:
         value: production
       - key: TRUST_PROXY
         value: "1"
+      # URL interne (même région) : le trafic API → base ne passe pas par Internet.
       - key: DATABASE_URL
         fromDatabase: { name: poapo-db, property: connectionString }
       - key: JWT_SECRET
         generateValue: true
       - key: AI_SERVICE_TOKEN
         generateValue: true
+      # URL PUBLIQUE https de poapo-ai : un service gratuit ne reçoit pas de trafic du réseau privé, donc l'URL interne
+      # (fromService / host) est inutilisable tant que poapo-ai est en offre gratuite. L'appel est protégé par AI_SERVICE_TOKEN.
       - key: AI_SERVICE_URL
-        sync: false # https://poapo-ai.onrender.com
+        sync: false # https://poapo-ai.onrender.com (sans slash final)
       - key: FRONTEND_URL
-        sync: false # URL du widget (poapo-widget)
+        sync: false # URL du widget (poapo-widget), origine seule : https://poapo-widget.onrender.com
       - key: ADMIN_URL
-        sync: false # URL de l'administration (poapo-admin)
+        sync: false # URL de l'administration (poapo-admin) : https://poapo-admin.onrender.com
       - key: AUTH0_DOMAIN
         sync: false # ex. poapo.eu.auth0.com — voir docs/auth0.md
       - key: AUTH0_AUDIENCE
         sync: false
-      - key: SMTP_HOST
-        sync: false
-      - key: SMTP_PORT
-        sync: false
-      - key: SMTP_USER
-        sync: false
-      - key: SMTP_PASS
-        sync: false
-      - key: EMAIL_FROM
-        sync: false
       - key: SUPER_ADMIN_EMAIL
-        sync: false
-      - key: SUPER_ADMIN_PASSWORD
-        sync: false
+        sync: false # email Auth0 vérifié du super-admin
 
   # ── Moteur Python (embeddings locaux, recommandation) ────────────────────────
   - type: web
     name: poapo-ai
     runtime: python
     region: frankfurt
-    plan: free
+    plan: free # ⚠ 512 Mo : insuffisant pour torch + modèle (≈ 760 Mo mesurés). Voir docs/deploiement-render.md.
+    autoDeployTrigger: "off"
     rootDir: poapoai
     # Le modèle est téléchargé au build dans HF_HOME (même chemin au runtime) : aucun téléchargement au démarrage.
     buildCommand: >-
@@ -82,26 +82,51 @@ services:
         value: /opt/render/project/src/poapoai/.hf-cache
       - key: MODEL_NAME
         value: paraphrase-multilingual-MiniLM-L12-v2
+      # Limitent les pics de mémoire et de threads (0,1 CPU) sans changer les résultats numériques.
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: TOKENIZERS_PARALLELISM
+        value: "false"
+      # URL interne : lecture des produits dans la base, même région.
       - key: DATABASE_URL
         fromDatabase: { name: poapo-db, property: connectionString }
       - key: AI_SERVICE_TOKEN
         fromService: { type: web, name: poapo-api, envVarKey: AI_SERVICE_TOKEN }
+      # L'API appelle ce service côté serveur (aucun navigateur) : ce CORS n'a pas d'effet sur le widget.
       - key: ALLOWED_ORIGINS
         value: https://poapo-api.onrender.com
+      # Facultatif et laissé vide en recette : sert uniquement à la génération de quiz et à l'enrichissement par IA (OpenAI).
       - key: OPENAI_API_KEY
-        sync: false # facultatif : génération de quiz et enrichissement uniquement
+        sync: false
 
   # ── Administration React (site statique) ─────────────────────────────────────
   - type: web
     name: poapo-admin
     runtime: static
-    region: frankfurt
+    autoDeployTrigger: "off"
     buildCommand: npm ci --include=dev && npm run build -w poapo-types && npm run build -w poapoadmin
     staticPublishPath: poapoadmin/dist
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
+    # L'administration ne doit jamais être affichée dans une iframe tierce (clickjacking).
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Content-Security-Policy
+        value: frame-ancestors 'none'
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
     envVars:
       - key: VITE_API_BASE_URL
         sync: false # https://poapo-api.onrender.com
@@ -110,7 +135,7 @@ services:
       - key: VITE_AUTH0_DOMAIN
         sync: false
       - key: VITE_AUTH0_CLIENT_ID
-        sync: false
+        sync: false # application Auth0 de RECETTE (SPA) : identifiant public, pas un secret
       - key: VITE_AUTH0_AUDIENCE
         sync: false
 
@@ -118,13 +143,31 @@ services:
   - type: web
     name: poapo-widget
     runtime: static
-    region: frankfurt
+    autoDeployTrigger: "off"
     buildCommand: npm ci --include=dev && npm run build -w poapo-types && npm run build -w poapofront
     staticPublishPath: poapofront/dist
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
+    # Le widget est embarqué en iframe sur les sites des clients : AUCUN X-Frame-Options, frame-ancestors ouvert.
+    headers:
+      - path: /*
+        name: Content-Security-Policy
+        value: frame-ancestors *
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /assets/*
+        name: Cache-Control
+        value: public, max-age=31536000, immutable
+      # Script copié par les clients : cache court pour que les correctifs se propagent vite.
+      - path: /poapo-widget.js
+        name: Cache-Control
+        value: public, max-age=300
     envVars:
       - key: VITE_API_BASE_URL
         sync: false # https://poapo-api.onrender.com

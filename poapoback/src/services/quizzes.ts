@@ -153,6 +153,12 @@ export const quizErrorHandler: ErrorRequestHandler = (err: unknown, _req, res, _
     res.status(409).json({ error: "Opération refusée : elle associerait des éléments de catalogues différents ou encore utilisés" });
     return;
   }
+  // Erreurs de body-parser (corps trop gros, JSON invalide) : réponse 4xx explicite plutôt qu'un 500 bruyant dans les logs.
+  const { status, type } = err as { status?: unknown; type?: unknown };
+  if (typeof type === "string" && type.startsWith("entity.") && typeof status === "number" && status >= 400 && status < 500) {
+    res.status(status).json({ error: status === 413 ? "Requête trop volumineuse" : "Requête invalide" });
+    return;
+  }
   console.error("[api]", err);
   res.status(500).json({ error: "Erreur interne du serveur" });
 };
