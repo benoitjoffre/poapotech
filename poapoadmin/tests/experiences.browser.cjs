@@ -172,13 +172,13 @@ async function main() {
   await page.goto(admin + "/quizzes");
   const nav = page.getByRole("navigation", { name: "Navigation principale" });
   check(await nav.getByRole("link", { name: "Mes expériences", exact: true }).getAttribute("aria-current") === "page", "navigation highlights Mes expériences");
-  for (const route of [`/quizzes/${shared.id}`, `/quizzes/new`, `/quiz-builder?quizId=${shared.id}`, `/campaigns/${campaigns[0].id}`, `/analytics?quizId=${shared.id}`, "/campaigns"]) {
+  for (const route of [`/campaigns/${campaigns[0].id}`, `/analytics?quizId=${shared.id}`, "/campaigns"]) {
     await page.goto(admin + route);
     await page.waitForLoadState("networkidle");
     check(new URL(page.url()).pathname === route.split("?")[0], `legacy link ${route}`);
   }
-  await page.goto(admin + `/quizzes/new`);
-  await page.getByRole("heading", { name: "Nouveau quiz", exact: true }).waitFor();
+  await page.goto(admin + `/quizzes/${shared.id}`);
+  await page.waitForURL(`**/experiences/${shared.id}/edit`);
 
   // Error, retry and loading states.
   await page.route("**/api/experiences", (route) => route.fulfill({ status: 500, json: { error: "Synthèse indisponible" } }));

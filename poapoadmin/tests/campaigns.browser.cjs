@@ -205,7 +205,7 @@ async function main() {
   eq((await request(`/api/campaigns/${onInactive.id}`, "PUT", { status: "ACTIVE" })).status, 400, "règle serveur conservée");
 
   // 5. Anciennes routes.
-  for (const route of [`/campaigns/${noDates.id}/quiz-editor`, `/campaigns/${noDates.id}/generate-quiz`, "/quizzes", `/experiences/${shared.id}/edit`, "/experiences"]) {
+  for (const route of [`/campaigns/${noDates.id}/quiz-editor`, "/quizzes", `/experiences/${shared.id}/edit`, "/experiences"]) {
     await page.goto(admin + route);
     await page.waitForLoadState("networkidle");
     ok(!(await page.locator("body").innerText()).includes("Page introuvable"), `route ${route}`);

@@ -1,4 +1,4 @@
-import { Navigate, NavLink, Outlet, Route, Routes, useLocation, useMatch } from "react-router-dom";
+import { Navigate, NavLink, Outlet, Route, Routes, useLocation, useMatch, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import CatalogPage from "./pages/CatalogPage";
@@ -8,17 +8,14 @@ import SettingsPage from "./pages/SettingsPage";
 import SidebarPlan from "./components/SidebarPlan";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import ImportPage from "./pages/ImportPage";
-import QuizBuilderPage from "./pages/QuizBuilderPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import TenantsAdminPage from "./pages/TenantsAdminPage";
 import QuizzesPage from "./pages/QuizzesPage";
-import QuizFormPage from "./pages/QuizFormPage";
 import ExperienceCreatePage from "./pages/ExperienceCreatePage";
 import ExpressCreationPage from "./pages/ExpressCreationPage";
 import CampaignsPage from "./pages/CampaignsPage";
 import CampaignFormPage from "./pages/CampaignFormPage";
 import CampaignDetailPage from "./pages/CampaignDetailPage";
-import CampaignQuizGeneratorPage from "./pages/CampaignQuizGeneratorPage";
 import ExperienceEditorPage, { ExperienceSetupPage } from "./pages/ExperienceEditorPage";
 import CampaignQuizEditorPage from "./pages/CampaignQuizEditorPage";
 import ProductEnrichmentPage from "./pages/ProductEnrichmentPage";
@@ -27,6 +24,7 @@ import HelpArticlePage from "./pages/HelpArticlePage";
 import HomePage from "./pages/HomePage";
 import OnboardingPage from "./pages/OnboardingPage";
 import LandingPage from "./landing/LandingPage";
+import { experienceEditorPath } from "./lib/experienceLinks";
 import Icon from "./components/Icon";
 import { QuizProvider } from "./contexts/QuizContext";
 import { TourProvider } from "./tour/TourContext";
@@ -39,6 +37,11 @@ function ProtectedRoute() {
   // Visiteur non connecté sur la racine : landing publique (les autres pages restent privées).
   if (!token && pathname === "/") return <LandingPage />;
   return token ? <QuizProvider><Outlet /></QuizProvider> : <Navigate to="/login" replace />;
+}
+
+function LegacyQuizRedirect() {
+  const { quizId = "" } = useParams();
+  return <Navigate to={experienceEditorPath(quizId)} replace />;
 }
 
 function SuperAdminRoute() {
@@ -113,10 +116,8 @@ function App() {
             <Route path="/catalog/import" element={<ImportPage />} />
             <Route path="/catalog/:id/edit" element={<ProductFormPage />} />
             <Route path="/enrichment" element={<ProductEnrichmentPage />} />
-            <Route path="/quiz-builder" element={<QuizBuilderPage />} />
             <Route path="/quizzes" element={<QuizzesPage />} />
-            <Route path="/quizzes/new" element={<QuizFormPage />} />
-            <Route path="/quizzes/:quizId" element={<QuizFormPage />} />
+            <Route path="/quizzes/:quizId" element={<LegacyQuizRedirect />} />
             <Route path="/experiences/new" element={<ExperienceCreatePage />} />
             <Route path="/experiences/new/express" element={<ExpressCreationPage />} />
             <Route path="/experiences/:quizId/setup" element={<ExperienceSetupPage />} />
@@ -125,7 +126,6 @@ function App() {
             <Route path="/campaigns/new" element={<CampaignFormPage />} />
             <Route path="/campaigns/:campaignId" element={<CampaignDetailPage />} />
             <Route path="/campaigns/:campaignId/edit" element={<CampaignFormPage />} />
-            <Route path="/campaigns/:campaignId/generate-quiz" element={<CampaignQuizGeneratorPage />} />
             <Route path="/campaigns/:campaignId/quiz-editor" element={<CampaignQuizEditorPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route element={<SuperAdminRoute />}>

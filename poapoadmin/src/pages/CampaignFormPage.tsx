@@ -260,7 +260,7 @@ export default function CampaignFormPage() {
               <div className="cp-empty">
                 <h3>Aucune expérience disponible</h3>
                 <p>Une campagne s'appuie sur une expérience existante. Créez-en une d'abord.</p>
-                <Link className="btn-primary" to="/quizzes/new">Créer une expérience</Link>
+                <Link className="btn-primary" to="/experiences/new">Créer une expérience</Link>
               </div>
             ) : (
               <div role="radiogroup" aria-label="Expérience associée" className="cp-choices">

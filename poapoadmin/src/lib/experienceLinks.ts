@@ -1,6 +1,8 @@
 import type { DashboardExperience } from "@poapo/types";
 
 export function quizPath(quiz: Pick<DashboardExperience, "id" | "catalog">, path = "/quizzes/"): string {
+  if (path === "/quizzes/") return experienceEditorPath(quiz.id);
+  if (path === "/quiz-builder") return experienceEditorPath(quiz.id, "questions");
   const query = new URLSearchParams({ quizId: quiz.id, catalogId: quiz.catalog.id });
   return path === "/quizzes/" ? `${path}${encodeURIComponent(quiz.id)}?${query}` : `${path}?${query}`;
 }

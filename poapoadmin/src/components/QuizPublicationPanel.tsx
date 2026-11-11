@@ -92,7 +92,7 @@ export default function QuizPublicationPanel({ editor, quizId, visible, pending,
     return <ul>{items.map((issue, index) => <li key={`${issue.code}:${index}`}>
       <span>{issue.message}</span>{" "}
       {locate && onLocate ? (locate(issue) ? <button type="button" className="table-link" onClick={() => onLocate(issue)}>Corriger</button> : null)
-        : issue.section === "configuration" ? <a href={`/quizzes/${encodeURIComponent(quizId)}`}>Configurer le quiz</a>
+        : issue.section === "configuration" ? <a href={`/experiences/${encodeURIComponent(quizId)}/edit?section=configuration`}>Configurer le quiz</a>
         : issue.section !== "publication" && <button type="button" className="table-link"
           onClick={() => navigate?.(issue.section === "appearance" ? "appearance" : "questions", issue.questionId)}>Voir l'élément</button>}
     </li>)}</ul>;

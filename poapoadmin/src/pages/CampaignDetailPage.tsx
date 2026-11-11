@@ -194,12 +194,7 @@ export default function CampaignDetailPage() {
             <h3>Campaign Studio</h3>
             <div className="cp-actions">
               <Link className="btn-ghost" to={campaignEditorPath(campaign.id)}>Personnaliser le quiz</Link>
-              <Link className="btn-ghost" to={`/campaigns/${campaign.id}/generate-quiz`}>✨ Générer un quiz avec l'IA</Link>
             </div>
-            <p className="cp-muted">
-              La génération part des axes de ce quiz et enregistre un nouveau quiz inactif
-              {campaign.status === "DRAFT" ? ", que vous pouvez associer à cette campagne." : " indépendant, car la campagne n'est plus en brouillon."}
-            </p>
           </div>
         </section>
       </div>

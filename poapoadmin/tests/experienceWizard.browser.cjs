@@ -231,9 +231,6 @@ async function main() {
   await page.keyboard.press("Enter");
   await page.getByRole("heading", { name: "Qu'est-ce qui différencie vos produits ?" }).waitFor();
 
-  // Anciennes routes toujours disponibles.
-  await page.goto(`${admin}/quizzes/new`);
-  await page.getByRole("heading", { name: "Nouveau quiz", exact: true }).waitFor();
   await page.goto(`${admin}/experiences/${quizId}/edit`);
   await page.getByRole("tab", { name: "Questions", exact: true }).waitFor();
 
