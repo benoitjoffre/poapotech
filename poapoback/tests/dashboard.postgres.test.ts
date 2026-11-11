@@ -77,9 +77,6 @@ test("PostgreSQL : accueil isolé, données réelles et lecture seule", {
     for (const quizId of [quiz.id, manual.id]) await prisma.question.create({
       data: { tenantId: id, quizId, text: "Question ?", answers: { create: { text: "Réponse", impacts: {} } } },
     });
-    for (const name of ["Occasion A", "Occasion B"]) await prisma.campaign.create({
-      data: { tenantId: id, quizId: quiz.id, name, occasion: "PERMANENT", objectives: [], status: "PAUSED" },
-    });
     await prisma.quizEditorDraft.create({ data: { tenantId: id, quizId: standalone.id, content: { schemaVersion: 1 }, revision: 3 } });
     await prisma.quizEditorDraft.create({ data: { tenantId: id, quizId: quiz.id, content: Prisma.DbNull } });
     await prisma.metric.createMany({ data: [

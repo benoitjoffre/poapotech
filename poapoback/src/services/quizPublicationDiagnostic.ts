@@ -81,11 +81,8 @@ function contrast(first: string, second: string) {
 export async function diagnoseQuiz(
   quiz: ScopedQuiz, raw: unknown, db: Prisma.TransactionClient = prisma,
 ): Promise<{ diagnostic: QuizPublicationDiagnostic; draft: QuizEditorDraft | null }> {
-  const campaigns = await db.campaign.findMany({
-    where: { tenantId: quiz.tenantId, quizId: quiz.id }, select: { id: true, name: true }, orderBy: { id: "asc" },
-  });
   const diagnostic: QuizPublicationDiagnostic = {
-    quizId: quiz.id, revision: 0, hasChanges: false, valid: false, errors: [], warnings: [], campaigns,
+    quizId: quiz.id, revision: 0, hasChanges: false, valid: false, errors: [], warnings: [],
     summary: { name: quiz.name, catalogId: quiz.catalogId, catalogName: quiz.catalog.name, questions: 0, products: 0, active: quiz.active },
   };
   let draft: QuizEditorDraft;
@@ -135,7 +132,6 @@ export async function diagnoseQuiz(
   if (contrast(theme.textColor, theme.backgroundColor) < 4.5 || contrast("#ffffff", theme.primaryColor) < 4.5) {
     warning("LOW_CONTRAST", "Contraste inférieur à 4,5:1 pour le texte ou le bouton principal. Vérifiez aussi les images et dégradés.", "appearance");
   }
-  if (campaigns.length > 1) warning("SHARED_QUIZ", `Ce quiz est partagé par ${campaigns.length} campagnes.`, "publication");
   diagnostic.valid = !diagnostic.errors.length;
   return { diagnostic, draft };
 }

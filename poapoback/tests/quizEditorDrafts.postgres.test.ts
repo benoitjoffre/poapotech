@@ -43,12 +43,9 @@ test("PostgreSQL : API des brouillons, CAS concurrent, FK tenant, abandon et con
     const otherQuiz = await prisma.quiz.create({ data: {
       tenantId: id, catalogId: catalog.id, name: "Autre quiz", quizTitle: "Autre titre", ctaText: "Découvrir",
     } });
-    await prisma.campaign.create({ data: {
-      tenantId: id, quizId: quiz.id, name: "Campagne inchangée", occasion: "PERMANENT", objectives: [],
-    } });
     const publicSnapshot = () => prisma.quiz.findUnique({ where: { id: quiz.id }, include: {
       questions: { orderBy: { id: "asc" }, include: { answers: { orderBy: { id: "asc" } } } },
-      products: true, campaigns: true,
+      products: true,
     } });
     const before = await publicSnapshot();
     const app = express();

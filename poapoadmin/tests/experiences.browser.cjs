@@ -37,11 +37,7 @@ async function main() {
   await prisma.quiz.create({ data: { tenantId: foreignId, catalogId: foreignCatalog.id, name: "Quiz secret étranger", quizTitle: "Secret", ctaText: "Voir" } });
   for (const quizId of [shared.id, standalone.id]) await prisma.question.create({ data: {
     tenantId, quizId, text: "Question ?", answers: { create: [{ text: "Oui", order: 0, impacts: {} }] } } });
-  const campaigns = [];
-  for (const [name, status] of [["Vacances d'été", "ACTIVE"], ["City break automne", "PAUSED"], ["Noël 2026", "SCHEDULED"]]) {
-    campaigns.push(await prisma.campaign.create({ data: { tenantId, quizId: shared.id, name, occasion: "PERMANENT", objectives: [], status,
-      startsAt: status === "SCHEDULED" ? new Date(Date.now() + 40 * 86_400_000) : null } }));
-  }
+  await prisma.quiz.update({ where: { id: shared.id }, data: { occasion: "CHRISTMAS", startsAt: new Date("2026-12-01T00:00:00Z"), endsAt: new Date("2026-12-24T23:00:00Z") } });
   await prisma.quizEditorDraft.create({ data: { tenantId, quizId: shared.id, content: { config: { name: shared.name } } } });
   await prisma.metric.createMany({ data: [
     { tenantId, quizId: shared.id, type: "quiz_start" }, { tenantId, quizId: shared.id, type: "quiz_start" },
@@ -70,7 +66,7 @@ async function main() {
   check(await page.locator(".dashboard-stat dd").allTextContents().then((values) => values.join(",") === "5,3,2,1"), "real totals, shared quiz counted once");
 
   const sharedCard = cards.filter({ hasText: shared.name });
-  check(await sharedCard.getByText("3 campagnes").count() === 1, "campaign count");
+  check(await sharedCard.getByText(/Noël/).count() === 1, "occasion and period shown");
   check(await sharedCard.getByText("Brouillon enregistré").count() === 1, "saved draft state");
   check(await sharedCard.getByText("Accessible au public").count() === 1, "public availability");
   check(await sharedCard.getByText("Catalogue principal").count() === 1 && await sharedCard.getByText("1 question", { exact: true }).count() === 1, "catalogue and question count");
@@ -81,7 +77,6 @@ async function main() {
   check((await sharedCard.getByRole("link", { name: /Prévisualiser/ }).getAttribute("href")).includes(`quizId=${shared.id}`), "preview opens the public quiz");
   check(await sharedCard.getByText("Commencés").count() === 1 && await sharedCard.locator(".xp-stats dd").allTextContents().then((v) => v.join(",") === "2,1,1"), "real statistics");
   const standaloneCard = cards.filter({ hasText: standalone.name });
-  check(await standaloneCard.getByText("Aucune campagne").count() === 1, "quiz without campaign");
   check(await standaloneCard.getByText(/Pas encore de données/).count() === 1, "no-data state without fictional figures");
   check(await standaloneCard.getByText("Catalogue Soins").count() === 1, "second catalogue");
   const inactiveCard = cards.filter({ hasText: inactive.name });
@@ -117,14 +112,10 @@ async function main() {
   await cards.filter({ hasText: shared.name }).getByRole("button", { name: /afficher les détails/ }).click();
   await panel.getByRole("heading", { level: 2, name: shared.name, exact: true }).waitFor();
   check(true, "selected experience details");
-  check(await panel.locator(".xp-campaigns li").count() === 3, "associated campaigns listed");
-  check(await panel.getByText("Programmée").count() === 1 && await panel.getByText("En pause").count() === 1, "campaign states");
-  check(await panel.getByText(/Cette expérience est partagée/).count() === 1, "shared quiz warning");
-  check(await panel.getByRole("link", { name: /Éditeur historique via la campagne Vacances/ }).getAttribute("href") === `/campaigns/${campaigns[0].id}/quiz-editor`, "legacy campaign editor route is still linked");
+  check(await panel.getByText("Occasion et période").count() === 1, "occasion and period in the details");
   check(new URL(page.url()).searchParams.get("experience") === shared.id, "selection stored in the URL");
   await cards.filter({ hasText: standalone.name }).getByRole("button", { name: /afficher les détails/ }).click();
   await panel.getByRole("heading", { level: 2, name: standalone.name, exact: true }).waitFor();
-  check(await panel.getByText(/Aucune campagne : l'expérience existe sans campagne/).count() === 1, "no-campaign detail states the absence of campaigns");
   check(await panel.getByRole("link", { name: "Éditer" }).getAttribute("href") !== null, "edit action available without campaign");
 
   // Keyboard.
@@ -172,7 +163,7 @@ async function main() {
   await page.goto(admin + "/quizzes");
   const nav = page.getByRole("navigation", { name: "Navigation principale" });
   check(await nav.getByRole("link", { name: "Mes expériences", exact: true }).getAttribute("aria-current") === "page", "navigation highlights Mes expériences");
-  for (const route of [`/campaigns/${campaigns[0].id}`, `/analytics?quizId=${shared.id}`, "/campaigns"]) {
+  for (const route of [`/analytics?quizId=${shared.id}`]) {
     await page.goto(admin + route);
     await page.waitForLoadState("networkidle");
     check(new URL(page.url()).pathname === route.split("?")[0], `legacy link ${route}`);
@@ -190,7 +181,7 @@ async function main() {
   check(await cards.count() === 5, "retry recovers");
 
   check(await prisma.quiz.count({ where: { tenantId } }) === 5 && await prisma.quizEditorDraft.count({ where: { tenantId } }) === 1 &&
-    await prisma.metric.count({ where: { tenantId } }) === 4 && await prisma.campaign.count({ where: { tenantId } }) === 3, "page is read-only");
+    await prisma.metric.count({ where: { tenantId } }) === 4, "page is read-only");
   check(errors.length === 0, errors.join("\n"));
   await context.close();
 

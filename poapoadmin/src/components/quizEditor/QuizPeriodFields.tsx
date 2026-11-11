@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import type { CampaignOccasion, Quiz } from "@poapo/types";
+import type { QuizOccasion, Quiz } from "@poapo/types";
 import { apiFetch } from "../../lib/api";
 import { fromDateInput, OCCASION_LABELS, OCCASIONS, toDateInput } from "../../lib/occasions";
 
 /** Occasion et période (facultatives) : enregistrées automatiquement, sans effet sur ce que voient les visiteurs. */
 export default function QuizPeriodFields({ quiz }: { quiz: Quiz }) {
-  const [occasion, setOccasion] = useState<CampaignOccasion | "">(quiz.occasion ?? "");
+  const [occasion, setOccasion] = useState<QuizOccasion | "">(quiz.occasion ?? "");
   const [label, setLabel] = useState(quiz.occasionLabel ?? "");
   const [start, setStart] = useState(toDateInput(quiz.startsAt));
   const [end, setEnd] = useState(toDateInput(quiz.endsAt));
@@ -37,7 +37,7 @@ export default function QuizPeriodFields({ quiz }: { quiz: Quiz }) {
     <div className="form-grid">
       <div className="field-group">
         <label className="field-label" htmlFor="quiz-occasion">Occasion</label>
-        <select id="quiz-occasion" className="field-select" value={occasion} onChange={(e) => setOccasion(e.target.value as CampaignOccasion | "")}>
+        <select id="quiz-occasion" className="field-select" value={occasion} onChange={(e) => setOccasion(e.target.value as QuizOccasion | "")}>
           <option value="">Aucune</option>
           {OCCASIONS.map((value) => <option key={value} value={value}>{OCCASION_LABELS[value]}</option>)}
         </select>

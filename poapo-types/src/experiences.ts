@@ -1,17 +1,4 @@
-import type { CampaignOccasion, CampaignStatus } from "./index";
-
-/** Campagne rattachée à un quiz : simple référence, jamais une copie du quiz. */
-export interface ExperienceCampaign {
-  id: string;
-  name: string;
-  status: CampaignStatus;
-  effectiveStatus: CampaignStatus;
-  occasion: CampaignOccasion;
-  occasionLabel: string | null;
-  startsAt: string | null;
-  endsAt: string | null;
-  updatedAt: string;
-}
+import type { QuizOccasion } from "./index";
 
 export interface ExperienceStats {
   started: number;
@@ -38,8 +25,7 @@ export interface ExperienceListItem {
   lastModifiedAt: string;
   /** null lorsqu'aucun événement n'a été enregistré sur la période. */
   stats: ExperienceStats | null;
-  campaigns: ExperienceCampaign[];
-  occasion: CampaignOccasion | null;
+  occasion: QuizOccasion | null;
   occasionLabel: string | null;
   startsAt: string | null;
   endsAt: string | null;

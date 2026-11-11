@@ -12,11 +12,7 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import TenantsAdminPage from "./pages/TenantsAdminPage";
 import QuizzesPage from "./pages/QuizzesPage";
 import ExpressCreationPage from "./pages/ExpressCreationPage";
-import CampaignsPage from "./pages/CampaignsPage";
-import CampaignFormPage from "./pages/CampaignFormPage";
-import CampaignDetailPage from "./pages/CampaignDetailPage";
 import ExperienceEditorPage from "./pages/ExperienceEditorPage";
-import CampaignQuizEditorPage from "./pages/CampaignQuizEditorPage";
 import ProductEnrichmentPage from "./pages/ProductEnrichmentPage";
 import HelpCenterPage from "./pages/HelpCenterPage";
 import HelpArticlePage from "./pages/HelpArticlePage";
@@ -52,13 +48,12 @@ function SuperAdminRoute() {
 
 function AppLayout() {
   const { user, logout } = useAuth();
-  const campaignEditor = useMatch("/campaigns/:campaignId/quiz-editor");
   const experienceEditor = useMatch("/experiences/*");
   const tourUserId = user && !user.isSuperAdmin ? user.tenantId : null;
   const link = ({ isActive }: { isActive: boolean }) => `admin-side-link${isActive ? " active" : ""}`;
   return (
-    <TourProvider userId={tourUserId} suppressOffer={!!campaignEditor || !!experienceEditor}>
-    <div className={`admin-layout${user?.isSuperAdmin ? "" : " merchant-layout"}${campaignEditor ? " campaign-editor-layout" : ""}`}>
+    <TourProvider userId={tourUserId} suppressOffer={!!experienceEditor}>
+    <div className={`admin-layout${user?.isSuperAdmin ? "" : " merchant-layout"}`}>
       <aside className="admin-sidebar">
         <div className="admin-sidebar-brand">
           <span className="admin-nav-logo">POAPO</span>
@@ -120,11 +115,6 @@ function App() {
             <Route path="/experiences/new/express" element={<Navigate to="/experiences/new" replace />} />
             <Route path="/experiences/:quizId/setup" element={<LegacyQuizRedirect />} />
             <Route path="/experiences/:quizId/edit" element={<ExperienceEditorPage />} />
-            <Route path="/campaigns" element={<CampaignsPage />} />
-            <Route path="/campaigns/new" element={<CampaignFormPage />} />
-            <Route path="/campaigns/:campaignId" element={<CampaignDetailPage />} />
-            <Route path="/campaigns/:campaignId/edit" element={<CampaignFormPage />} />
-            <Route path="/campaigns/:campaignId/quiz-editor" element={<CampaignQuizEditorPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route element={<SuperAdminRoute />}>
               <Route path="/admin/tenants" element={<TenantsAdminPage />} />

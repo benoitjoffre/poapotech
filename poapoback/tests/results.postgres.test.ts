@@ -32,10 +32,6 @@ test("PostgreSQL : résultats par expérience, quiz partagé, périodes, catalog
     const mkQuiz = (tenantId: string, catalogId: string, name: string) =>
       prisma.quiz.create({ data: { tenantId, catalogId, name, quizTitle: name, ctaText: "Voir", active: true } });
     const [shared, solo, foreign] = await Promise.all([mkQuiz(id, catA.id, "Partagé"), mkQuiz(id, catB.id, "Sans campagne"), mkQuiz(other, catOther.id, "Étranger")]);
-    // Deux campagnes sur le même quiz : ne doit jamais doubler les compteurs.
-    for (const name of ["Noël", "Soldes"]) {
-      await prisma.campaign.create({ data: { tenantId: id, quizId: shared.id, name, occasion: "CUSTOM", occasionLabel: name, objectives: [] } });
-    }
     const product = await prisma.product.create({ data: { tenantId: id, catalogId: catA.id, name: "Séjour Bali", tags: [] } });
     const question = await prisma.question.create({ data: { tenantId: id, quizId: shared.id, text: "Quelle destination ?" } });
     const answer = await prisma.answer.create({ data: { questionId: question.id, text: "Plage" } });

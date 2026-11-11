@@ -42,7 +42,7 @@ async function main() {
   await page.getByRole("heading", { name: "Centre d'aide", level: 1 }).waitFor();
   check(new URL(page.url()).pathname === "/help", "sidebar leads to /help");
   check(await page.locator(".help-grid a").count() === 6, "six guide cards");
-  check(await page.locator(".help-faq details").count() === 6, "six FAQ entries");
+  check(await page.locator(".help-faq details").count() === 5, "five FAQ entries");
   await shot("center-1440");
 
   // FAQ
@@ -142,7 +142,7 @@ async function main() {
     await page.waitForURL(`**${to}`);
     check(true, `contextual link ${from}`);
   }
-  for (const route of ["/", "/catalogs", "/catalog", "/quizzes", "/campaigns", "/analytics", "/settings", "/experiences/new"]) {
+  for (const route of ["/", "/catalogs", "/catalog", "/quizzes", "/analytics", "/settings", "/experiences/new"]) {
     await page.goto(admin + route);
     await page.waitForLoadState("networkidle");
     check(new URL(page.url()).pathname === route || route === "/experiences/new", `route ${route} not redirected`);

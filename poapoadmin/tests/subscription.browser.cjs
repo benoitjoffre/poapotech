@@ -77,7 +77,6 @@ let quizId;
   ok((await page.getByTestId("quota-catalogs").innerText()).includes("/ 1"), "quota catalogues 1");
   ok((await page.getByTestId("quota-publishedExperiences").innerText()).includes("0") , "0 expérience publiée");
   ok((await page.getByTestId("quota-recommendationsPerMonth").innerText()).includes("/ 100"), "quota recommandations 100");
-  ok((await page.getByTestId("feature-campaigns").innerText()).includes("non inclus"), "campagnes non incluses en STARTER");
   ok(await page.getByText("Offert pendant le pilote").count() === 0, "pas de mention pilote en STARTER");
   await page.getByRole("button", { name: "Découvrir les formules" }).click();
   const plans = page.getByTestId("plans");
@@ -194,7 +193,7 @@ let quizId;
   if (process.env.DBG) console.log("HEADING:", await page.getByRole("heading", { name: /Formule/ }).innerText());
   await page.getByRole("heading", { name: "Formule Pro" }).waitFor();
   ok(await page.getByText("Offert pendant le pilote").count() === 1, "mention « Offert pendant le pilote »");
-  ok((await page.getByTestId("quota-catalogs").innerText()).includes("/ 5") && (await page.getByTestId("feature-campaigns").innerText()).includes("✓"), "quotas et fonctionnalités PRO");
+  ok((await page.getByTestId("quota-catalogs").innerText()).includes("/ 5"), "quotas et fonctionnalités PRO");
   await shot(page, "06-pro-offert");
   // Nouveau quota disponible : le widget fonctionne à nouveau (100/5000).
   await playWidget(await browser.newPage({ viewport: { width: 375, height: 800 } }), { expectResult: true });

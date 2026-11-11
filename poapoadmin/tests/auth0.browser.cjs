@@ -66,7 +66,7 @@ async function createShop(page, name) {
   ok(await prisma.tenant.count({ where: { email: users.alice.email } }) === 1, "un seul tenant malgré la double soumission");
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { email: users.alice.email } });
   ok(tenant.primaryColor === "#6C47FF" && tenant.name === "Café Alice", "paramètres initiaux");
-  ok(await prisma.quiz.count({ where: { tenantId: tenant.id } }) <= 1 && await prisma.campaign.count({ where: { tenantId: tenant.id } }) === 0, "ni campagne ni quiz créés");
+  ok(await prisma.quiz.count({ where: { tenantId: tenant.id } }) <= 1, "aucun quiz superflu créé");
   await page.getByRole("button", { name: "Passer la visite" }).click();
   ok(await page.getByRole("link", { name: "Mes produits", exact: true }).isVisible() && await page.getByRole("link", { name: "Mes expériences", exact: true }).isVisible(), "accès produits et expériences");
 

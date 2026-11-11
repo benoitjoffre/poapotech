@@ -49,7 +49,6 @@ export default function AnalyticsPage() {
   const requested = params.get("quizId");
   const selectedId = (summary?.experiences.some((e) => e.id === requested) ? requested : null) ?? rows[0]?.id ?? null;
   const selected = summary?.experiences.find((e) => e.id === selectedId) ?? null;
-  const fromCampaign = params.get("from") === "campaign";
   const select = (id: string) => setParams((prev) => { const next = new URLSearchParams(prev); next.set("quizId", id); return next; }, { replace: true });
   const hasAny = (summary?.experiences.length ?? 0) > 0;
   const noEvents = summary ? METRICS.every((m) => summary.totals[m.key] === 0) : false;
@@ -68,13 +67,6 @@ export default function AnalyticsPage() {
           ))}
         </div>
       </header>
-
-      {fromCampaign && (
-        <p className="rs-banner" role="note">
-          <strong>Résultats de l'expérience associée.</strong> Ces chiffres concernent l'expérience entière, y compris
-          lorsqu'elle est utilisée par plusieurs campagnes : ils ne sont pas calculés par campagne.
-        </p>
-      )}
 
       {loading && <div className="loading-block" role="status">Chargement des résultats...</div>}
       {error && (
@@ -127,7 +119,7 @@ export default function AnalyticsPage() {
           <div className="rs-layout">
             <section className="rs-card" aria-labelledby="rs-perf">
               <h2 id="rs-perf">Performances par expérience</h2>
-              <p className="rs-muted">Comparez vos expériences et repérez celles qui génèrent le plus d'engagement. Chaque expérience est comptée une seule fois, même si plusieurs campagnes l'utilisent.</p>
+              <p className="rs-muted">Comparez vos expériences et repérez celles qui génèrent le plus d'engagement. Chaque expérience est comptée une seule fois.</p>
               <div className="rs-filters">
                 <label className="rs-field"><span>Rechercher</span>
                   <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher une expérience" /></label>

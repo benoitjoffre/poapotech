@@ -31,9 +31,6 @@ async function main() {
   ]);
   const mk = (catalogId, name) => prisma.quiz.create({ data: { tenantId, catalogId, name, quizTitle: name, ctaText: "Voir", active: true } });
   const [travel, coffee] = [await mk(voyage.id, "Quel est votre style de voyage ?"), await mk(cafe.id, "Quel café vous correspond ?")];
-  for (const name of ["Été", "Noël"]) {
-    await prisma.campaign.create({ data: { tenantId, quizId: travel.id, name, occasion: "CUSTOM", occasionLabel: name, objectives: [] } });
-  }
   const product = await prisma.product.create({ data: { tenantId, catalogId: voyage.id, name: "Séjour Bali", tags: [] } });
   const question = await prisma.question.create({ data: { tenantId, quizId: travel.id, text: "Quelle destination idéale ?" } });
   const answer = await prisma.answer.create({ data: { questionId: question.id, text: "Plage" } });
@@ -60,7 +57,7 @@ async function main() {
   };
   const overflow = (page) => page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
 
-  // Tenant avec plusieurs expériences, quiz partagé par deux campagnes.
+  // Tenant avec plusieurs expériences, .
   const page = await open(tenantId);
   await page.getByRole("heading", { name: "Résultats", level: 1 }).waitFor();
   await page.locator(".rs-kpi").first().waitFor();
@@ -117,11 +114,10 @@ async function main() {
   await page.keyboard.press("Enter");
   check((await page.getByRole("button", { name: "30 jours" }).getAttribute("aria-pressed")) === "true", "activation clavier");
 
-  // Arrivée depuis Campaign Studio.
-  const campaignPage = await open(tenantId, 1440, `/analytics?quizId=${travel.id}&from=campaign`);
-  await campaignPage.getByText("Résultats de l'expérience associée.").waitFor();
+  // Arrivée avec une expérience présélectionnée.
+  const campaignPage = await open(tenantId, 1440, `/analytics?quizId=${travel.id}`);
   await campaignPage.getByRole("heading", { name: /Détail — Quel est votre style/ }).waitFor();
-  check(true, "quiz de la campagne sélectionné");
+  check(true, "quiz présélectionné");
 
   // Responsive.
   for (const width of [768, 375, 320]) {

@@ -23,7 +23,6 @@ test("grille des formules : valeurs convenues, BUSINESS illimité", () => {
   assert.deepEqual(PLAN_CATALOG.STARTER.limits, { catalogs: 1, publishedExperiences: 1, recommendationsPerMonth: 100 });
   assert.deepEqual(PLAN_CATALOG.PRO.limits, { catalogs: 5, publishedExperiences: 10, recommendationsPerMonth: 5000 });
   assert.deepEqual(Object.values(PLAN_CATALOG.BUSINESS.limits), [null, null, null]);
-  assert.equal(entitlementsOf(computeEffective(null)).features.campaigns, false);
   assert.equal(limitReached(null, 1e9), false);
   assert.equal(limitReached(1, 1), true);
 });

@@ -26,7 +26,7 @@ async function generateOpenAIInsights(snapshot: MetricsSnapshot, industry: strin
     "Règles : productClicks sont des clics vers une fiche produit, jamais des ventes ni des conversions.",
     "clicksPer100Recommendations est indicatif (clics non rattachés à une session) : ne le présente jamais comme un CTR ou un taux de conversion.",
     "Un indicateur dont reliable vaut false ne doit pas être interprété comme une performance ; recentAbandons est une collecte partielle, pas un taux.",
-    "N'invente aucune donnée absente (ventes, chiffre d'affaires, visiteurs uniques, temps de complétion, satisfaction, campagnes).",
+    "N'invente aucune donnée absente (ventes, chiffre d'affaires, visiteurs uniques, temps de complétion, satisfaction).",
     `Métriques: ${JSON.stringify(snapshot)}`,
   ].join("\n");
 

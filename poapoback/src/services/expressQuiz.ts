@@ -18,7 +18,7 @@ import { computeProfile } from "./scoring";
 import { AXIS_KEY_PATTERN, AxisValidationError, invalidAxisValue, isAxisValue, validateAxes } from "./axes";
 import { catalogAxes, resolveCatalog } from "./catalogs";
 import { createQuestionsWithAnswers, MANUAL_IMPACT_LIMIT } from "./questions";
-import { DISCRIMINANT_SPREAD, DRAFT_TEXT_LIMITS, GENERATION_LIMITS, MIN_AXIS_AMPLITUDE, PREVIEW_TIMEOUT_MS } from "./quizGeneration";
+import { DISCRIMINANT_SPREAD, DRAFT_TEXT_LIMITS, GENERATION_LIMITS, MIN_AXIS_AMPLITUDE, PREVIEW_TIMEOUT_MS } from "./generationLimits";
 import { createQuiz, ensureDefaultQuiz, QuizError } from "./quizzes";
 import { type AxisTemplate, type QuestionTemplate, type SectorTemplate, sectorById, SECTORS } from "./expressSectors";
 

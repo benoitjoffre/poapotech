@@ -1,4 +1,4 @@
-import type { CampaignStatus, ExperienceListItem } from "@poapo/types";
+import type { ExperienceListItem } from "@poapo/types";
 
 export interface PublicAvailability {
   accessible: boolean;
@@ -6,7 +6,7 @@ export interface PublicAvailability {
   reason: string | null;
 }
 
-/** Même règle que l'API publique : boutique active ET quiz actif. Le statut des campagnes n'intervient pas. */
+/** Même règle que l'API publique : boutique active ET quiz actif. */
 export function publicAvailability({ shopActive, quizActive }: { shopActive: boolean; quizActive: boolean }): PublicAvailability {
   if (!shopActive) return { accessible: false, label: "Désactivée pour le public", reason: "Boutique désactivée" };
   if (!quizActive) return { accessible: false, label: "Désactivée pour le public", reason: "Quiz désactivé" };
@@ -42,15 +42,6 @@ export function sortExperiences(items: ExperienceListItem[], sort: ExperienceSor
     a.name.localeCompare(b.name, "fr", { sensitivity: "base" }) || a.id.localeCompare(b.id);
   return [...items].sort(sort === "name" ? byName
     : (a, b) => b.lastModifiedAt.localeCompare(a.lastModifiedAt) || byName(a, b));
-}
-
-/** Libellés de campagne : ils décrivent la campagne, jamais l'accès public du quiz. */
-export const CAMPAIGN_STATE_LABELS: Record<CampaignStatus, string> = {
-  DRAFT: "Brouillon", SCHEDULED: "Programmée", ACTIVE: "En cours", PAUSED: "En pause", COMPLETED: "Terminée",
-};
-
-export function campaignCountLabel(count: number): string {
-  return count === 0 ? "Aucune campagne" : `${count} campagne${count > 1 ? "s" : ""}`;
 }
 
 export function questionCountLabel(count: number): string {

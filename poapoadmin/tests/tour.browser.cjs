@@ -22,7 +22,7 @@ async function main() {
   await prisma.subscription.create({ data: { tenantId, plan: "BUSINESS", source: "LEGACY" } });
   await prisma.catalog.create({ data: { tenantId, name: "Catalogue visite", isDefault: true } });
   const token = jwt.sign({ tenantId, email: `${tenantId}@example.test` }, process.env.JWT_SECRET);
-  const counts = async () => [await prisma.quiz.count({ where: { tenantId } }), await prisma.campaign.count({ where: { tenantId } })];
+  const counts = async () => [await prisma.quiz.count({ where: { tenantId } })];
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript((value) => { if (!sessionStorage.getItem("seeded")) localStorage.setItem("poapo_admin_token", value); }, token);
@@ -159,7 +159,7 @@ async function main() {
 
   // No side effects, no regressions
   await page.setViewportSize({ width: 1440, height: 900 });
-  for (const route of ["/", "/catalog", "/quizzes", "/campaigns", "/analytics", "/settings", "/help"]) {
+  for (const route of ["/", "/catalog", "/quizzes", "/analytics", "/settings", "/help"]) {
     await page.goto(admin + route);
     await page.waitForLoadState("networkidle");
     check(new URL(page.url()).pathname === route, `route ${route} not redirected`);

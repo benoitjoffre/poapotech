@@ -1,15 +1,15 @@
-import type { CampaignOccasion } from "@poapo/types";
+import type { QuizOccasion } from "@poapo/types";
 import type { Prisma } from "@prisma/client";
 import { QuizError } from "./quizzes";
 
 /** Occasion et période facultatives d'une expérience : informatives, jamais utilisées pour l'accès public. */
 export const QUIZ_OCCASIONS = [
   "CHRISTMAS", "VALENTINES_DAY", "SPRING", "MOTHERS_DAY", "BACK_TO_SCHOOL", "BLACK_FRIDAY", "PROMOTION", "PERMANENT", "CUSTOM",
-] as const satisfies readonly CampaignOccasion[];
+] as const satisfies readonly QuizOccasion[];
 export const QUIZ_PERIOD_KEYS = ["occasion", "occasionLabel", "startsAt", "endsAt"] as const;
 const OCCASION_LABEL_MAX = 80;
 
-interface CurrentPeriod { occasion: CampaignOccasion | null; occasionLabel: string | null; startsAt: Date | null; endsAt: Date | null }
+interface CurrentPeriod { occasion: QuizOccasion | null; occasionLabel: string | null; startsAt: Date | null; endsAt: Date | null }
 
 function dateOrNull(value: unknown, label: string): Date | null {
   if (value === null || value === "") return null;
@@ -23,8 +23,8 @@ function dateOrNull(value: unknown, label: string): Date | null {
 export function parseQuizPeriod(body: Record<string, unknown>, current: CurrentPeriod): Prisma.QuizUpdateInput {
   const next: CurrentPeriod = { occasion: current.occasion ?? null, occasionLabel: current.occasionLabel ?? null, startsAt: current.startsAt ?? null, endsAt: current.endsAt ?? null };
   if (body.occasion !== undefined) {
-    if (body.occasion !== null && !QUIZ_OCCASIONS.includes(body.occasion as CampaignOccasion)) throw new QuizError(400, "Occasion invalide");
-    next.occasion = body.occasion as CampaignOccasion | null;
+    if (body.occasion !== null && !QUIZ_OCCASIONS.includes(body.occasion as QuizOccasion)) throw new QuizError(400, "Occasion invalide");
+    next.occasion = body.occasion as QuizOccasion | null;
   }
   if (body.occasionLabel !== undefined) {
     if (body.occasionLabel !== null && typeof body.occasionLabel !== "string") throw new QuizError(400, "Le libellé de l'occasion doit être un texte");

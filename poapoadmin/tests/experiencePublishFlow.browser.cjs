@@ -62,7 +62,6 @@ async function main() {
   const open = async (id) => { await page.goto(`${admin}/experiences/${id}/edit?section=publication`); await page.getByRole("heading", { name: "Publier mon expérience" }).waitFor(); };
   const status = (label) => page.locator("[data-publication-status]").filter({ hasText: label }).waitFor();
   const primary = page.getByRole("button", { name: "Publier et rendre accessible" });
-  const campaigns = () => prisma.campaign.count({ where: { tenantId } });
 
   // 1. Première publication : brouillon enregistré mais rien publié → jamais « Publié ».
   const a = (await mk("first")).id;
@@ -83,12 +82,10 @@ async function main() {
   await status("Pas encore publié");
 
   // 3. Réussite : publication + activation, confirmation, liens, aucune campagne créée.
-  const before = await campaigns();
   await primary.click();
   await page.getByRole("heading", { name: "Expérience publiée" }).waitFor();
   await status("Publié et accessible");
   eq((await row(a)).active, true);
-  eq(await campaigns(), before, "aucune campagne créée");
   ok(await page.getByRole("button", { name: "Copier le lien public" }).isVisible());
   ok(await page.getByRole("button", { name: "Copier le code d'intégration" }).isVisible());
   ok(await page.getByRole("link", { name: "Tester l'expérience publiée" }).isVisible());
@@ -126,16 +123,14 @@ async function main() {
   await page.reload();
   await status("Publié et accessible");
 
-  // 7. Avec campagne : le statut de la campagne n'influe pas.
+  // 7. Une occasion et une période n'influent pas sur la publication.
   const d = (await mk("camp")).id;
   await saveDraft(d, (x) => ({ ...x, questions: [question("Q ?")] }));
-  await prisma.campaign.create({ data: { tenantId, quizId: d, name: "Noël", occasion: "CUSTOM", occasionLabel: "x", status: "ACTIVE" } });
+  await prisma.quiz.update({ where: { id: d }, data: { occasion: "CUSTOM", occasionLabel: "x" } });
   await open(d);
   await status("Pas encore publié");
-  const n = await campaigns();
   await primary.click();
   await status("Publié et accessible");
-  eq(await campaigns(), n);
 
   // 8. Isolation tenant.
   eq((await call(`/api/quizzes/${foreign.id}/draft`)).status >= 400, true, "brouillon étranger refusé");

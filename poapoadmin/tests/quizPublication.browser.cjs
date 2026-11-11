@@ -24,8 +24,6 @@ async function main() {
     useAllProducts: false, products: { create: { productId: product.id } } } });
   const question = await prisma.question.create({ data: { tenantId, quizId: quiz.id, text: "Votre rythme ?", order: 0,
     answers: { create: [{ text: "Calme", order: 0, impacts: { pace: -0.2 } }, { text: "Intense", order: 1, impacts: { pace: 0.2 } }] } } });
-  const campaign = await prisma.campaign.create({ data: { tenantId, quizId: quiz.id, name: "Odyssey principale", occasion: "PERMANENT", objectives: [] } });
-  await prisma.campaign.create({ data: { tenantId, quizId: quiz.id, name: "Odyssey secondaire", occasion: "SPRING", objectives: [] } });
   const token = jwt.sign({ tenantId, email: tenant.email }, process.env.JWT_SECRET);
   async function request(endpoint, method = "GET", body) {
     const response = await fetch(api + endpoint, { method, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -44,7 +42,8 @@ async function main() {
   page.on("response", async (response) => {
     if (response.url().includes("/publication/")) publicationResponses.push({ status: response.status(), body: await response.text() });
   });
-  await page.goto(`${admin}/campaigns/${campaign.id}/quiz-editor`);
+  await page.goto(`${admin}/experiences/${quiz.id}/edit`);
+  await page.getByRole("tab", { name: "Questions", exact: true }).click();
   const questionCard = page.locator(".questions-list .question-card").first();
   await questionCard.getByRole("button", { name: /Modifier/ }).first().click();
   await questionCard.locator(".question-meta-form input").first().fill("Rythme publie ?");
@@ -62,25 +61,21 @@ async function main() {
   await page.getByLabel("Forme des boutons", { exact: true }).selectOption("square");
   await page.getByLabel("Démarrer le quiz", { exact: true }).fill("Mon voyage");
   await page.getByText("Modifications enregistrées automatiquement").first().waitFor({ timeout: 15000 });
-  await page.getByText("Modifications enregistrées automatiquement", { exact: true }).waitFor();
   assert.equal((await prisma.question.findUnique({ where: { id: question.id } })).text, "Votre rythme ?");
   assert.equal((await request(`/api/embed/config?clientId=${tenantId}`)).theme, undefined);
   await page.getByRole("tab", { name: "Publication", exact: true }).click();
   const check = () => panel.getByRole("button", { name: "Vérifier avant de publier" }).click();
   const general = panel.getByLabel("Je confirme : mes visiteurs verront", { exact: false });
-  const shared = panel.getByLabel("Je confirme que toutes les campagnes", { exact: false });
   const publish = panel.getByRole("button", { name: "Publier", exact: true });
   await check();
   await panel.getByText("Rien à corriger.", { exact: true }).waitFor();
-  await panel.getByRole("link", { name: "Odyssey secondaire", exact: true }).waitFor();
-  await panel.getByRole("link", { name: "Corriger dans les réglages", exact: true }).first().waitFor();
+  await panel.getByRole("button", { name: "Corriger", exact: true }).first().waitFor();
   for (const width of [320, 375, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `diagnostic overflow ${width}`);
   }
   await general.check();
-  assert.equal(await publish.isDisabled(), true);
-  await shared.check();
+  assert.equal(await publish.isDisabled(), false);
   const publishUrl = `**/api/quizzes/${quiz.id}/publication/publish`;
   await page.route(publishUrl, (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "Echec transaction recette" }) }), { times: 1 });
   await publish.click();
@@ -88,7 +83,7 @@ async function main() {
   assert.equal(await panel.getByText("Expérience publiée", { exact: false }).count(), 0);
   assert.equal((await prisma.question.findUnique({ where: { id: question.id } })).text, "Votre rythme ?");
   await check();
-  await general.check(); await shared.check();
+  await general.check();
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
   let entered;
@@ -163,11 +158,11 @@ async function main() {
   await check();
   await panel.getByText("Question accessible sans réponse active.", { exact: true }).waitFor();
   assert.equal(await publish.count(), 0);
-  await panel.getByRole("button", { name: "Voir", exact: true }).first().click();
+  await panel.getByRole("button", { name: "Corriger", exact: true }).first().click();
   assert.equal(await page.getByRole("tab", { name: "Questions", exact: true }).getAttribute("aria-selected"), "true");
   await questionCard.getByText("Rythme publie ?", { exact: true }).waitFor();
   assert.deepEqual(pageErrors, []);
-  console.log("PASS publication browser: local forms, shared confirmation, failure, edit lock, stable IDs, no publication tracking, public theme/journey, 409, 320/375/768/1440px");
+  console.log("PASS publication browser: local forms, failure, edit lock, stable IDs, no publication tracking, public theme/journey, 409, 320/375/768/1440px");
 }
 main().catch((err) => { console.error(err); process.exitCode = 1; }).finally(async () => {
   if (browser) await browser.close();

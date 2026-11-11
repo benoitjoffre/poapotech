@@ -53,9 +53,6 @@ async function main() {
   await prisma.question.create({ data: {
     tenantId, quizId: quiz.id, text: "Question désactivée", order: 4, active: false,
   } });
-  const campaign = await prisma.campaign.create({ data: {
-    tenantId, quizId: quiz.id, name: "Campagne de recette", occasion: "PERMANENT", objectives: [],
-  } });
   const snapshot = async () => ({
     sessions: await prisma.quizSession.findMany({ where: { tenantId } }),
     metrics: await prisma.metric.findMany({ where: { tenantId } }),
@@ -79,9 +76,10 @@ async function main() {
     if (/\/api\/quiz\/(track|submit|feedback|conversion)(?:[/?]|$)/.test(request.url())) tracking.push(request.url());
   });
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(`${adminUrl}/campaigns/${campaign.id}/quiz-editor`);
+  await page.goto(`${adminUrl}/experiences/${quiz.id}/edit`);
   await page.getByRole("tab", { name: "Apparence" }).click();
   await page.getByLabel("Couleur principale (hexadécimal)", { exact: true }).fill("#123456");
+  await page.getByText("Plus d'options").click();
   await page.getByLabel("Couleur de fond (hexadécimal)", { exact: true }).fill("#FAF0DD");
   await page.getByLabel("Police des titres", { exact: true }).selectOption("georgia");
   await page.getByLabel("Forme des boutons", { exact: true }).selectOption("square");

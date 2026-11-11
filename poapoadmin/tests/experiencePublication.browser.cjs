@@ -73,7 +73,6 @@ async function main() {
   // 1-3. Quiz sans campagne : configuration + question, puis enregistrement du brouillon.
   await page.goto(editorUrl(solo.id));
   await page.getByRole("heading", { name: "Quiz recette", level: 1 }).waitFor();
-  eq((await request(`/api/campaigns?quizId=${solo.id}`)).body.data.length, 0, "quiz sans campagne");
   await page.waitForFunction(() => document.querySelector("#quiz-title")?.value === "Quiz recette titre initial");
   await page.getByLabel("Titre affiché aux visiteurs", { exact: true }).fill("Titre publié par la recette");
   await tab("Questions").click();

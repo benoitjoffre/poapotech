@@ -17,14 +17,9 @@ export function publicQuizLink(tenantId: string, quizId: string): string {
   return `${base}/?${new URLSearchParams({ clientId: tenantId, quizId })}`;
 }
 
-/** Éditeur unifié basé sur le quiz : aucune campagne requise. */
+/** Éditeur unifié basé sur le quiz. */
 export function experienceEditorPath(quizId: string, section?: string): string {
   return `/experiences/${encodeURIComponent(quizId)}/edit${section ? `?section=${encodeURIComponent(section)}` : ""}`;
-}
-
-/** Éditeur historique ouvert depuis une campagne (Campaign Studio). */
-export function campaignEditorPath(campaignId: string): string {
-  return `/campaigns/${encodeURIComponent(campaignId)}/quiz-editor`;
 }
 
 export function embedSnippet(tenantId: string, quizId: string): string {

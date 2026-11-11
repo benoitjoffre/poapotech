@@ -40,7 +40,7 @@ export async function checkQuizPublication(tenantId: string, quizId: unknown, ra
   return prisma.$transaction(async (db) => (await savedDiagnostic(db, tenantId, quizId, revision)).diagnostic);
 }
 
-export async function publishQuizDraft(tenantId: string, quizId: unknown, rawRevision: unknown, confirmation: unknown) {
+export async function publishQuizDraft(tenantId: string, quizId: unknown, rawRevision: unknown) {
   if (typeof quizId !== "string" || !quizId.trim()) throw new QuizError(400, "quizId invalide");
   const revision = parseDraftRevision(rawRevision);
   try {
@@ -50,13 +50,6 @@ export async function publishQuizDraft(tenantId: string, quizId: unknown, rawRev
       const { diagnostic, draft, quiz, row } = await savedDiagnostic(db, tenantId, quizId, revision);
       if (!diagnostic.valid || !draft) throw new PublicationValidationError(diagnostic);
       if (!row?.content) throw new QuizError(409, "Aucune modification préparatoire à publier");
-      if (diagnostic.campaigns.length > 1) {
-        const expected = diagnostic.campaigns.map((c) => c.id).sort();
-        if (!Array.isArray(confirmation) || confirmation.length !== expected.length ||
-            [...confirmation].sort().some((id, index) => id !== expected[index])) {
-          throw new QuizError(409, "Confirmez explicitement toutes les campagnes partageant ce quiz après une nouvelle vérification");
-        }
-      }
       // Acquiring the draft row by CAS also serializes with save/discard, which use this same revision.
       const changed = await db.quizEditorDraft.updateMany({
         where: { tenantId, quizId, revision },

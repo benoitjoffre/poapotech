@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { ExperiencesOverview } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 
-/** Synthèse des expériences (une seule requête, isolée par tenant) : accessibilité, brouillons, campagnes partagées, statistiques. */
+/** Synthèse des expériences (une seule requête, isolée par tenant) : accessibilité, brouillons, statistiques. */
 export function useExperiencesOverview() {
   const [overview, setOverview] = useState<ExperiencesOverview | null>(null);
   const [error, setError] = useState("");

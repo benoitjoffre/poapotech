@@ -1,7 +1,7 @@
 /** État public réel d'une expérience, tel que renvoyé par `/api/experiences` (jamais déduit de l'état local seul). */
 export interface ServerPublicationState {
   shopActive: boolean;
-  /** boutique active ET quiz actif — même règle que l'API publique ; le statut des campagnes n'intervient pas. */
+  /** boutique active ET quiz actif — même règle que l'API publique . */
   accessible: boolean;
   /** Questions de la version publiée (live), pas du brouillon. */
   questionCount: number;

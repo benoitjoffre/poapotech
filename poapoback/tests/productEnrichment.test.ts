@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../src/lib/prisma";
 import catalogsRouter from "../src/routes/catalogs";
 import { quizErrorHandler } from "../src/services/quizzes";
-import { generationLimiter } from "../src/services/quizGeneration";
+import { generationLimiter } from "../src/services/generationLimits";
 import { buildEnrichmentBatch, enrichmentLimiter, normalizeEnrichment } from "../src/services/productEnrichment";
 
 type Row = Record<string, any>;

@@ -57,7 +57,7 @@ export default function HomePage() {
               <StatCard label="Clics vers les produits" value={summary.totals.productClicks} icon="eye" caption={`Ces ${summary.period.days} derniers jours`} />
               <StatCard label="Expériences accessibles" value={summary.totals.accessible} icon="sparkles" caption="Disponibilité actuelle" />
             </div>
-            <p className="dashboard-muted home-metric-note">Les clics produits ne sont pas des ventes. Chaque quiz est compté une seule fois, même s'il est partagé entre campagnes.</p>
+            <p className="dashboard-muted home-metric-note">Les clics produits ne sont pas des ventes. Chaque quiz est compté une seule fois.</p>
             {summary.totals.started === 0 && summary.totals.completed === 0 && summary.totals.productClicks === 0 &&
               <p className="dashboard-muted">Aucune activité enregistrée sur cette période. Partagez votre expérience pour recueillir vos premiers résultats.</p>}
           </section>

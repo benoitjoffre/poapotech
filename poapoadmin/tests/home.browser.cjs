@@ -40,8 +40,6 @@ async function main() {
     tenantId, quizId, text: "Quelle intensité préférez-vous ?",
     answers: { create: [{ text: "Douce", order: 0, impacts: { intensity: -0.2 } }, { text: "Intense", order: 1, impacts: { intensity: 0.2 } }] },
   } });
-  const campaign = await prisma.campaign.create({ data: { tenantId, quizId: live.id, name: "Occasion une", occasion: "PERMANENT", objectives: [] } });
-  await prisma.campaign.create({ data: { tenantId, quizId: live.id, name: "Occasion deux", occasion: "SPRING", objectives: [], status: "PAUSED" } });
   await prisma.metric.createMany({ data: [
     { tenantId, quizId: live.id, type: "quiz_start" },
     { tenantId, quizId: live.id, type: "quiz_complete" },
@@ -143,7 +141,7 @@ async function main() {
   await page.getByRole("link", { name: "Créer une expérience", exact: true }).click();
   await page.getByRole("heading", { name: "Créer une expérience", exact: true }).waitFor();
   check(page.url().includes("/experiences/new"), "creation uses available route");
-  for (const route of [`/campaigns/${campaign.id}`, "/catalogs"]) {
+  for (const route of ["/catalogs"]) {
     await page.goto(admin + route);
     await page.waitForLoadState("networkidle");
     check(new URL(page.url()).pathname === route.split("?")[0], `legacy deep link ${route}`);

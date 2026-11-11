@@ -1,7 +1,7 @@
-import type { CampaignOccasion } from "@poapo/types";
+import type { QuizOccasion } from "@poapo/types";
 
 /** Occasion et période d'une expérience : informatives, sans effet sur l'accès public. */
-export const OCCASION_LABELS: Record<CampaignOccasion, string> = {
+export const OCCASION_LABELS: Record<QuizOccasion, string> = {
   CHRISTMAS: "Noël",
   VALENTINES_DAY: "Saint-Valentin",
   SPRING: "Printemps",
@@ -12,10 +12,10 @@ export const OCCASION_LABELS: Record<CampaignOccasion, string> = {
   PERMANENT: "Toute l'année",
   CUSTOM: "Autre occasion",
 };
-export const OCCASIONS = Object.keys(OCCASION_LABELS) as CampaignOccasion[];
+export const OCCASIONS = Object.keys(OCCASION_LABELS) as QuizOccasion[];
 
 interface PeriodLike {
-  occasion?: CampaignOccasion | null;
+  occasion?: QuizOccasion | null;
   occasionLabel?: string | null;
   startsAt?: string | Date | null;
   endsAt?: string | Date | null;

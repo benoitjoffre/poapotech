@@ -44,23 +44,20 @@ async function summarize(tenantId: string, catalogIds: string[]) {
     }),
     prisma.quiz.findMany({
       where: { tenantId, catalogId: { in: catalogIds } },
-      select: { catalogId: true, _count: { select: { campaigns: true } } },
+      select: { catalogId: true },
     }),
   ]);
   const productCount = new Map(products.map((row) => [row.catalogId, row._count._all]));
   const activeCount = new Map(activeProducts.map((row) => [row.catalogId, row._count._all]));
   const quizCount = new Map<string, number>();
-  const campaignCount = new Map<string, number>();
   for (const quiz of quizzes) {
     quizCount.set(quiz.catalogId, (quizCount.get(quiz.catalogId) ?? 0) + 1);
-    campaignCount.set(quiz.catalogId, (campaignCount.get(quiz.catalogId) ?? 0) + quiz._count.campaigns);
   }
   return (catalog: Prisma.CatalogGetPayload<object>): CatalogSummary => ({
     ...serializeCatalog(catalog),
     productCount: productCount.get(catalog.id) ?? 0,
     activeProductCount: activeCount.get(catalog.id) ?? 0,
     quizCount: quizCount.get(catalog.id) ?? 0,
-    campaignCount: campaignCount.get(catalog.id) ?? 0,
   });
 }
 

@@ -11,7 +11,7 @@ import type {
 import { prisma } from "../lib/prisma";
 import { isAxisValue, parseAxes } from "./axes";
 import { catalogAxes } from "./catalogs";
-import { GenerationLimiter } from "./quizGeneration";
+import { GenerationLimiter } from "./generationLimits";
 import { QuizError } from "./quizzes";
 
 export const ENRICHMENT_LIMITS = {

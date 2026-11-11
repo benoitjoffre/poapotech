@@ -88,7 +88,6 @@ test("inscription, email non vérifié, idempotence, isolation, catalogue, recon
   assert.deepEqual([tenant.primaryColor, tenant.name, tenant.email, tenant.plan, tenant.websiteUrl], ["#6C47FF", "Boutique A", emailA, "FREE", "https://ma-boutique.fr/"]);
   assert.equal(await prisma.membership.count({ where: { tenantId: tenant.id, role: "OWNER" } }), 1);
   assert.equal(await prisma.quiz.count({ where: { tenantId: tenant.id } }), 0);
-  assert.equal(await prisma.campaign.count({ where: { tenantId: tenant.id } }), 0);
   // Rechargement : même boutique, pas de doublon.
   const again = await call("/api/auth/onboarding", a, "POST", body);
   assert.deepEqual([again.status, (await again.json()).created], [200, false]);

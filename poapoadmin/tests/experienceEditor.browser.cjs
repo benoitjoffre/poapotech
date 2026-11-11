@@ -44,10 +44,6 @@ async function main() {
   const off = await make(`off_${tenantId}`, "Quiz inactif", { active: false });
   const foreign = await prisma.quiz.create({ data: { id: `foreign_${foreignId}`, tenantId: foreignId, catalogId: foreignCatalog.id,
     name: "Quiz secret étranger", quizTitle: "Secret", ctaText: "Voir" } });
-  const campaigns = [];
-  for (const [name, status] of [["Vacances d'été", "ACTIVE"], ["Noël 2026", "SCHEDULED"]]) {
-    campaigns.push(await prisma.campaign.create({ data: { tenantId, quizId: shared.id, name, occasion: "PERMANENT", objectives: [], status } }));
-  }
   const bearer = { Authorization: `Bearer ${token(tenantId)}`, "Content-Type": "application/json" };
   const request = async (endpoint, method = "GET", body) => {
     const response = await fetch(api + endpoint, { method, headers: bearer, ...(body && { body: JSON.stringify(body) }) });
@@ -181,9 +177,8 @@ async function main() {
   // 12. Anciennes routes toujours disponibles.
   await page.goto(`${admin}/quizzes/${shared.id}`);
   await page.waitForURL(`**/experiences/${shared.id}/edit`);
-  await page.goto(`${admin}/campaigns/${campaigns[0].id}/quiz-editor`);
-  await page.getByRole("heading", { name: "Vacances d'été", level: 1 }).waitFor();
-  eq(await page.getByRole("tab").count(), 4);
+  await page.getByRole("tab").first().waitFor();
+  eq(await page.getByRole("tab").count(), 5);
 
   // 13. Depuis Mes expériences : « Éditer » ouvre le nouvel éditeur.
   await page.goto(`${admin}/quizzes`);

@@ -31,7 +31,7 @@ router.post("/:id/publication/check", asyncRoute(async (req: AuthRequest, res) =
 
 router.post("/:id/publication/publish", asyncRoute(async (req: AuthRequest, res) => {
   if (req.body?.confirm !== true) throw new QuizError(400, "Confirmation explicite de publication requise");
-  res.json(await publishQuizDraft(req.tenant!.tenantId, req.params.id, req.body?.revision, req.body?.confirmedCampaignIds));
+  res.json(await publishQuizDraft(req.tenant!.tenantId, req.params.id, req.body?.revision));
 }));
 
 router.post("/:id/preview", asyncRoute(async (req: AuthRequest, res) => {

@@ -19,7 +19,6 @@ export default function QuizPublicationPanel({ editor, quizId, visible, pending,
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [confirmed, setConfirmed] = useState(false);
-  const [sharedConfirmed, setSharedConfirmed] = useState(false);
   const revision = editor.state?.revision;
   const stale = diagnostic?.revision !== revision;
   const local = editor.dirty || pending;
@@ -43,12 +42,11 @@ export default function QuizPublicationPanel({ editor, quizId, visible, pending,
       const result = await apiFetch<QuizEditorDraftResponse>(`/api/quizzes/${encodeURIComponent(quizId)}/publication/publish`, {
         method: "POST", body: JSON.stringify({
           revision: rev, confirm: true,
-          ...(checked.campaigns.length > 1 && { confirmedCampaignIds: checked.campaigns.map((c) => c.id) }),
         }),
       });
       editor.accept(result);
       onPublished(result, checked);
-      setDiagnostic(null); setConfirmed(false); setSharedConfirmed(false);
+      setDiagnostic(null); setConfirmed(false);
       setSuccess("Expérience publiée : vos visiteurs voient maintenant cette version.");
       return true;
     } catch (err) {
@@ -60,31 +58,27 @@ export default function QuizPublicationPanel({ editor, quizId, visible, pending,
   }
   async function check() {
     onBusyChange(true);
-    setBusy(true); setError(""); setSuccess(""); setConfirmed(false); setSharedConfirmed(false);
+    setBusy(true); setError(""); setSuccess(""); setConfirmed(false);
     await runCheck(revision);
     setBusy(false); onBusyChange(false);
   }
   async function publish() {
-    if (!diagnostic || disabled || stale || !confirmed || (diagnostic.campaigns.length > 1 && !sharedConfirmed)) return;
+    if (!diagnostic || disabled || stale || !confirmed) return;
     setBusy(true); setError(""); setSuccess("");
     onBusyChange(true);
     await runPublish(revision, diagnostic);
     setBusy(false); onBusyChange(false);
   }
-  // Enregistre l'activation dans le brouillon, vérifie, puis publie. Avec plusieurs campagnes
-  // partageant le quiz, on s'arrête sur la confirmation explicite existante.
+  // Enregistre l'activation dans le brouillon, vérifie, puis publie.
   async function publishAndActivate() {
     if (!primaryAction || busy || editor.loading || editor.saving || editor.conflict || pending) return;
     onBusyChange(true);
-    setBusy(true); setError(""); setSuccess(""); setConfirmed(false); setSharedConfirmed(false); setDiagnostic(null);
+    setBusy(true); setError(""); setSuccess(""); setConfirmed(false); setDiagnostic(null);
     try {
       const saved = await primaryAction.prepare();
       if (!saved) { setError("Le brouillon n'a pas pu être enregistré."); return; }
       const checked = await runCheck(saved.revision);
-      if (!checked || !checked.valid || !checked.hasChanges || checked.campaigns.length > 1) {
-        if (checked && checked.campaigns.length > 1 && checked.valid) setConfirmed(true);
-        return;
-      }
+      if (!checked || !checked.valid || !checked.hasChanges) return;
       await runPublish(saved.revision, checked);
     } finally { setBusy(false); onBusyChange(false); }
   }
@@ -126,20 +120,12 @@ export default function QuizPublicationPanel({ editor, quizId, visible, pending,
       {diagnostic.errors.length ? issues(diagnostic.errors) : <p>Rien à corriger.</p>}
       <h3>Conseils ({diagnostic.warnings.length})</h3>
       {diagnostic.warnings.length ? issues(diagnostic.warnings) : <p>Aucun conseil.</p>}
-      <h3>Campagnes associées</h3>
-      {diagnostic.campaigns.length ? <ul>{diagnostic.campaigns.map((c) => <li key={c.id}>
-        <a href={`/campaigns/${encodeURIComponent(c.id)}`}>{c.name}</a>
-      </li>)}</ul> : <p>Aucune campagne associée.</p>}
       {diagnostic.valid && diagnostic.hasChanges && <fieldset disabled={disabled} className="publication-confirmation">
         <legend>Confirmer la publication</legend>
         <label><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />
           Je confirme : mes visiteurs verront cette nouvelle version.</label>
-        {diagnostic.campaigns.length > 1 && <label className="quiz-editor-shared">
-          <input type="checkbox" checked={sharedConfirmed} onChange={(event) => setSharedConfirmed(event.target.checked)} />
-          Je confirme que toutes les campagnes listées partageront cette nouvelle version.
-        </label>}
         <button type="button" className="btn-primary"
-          disabled={!confirmed || (diagnostic.campaigns.length > 1 && !sharedConfirmed)}
+          disabled={!confirmed}
           onClick={() => void publish()}>Publier</button>
       </fieldset>}
     </>}

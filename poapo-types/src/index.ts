@@ -78,7 +78,6 @@ export interface CatalogSummary extends Catalog {
   productCount: number;
   activeProductCount: number;
   quizCount: number;
-  campaignCount: number;
 }
 
 export interface CatalogInput {
@@ -104,7 +103,7 @@ export interface Quiz {
   useAllProducts: boolean;
   products: { productId: string }[];
   /** Occasion et période facultatives, informatives : sans effet sur l'accès public. */
-  occasion?: CampaignOccasion | null;
+  occasion?: QuizOccasion | null;
   occasionLabel?: string | null;
   startsAt?: string | Date | null;
   endsAt?: string | Date | null;
@@ -127,203 +126,11 @@ export interface QuizInput {
 }
 
 // ─────────────────────────────────────────────
-// Campaign Studio
+// Occasion d'une expérience (informative)
 // ─────────────────────────────────────────────
-export type CampaignStatus = "DRAFT" | "SCHEDULED" | "ACTIVE" | "PAUSED" | "COMPLETED";
-
-export type CampaignOccasion =
+export type QuizOccasion =
   | "CHRISTMAS" | "VALENTINES_DAY" | "SPRING" | "MOTHERS_DAY" | "BACK_TO_SCHOOL"
   | "BLACK_FRIDAY" | "PROMOTION" | "PERMANENT" | "CUSTOM";
-
-export interface CampaignQuizSummary {
-  id: string;
-  name: string;
-  active: boolean;
-  /** Nombre de questions actives du quiz. */
-  questionCount: number;
-  /** Produits proposés par le quiz (catalogue actif si useAllProducts). */
-  productCount: number;
-  catalog: CatalogRef;
-}
-
-export interface Campaign {
-  id: string;
-  tenantId: string;
-  quizId: string;
-  name: string;
-  occasion: CampaignOccasion;
-  occasionLabel: string | null;
-  description: string | null;
-  objectives: string[];
-  imageUrl: string | null;
-  /** Statut enregistré, choisi par le tenant. */
-  status: CampaignStatus;
-  /** Statut calculé à partir du statut enregistré et des dates (SCHEDULED/ACTIVE/COMPLETED). */
-  effectiveStatus: CampaignStatus;
-  startsAt: string | null;
-  endsAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  quiz: CampaignQuizSummary;
-}
-
-export interface CampaignInput {
-  quizId?: string;
-  name?: string;
-  occasion?: CampaignOccasion;
-  occasionLabel?: string | null;
-  description?: string | null;
-  objectives?: string[];
-  imageUrl?: string | null;
-  status?: CampaignStatus;
-  startsAt?: string | null;
-  endsAt?: string | null;
-}
-
-export interface CampaignListResponse {
-  data: Campaign[];
-  /** Nombre de campagnes du tenant par statut calculé, indépendamment des filtres. */
-  counts: Record<CampaignStatus, number> & { total: number };
-}
-
-// ─────────────────────────────────────────────
-// Campaign Studio — génération de quiz par IA
-// ─────────────────────────────────────────────
-export type QuizGenerationObjective =
-  | "GIFT_FINDER" | "PRODUCT_DISCOVERY" | "CROSS_SELL" | "HIGHLIGHT_NEW" | "CLEAR_STOCK";
-
-/**
- * AXES : au moins un axe sépare les produits sélectionnés (écart ≥ 0,2).
- * SEMANTIC : aucun axe discriminant, la recommandation repose sur la similarité sémantique
- * (embeddings) du moteur existant, alimentée par le texte du profil construit à partir des axes.
- */
-export type QuizGenerationMode = "AXES" | "SEMANTIC";
-
-export interface QuizGenerationProduct {
-  id: string;
-  name: string;
-  brand: string | null;
-  imageUrl: string | null;
-  price: number | null;
-  /** Le produit dispose d'un embedding : il peut être départagé sémantiquement. */
-  hasEmbedding: boolean;
-  /** Valeurs 0–1 du produit sur les axes du quiz de la campagne. */
-  axisValues: Record<string, number>;
-}
-
-export interface QuizGenerationLimits {
-  minProducts: number;
-  maxProducts: number;
-  minQuestions: number;
-  maxQuestions: number;
-  maxDraftQuestions: number;
-  minAnswers: number;
-  maxAnswers: number;
-  instructions: number;
-  /** Borne des impacts proposés par l'IA. */
-  generationImpact: number;
-  /** Borne des impacts modifiés manuellement, identique au Quiz Builder. */
-  manualImpact: number;
-}
-
-export interface QuizGenerationContext {
-  campaign: {
-    id: string;
-    name: string;
-    status: CampaignStatus;
-    effectiveStatus: CampaignStatus;
-    occasion: CampaignOccasion;
-    occasionLabel: string | null;
-    quizId: string;
-    quizName: string;
-  };
-  /** Catalogue du quiz de la campagne : seuls ses produits sont proposés. */
-  catalog: CatalogRef;
-  industry: string;
-  /** Axes du quiz de la campagne : les seuls utilisables par la génération. */
-  axes: QuizAxis[];
-  products: QuizGenerationProduct[];
-  /** Le quiz généré peut être rattaché automatiquement (campagne en brouillon). */
-  canAttach: boolean;
-  limits: QuizGenerationLimits;
-}
-
-export interface QuizGenerationRequest {
-  occasion?: CampaignOccasion;
-  occasionLabel?: string | null;
-  objective: QuizGenerationObjective;
-  productIds: string[];
-  /** Sous-ensemble des axes du quiz de la campagne ; tous par défaut. */
-  axisKeys?: string[];
-  instructions?: string | null;
-  questionCount?: number;
-}
-
-export interface QuizDraftAnswer {
-  text: string;
-  emoji: string | null;
-  impacts: AnswerImpact;
-  /** Produits visés par l'IA, indicatif : jamais enregistré. */
-  targetProductIds?: string[];
-}
-
-export interface QuizDraftQuestion {
-  text: string;
-  helpText: string | null;
-  answers: QuizDraftAnswer[];
-}
-
-/** Quiz généré ou modifié, non enregistré. Toutes les questions sont à choix unique. */
-export interface QuizDraft {
-  name: string;
-  quizTitle: string;
-  ctaText: string;
-  axisKeys: string[];
-  productIds: string[];
-  questions: QuizDraftQuestion[];
-}
-
-export interface GeneratedQuizDraft {
-  draft: QuizDraft;
-  mode: QuizGenerationMode;
-  axes: QuizAxis[];
-  industry: string;
-  warnings: string[];
-  generation: { model: string; durationMs: number; attempts: number };
-}
-
-export interface QuizDraftPreviewRequest {
-  draft: QuizDraft;
-  /** Index de la réponse choisie pour chaque question, dans l'ordre. */
-  answers: number[];
-}
-
-export interface QuizDraftRecommendation {
-  product: Pick<Product, "id" | "name" | "brand" | "imageUrl" | "price">;
-  score: number;
-}
-
-export interface QuizDraftPreviewResponse {
-  profile: Record<string, number>;
-  profileSummary: ProfileSummary;
-  explanation: string[];
-  recommendations: QuizDraftRecommendation[];
-}
-
-export interface QuizDraftSaveRequest {
-  draft: QuizDraft;
-  attachToCampaign: boolean;
-}
-
-export interface QuizDraftSaveResponse {
-  quizId: string;
-  quizName: string;
-  questionCount: number;
-  answerCount: number;
-  attachedToCampaign: boolean;
-  /** Raison du non-rattachement lorsqu'il était demandé. */
-  attachMessage: string | null;
-}
 
 // ─────────────────────────────────────────────
 // Auth
@@ -621,7 +428,6 @@ export interface QuizPublicationDiagnostic {
   valid: boolean;
   errors: QuizPublicationIssue[];
   warnings: QuizPublicationIssue[];
-  campaigns: { id: string; name: string }[];
   summary: { name: string; catalogId: string; catalogName: string; questions: number; products: number; active: boolean };
 }
 
@@ -959,7 +765,7 @@ export interface PaginatedResponse<T> {
 // ── Abonnement (GET /api/subscription) ──
 export type SubscriptionPlanId = "STARTER" | "PRO" | "BUSINESS";
 export type SubscriptionQuotaKey = "catalogs" | "publishedExperiences" | "recommendationsPerMonth";
-export type SubscriptionFeatureKey = "aiEnrichment" | "advancedAnalytics" | "campaigns";
+export type SubscriptionFeatureKey = "aiEnrichment" | "advancedAnalytics";
 
 export interface SubscriptionOverview {
   plan: SubscriptionPlanId;

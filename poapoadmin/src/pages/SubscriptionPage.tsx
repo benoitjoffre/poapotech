@@ -12,7 +12,6 @@ const QUOTAS: { key: SubscriptionQuotaKey; label: string; unit: string }[] = [
 const FEATURE_NOTES: Record<SubscriptionFeatureKey, string> = {
   aiEnrichment: "Complète automatiquement les caractéristiques de vos produits.",
   advancedAnalytics: "Entonnoir détaillé, abandons, variantes A/B et suggestions.",
-  campaigns: "Planifiez des opérations autour de vos expériences.",
 };
 const STATUS_LABELS = { ACTIVE: "Actif", EXPIRED: "Accès offert expiré", CANCELED: "Annulé" } as const;
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "");

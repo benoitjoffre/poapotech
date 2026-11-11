@@ -8,7 +8,6 @@ import jwt from "jsonwebtoken";
 import type { QuizEditorDraft, QuizEditorDraftResponse, QuizPublicationDiagnostic } from "@poapo/types";
 import { prisma } from "../src/lib/prisma";
 import quizzesRouter from "../src/routes/quizzes";
-import campaignsRouter from "../src/routes/campaigns";
 import embedRouter from "../src/routes/embed";
 import quizRouter from "../src/routes/quiz";
 import { quizErrorHandler } from "../src/services/quizzes";
@@ -22,7 +21,6 @@ test("PostgreSQL : publication contrôlée, concurrence et activation", {
   const app = express();
   app.use(express.json());
   app.use("/api/quizzes", quizzesRouter);
-  app.use("/api/campaigns", campaignsRouter);
   app.use("/api/embed", embedRouter);
   app.use("/api/quiz", quizRouter);
   app.use(quizErrorHandler);
@@ -52,9 +50,6 @@ test("PostgreSQL : publication contrôlée, concurrence et activation", {
       tenantId, quizId: quiz.id, text: "Confort ?", order: 1, type: "scale", conditionAnswerId: root.answers[0].id,
       answers: { create: { text: "Simple", impacts: { pace: 0.1 }, order: 0 } },
     }, include: { answers: true } });
-    const campaign = await prisma.campaign.create({ data: {
-      tenantId, quizId: quiz.id, name: "Odyssey", occasion: "PERMANENT", objectives: [],
-    } });
     const token = jwt.sign({ tenantId, email: `${tenantId}@example.test` }, process.env.JWT_SECRET!);
     async function request(path: string, method = "GET", body?: unknown, auth: string | null = token) {
       return fetch(base + path, { method, headers: { "Content-Type": "application/json",
@@ -71,9 +66,9 @@ test("PostgreSQL : publication contrôlée, concurrence et activation", {
     const publish = (revision: number, extra: object = {}) => request(prefix + "/publication/publish", "POST", { revision, confirm: true, ...extra });
     const publicSnapshot = () => prisma.quiz.findUnique({ where: { id: quiz.id }, include: {
       products: true, questions: { orderBy: { id: "asc" }, include: { answers: { orderBy: { id: "asc" } } } },
-      campaigns: { orderBy: { id: "asc" } }, sessions: true, metrics: true,
+      sessions: true, metrics: true,
     } });
-    return { tenantId, catalog, product, quiz, root, child, campaign, request, prefix, read, save, check, publish, publicSnapshot };
+    return { tenantId, catalog, product, quiz, root, child, request, prefix, read, save, check, publish, publicSnapshot };
   }
   try {
     await t.test("brouillon seul, diagnostic et avertissements, publication, identifiants stables et liens historiques", async () => {
@@ -110,7 +105,6 @@ test("PostgreSQL : publication contrôlée, concurrence et activation", {
       assert.equal(body.primaryColor, "#123456");
       const explicit = await f.request(`/api/embed/config?clientId=${f.tenantId}&quizId=${f.quiz.id}`);
       assert.deepEqual(await explicit.json(), body);
-      assert.equal((await f.publicSnapshot())!.campaigns[0].status, "DRAFT");
       assert.equal(await prisma.metric.count({ where: { tenantId: f.tenantId } }), 0);
       assert.equal(await prisma.quizSession.count({ where: { tenantId: f.tenantId } }), 0);
       published.draft.theme = null;
@@ -222,47 +216,6 @@ test("PostgreSQL : publication contrôlée, concurrence et activation", {
       assert.equal((await f.publish(2)).status, 200);
       assert.equal((await f.read()).draft.questions[1].abVariant, "A");
     });
-    await t.test("campagnes partagées : confirmation exacte, nouvelle campagne entre diagnostic et publication", async () => {
-      const f = await fixture();
-      const second = await prisma.campaign.create({ data: { tenantId: f.tenantId, quizId: f.quiz.id, name: "Autre", occasion: "SPRING", objectives: [] } });
-      const { draft } = await f.read();
-      assert.equal((await f.save(draft, 0)).status, 200);
-      const checked = await (await f.check(1)).json() as QuizPublicationDiagnostic;
-      assert.equal(checked.campaigns.length, 2);
-      assert.ok(checked.warnings.some((w) => w.code === "SHARED_QUIZ"));
-      assert.equal((await f.publish(1)).status, 409);
-      assert.equal((await f.publish(1, { confirmedCampaignIds: [f.campaign.id] })).status, 409);
-      const third = await f.request("/api/campaigns", "POST", { quizId: f.quiz.id, name: "Nouvelle", occasion: "SPRING" });
-      assert.equal(third.status, 201);
-      assert.equal((await f.publish(1, { confirmedCampaignIds: [f.campaign.id, second.id] })).status, 409);
-      const confirmed = await (await f.check(1)).json() as QuizPublicationDiagnostic;
-      assert.equal((await f.publish(1, { confirmedCampaignIds: confirmed.campaigns.map((c) => c.id) })).status, 200);
-      assert.equal(await prisma.campaign.count({ where: { tenantId: f.tenantId, status: "DRAFT" } }), 3);
-    });
-    await t.test("une association de campagne concurrente est relue après acquisition du verrou", async () => {
-      const f = await fixture();
-      assert.equal((await f.save((await f.read()).draft, 0)).status, 200);
-      let release!: () => void, locked!: () => void;
-      const gate = new Promise<void>((resolve) => { release = resolve; });
-      const acquired = new Promise<void>((resolve) => { locked = resolve; });
-      const association = prisma.$transaction(async (db) => {
-        await lockQuiz(db, f.tenantId, f.quiz.id);
-        await db.campaign.create({ data: { tenantId: f.tenantId, quizId: f.quiz.id, name: "Concurrente", occasion: "SPRING", objectives: [] } });
-        locked();
-        await gate;
-      });
-      await acquired;
-      const publishing = f.publish(1);
-      try {
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      } finally { release(); }
-      await association;
-      assert.equal((await publishing).status, 409);
-      assert.equal((await f.read()).revision, 1);
-      const diagnostic = await (await f.check(1)).json() as QuizPublicationDiagnostic;
-      assert.equal(diagnostic.campaigns.length, 2);
-      assert.equal((await f.publish(1, { confirmedCampaignIds: diagnostic.campaigns.map((c) => c.id) })).status, 200);
-    });
     await t.test("activation et programmation ne publient pas le brouillon et vérifient uniquement le public", async () => {
       const f = await fixture();
       const { draft } = await f.read();
@@ -270,15 +223,10 @@ test("PostgreSQL : publication contrôlée, concurrence et activation", {
       draft.questions[0].answers[0].active = false;
       assert.equal((await f.save(draft, 0)).status, 200);
       const before = await f.read();
-      assert.equal((await f.request(`/api/campaigns/${f.campaign.id}`, "PUT", { status: "ACTIVE" })).status, 200);
+      assert.equal((await f.request(f.prefix, "PUT", { active: true })).status, 200);
       assert.deepEqual(await f.read(), before);
-      assert.equal((await f.request(`/api/campaigns/${f.campaign.id}`, "PUT", {
-        status: "SCHEDULED", startsAt: new Date(Date.now() + 86400000).toISOString(),
-      })).status, 200);
       await prisma.question.update({ where: { id: f.root.id }, data: { active: false } });
       assert.equal((await f.request(f.prefix, "PUT", { active: true })).status, 422);
-      assert.equal((await f.request(`/api/campaigns/${f.campaign.id}`, "PUT", { status: "ACTIVE" })).status, 422);
-      assert.equal((await f.request("/api/campaigns", "POST", { name: "Refus", quizId: f.quiz.id, occasion: "SPRING", status: "ACTIVE" })).status, 422);
       assert.equal((await f.request(f.prefix, "PUT", { active: false })).status, 200);
       const invalid = await f.request("/api/quizzes", "POST", { name: "Vide", active: true });
       assert.equal(invalid.status, 422);
