@@ -243,6 +243,12 @@ export default function SettingsPage() {
         <Link className="btn-ghost" to="/settings/subscription">Voir mon abonnement</Link>
       </section>
 
+      <section className="form-section">
+        <h2 className="section-title">Catalogues</h2>
+        <p className="section-hint">Par défaut, tous vos produits sont dans un seul catalogue. Créez-en d'autres pour séparer plusieurs gammes.</p>
+        <Link className="btn-ghost" to="/catalogs">Gérer mes catalogues</Link>
+      </section>
+
       <form className="product-form" onSubmit={handlePasswordSubmit}>
         <section className="form-section">
           <h2 className="section-title">Mot de passe de connexion</h2>

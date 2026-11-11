@@ -81,6 +81,7 @@ export default function CatalogPage() {
     }
   };
 
+  const multi = catalogs.length > 1;
   const catalogLink = (path: string) => (catalogId ? `${path}?catalogId=${encodeURIComponent(catalogId)}` : path);
 
   const setParam = (key: string, value: string) => {
@@ -95,10 +96,10 @@ export default function CatalogPage() {
     <div className="page">
       <div className="page-header">
         <div>
-          <h1 className="page-title">{catalog ? catalog.name : "Produits"}</h1>
+          <h1 className="page-title">{multi && catalog ? catalog.name : "Produits"}</h1>
           <p className="page-subtitle">
             {total} produit{total !== 1 ? "s" : ""}
-            {catalog ? "" : " · tous les catalogues"}{" · "}<Link to="/help/ajouter-vos-produits">Aide : ajouter vos produits</Link>
+            {multi && !catalog ? " · tous les catalogues" : ""}{" · "}<Link to="/help/ajouter-vos-produits">Aide : ajouter vos produits</Link>
           </p>
         </div>
         <Link to={catalogLink("/catalog/new")} className="btn-primary">
@@ -147,7 +148,7 @@ export default function CatalogPage() {
                 <th>Nom</th>
                 <th>Marque</th>
                 <th>Prix</th>
-                {!catalog && <th>Catalogue</th>}
+                {multi && !catalog && <th>Catalogue</th>}
                 <th>Tags</th>
                 <th>Axes</th>
                 <th>Statut</th>
@@ -169,7 +170,7 @@ export default function CatalogPage() {
                   </td>
                   <td>{p.brand ?? "—"}</td>
                   <td>{p.price != null ? `${p.price.toFixed(2)} €` : "—"}</td>
-                  {!catalog && <td>{p.catalog?.name ?? "—"}</td>}
+                  {multi && !catalog && <td>{p.catalog?.name ?? "—"}</td>}
                   <td>{p.tags.length > 0 ? p.tags.slice(0, 3).join(", ") : "—"}</td>
                   <td>
                     {(axesByCatalog.get(p.catalogId) ?? [])

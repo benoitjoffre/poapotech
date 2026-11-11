@@ -54,11 +54,10 @@ export function ProductsSummary({ products, catalogs }: Pick<DashboardSummary, "
   return <DashboardPanel id="home-products-title" title="Mes produits" icon="box" className="home-products"
     action={<Link className="btn-ghost btn-sm" to="/catalog">Gérer mes produits →</Link>}>
     <div className="home-product-counts">
-      <div><strong>{products.toLocaleString("fr-FR")}</strong><p>produit{products > 1 ? "s" : ""} dans vos catalogues</p></div>
-      <div><strong>{catalogs.toLocaleString("fr-FR")}</strong><p>catalogue{catalogs > 1 ? "s" : ""} de votre boutique</p></div>
+      <div><strong>{products.toLocaleString("fr-FR")}</strong><p>produit{products > 1 ? "s" : ""} dans votre boutique</p></div>
+      {catalogs > 1 && <div><strong>{catalogs.toLocaleString("fr-FR")}</strong><p>catalogues de votre boutique</p></div>}
     </div>
     <div className="home-product-links"><Link to="/catalog/import">Importer des produits</Link>
-      <Link to="/catalogs">Gérer les catalogues</Link>
       <Link to="/enrichment">Compléter les caractéristiques avec l'IA (facultatif)</Link></div>
   </DashboardPanel>;
 }

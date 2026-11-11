@@ -131,11 +131,11 @@ export default function AnalyticsPage() {
               <div className="rs-filters">
                 <label className="rs-field"><span>Rechercher</span>
                   <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher une expérience" /></label>
-                <label className="rs-field"><span>Catalogue</span>
+                {summary.catalogs.length > 1 && <label className="rs-field"><span>Catalogue</span>
                   <select value={catalogId} onChange={(e) => setCatalogId(e.target.value)}>
                     <option value="">Tous les catalogues</option>
                     {summary.catalogs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select></label>
+                  </select></label>}
                 <label className="rs-field"><span>Trier par</span>
                   <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
                     {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
@@ -145,7 +145,7 @@ export default function AnalyticsPage() {
                 <div className="rs-table-wrap">
                   <table className="table rs-table">
                     <thead><tr>
-                      <th scope="col">Expérience</th><th scope="col">Catalogue</th>
+                      <th scope="col">Expérience</th>{summary.catalogs.length > 1 && <th scope="col">Catalogue</th>}
                       <th scope="col">Démarrages</th><th scope="col">Terminés</th>
                       <th scope="col">Recommandations</th><th scope="col">Clics produits</th>
                       <th scope="col"><span className="sr-only">Actions</span></th>
@@ -154,7 +154,7 @@ export default function AnalyticsPage() {
                       {rows.map((row) => (
                         <tr key={row.id} className={row.id === selectedId ? "rs-selected" : undefined}>
                           <th scope="row" data-label="Expérience">{row.name}{!row.active && <span className="kpi-tag">Désactivée</span>}</th>
-                          <td data-label="Catalogue">{row.catalogName}</td>
+                          {summary.catalogs.length > 1 && <td data-label="Catalogue">{row.catalogName}</td>}
                           <td data-label="Démarrages">{row.started}</td>
                           <td data-label="Terminés">{row.completed}</td>
                           <td data-label="Recommandations">{row.recommendations}</td>
