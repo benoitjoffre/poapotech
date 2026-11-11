@@ -103,6 +103,11 @@ export interface Quiz {
   /** Tous les produits actifs du catalogue du quiz ; sinon la sélection `products`. */
   useAllProducts: boolean;
   products: { productId: string }[];
+  /** Occasion et période facultatives, informatives : sans effet sur l'accès public. */
+  occasion?: CampaignOccasion | null;
+  occasionLabel?: string | null;
+  startsAt?: string | Date | null;
+  endsAt?: string | Date | null;
   createdAt: string | Date;
   updatedAt: string | Date;
 }

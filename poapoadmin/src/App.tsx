@@ -71,7 +71,6 @@ function AppLayout() {
             <NavLink className={link} data-tour="nav-home" to="/" end><Icon name="home" />Accueil</NavLink>
             <NavLink className={link} data-tour="nav-products" to="/catalog"><Icon name="box" />Mes produits</NavLink>
             <NavLink className={({ isActive }) => link({ isActive: isActive || !!experienceEditor })} data-tour="nav-experiences" to="/quizzes"><Icon name="quiz" />Mes expériences</NavLink>
-            <NavLink className={link} to="/campaigns"><Icon name="megaphone" />Campagnes</NavLink>
             <NavLink className={link} data-tour="nav-results" to="/analytics"><Icon name="chart" />Résultats</NavLink>
             <NavLink className={link} to="/settings"><Icon name="gear" />Paramètres</NavLink>
             <NavLink className={link} to="/help"><Icon name="help" />Centre d'aide</NavLink>

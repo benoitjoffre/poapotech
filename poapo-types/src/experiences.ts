@@ -39,6 +39,10 @@ export interface ExperienceListItem {
   /** null lorsqu'aucun événement n'a été enregistré sur la période. */
   stats: ExperienceStats | null;
   campaigns: ExperienceCampaign[];
+  occasion: CampaignOccasion | null;
+  occasionLabel: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
 }
 
 export interface ExperiencesOverview {

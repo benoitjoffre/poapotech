@@ -17,7 +17,7 @@ export async function experiencesOverview(tenantId: string, now = new Date()): P
         where: { tenantId }, orderBy: [{ createdAt: "asc" }, { id: "asc" }],
         select: {
           id: true, name: true, quizTitle: true, industry: true, active: true, isDefault: true, useAllProducts: true,
-          updatedAt: true, catalogId: true, catalog: { select: { id: true, name: true } },
+          updatedAt: true, catalogId: true, occasion: true, occasionLabel: true, startsAt: true, endsAt: true, catalog: { select: { id: true, name: true } },
           _count: { select: {
             questions: { where: { active: true } },
             products: { where: { product: { active: true } } },
@@ -75,6 +75,8 @@ export async function experiencesOverview(tenantId: string, now = new Date()): P
           : !productCount ? "Aucun produit actif recommandable." : null,
         updatedAt: quiz.updatedAt.toISOString(), lastModifiedAt: lastModified.toISOString(),
         stats: stats.get(quiz.id) ?? null, campaigns: campaignsByQuiz.get(quiz.id) ?? [],
+        occasion: quiz.occasion, occasionLabel: quiz.occasionLabel,
+        startsAt: quiz.startsAt?.toISOString() ?? null, endsAt: quiz.endsAt?.toISOString() ?? null,
       };
     });
     return {

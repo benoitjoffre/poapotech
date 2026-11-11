@@ -69,9 +69,8 @@ async function main() {
   await page.getByRole("heading", { name: "Votre prochaine action" }).waitFor();
   const navigation = page.getByRole("navigation", { name: "Navigation principale" });
   check((await navigation.getByRole("link").allTextContents()).join("|") ===
-    "Accueil|Mes produits|Mes expériences|Campagnes|Résultats|Paramètres|Centre d'aide", "seven merchant destinations in the validated order");
-  check(await navigation.getByRole("link", { name: "Campagnes", exact: true }).getAttribute("href") === "/campaigns",
-    "campaign navigation retains the existing studio route");
+    "Accueil|Mes produits|Mes expériences|Résultats|Paramètres|Centre d'aide", "six merchant destinations in the validated order");
+  check(await navigation.getByRole("link", { name: "Campagnes", exact: true }).count() === 0, "campaigns no longer in the navigation");
   check(await page.getByText("Boutique de démonstration", { exact: true }).count() === 1, "real shop identity");
   check(await page.locator(".experience-card").count() === 3, "standalone and shared quizzes included once");
   check(await page.locator(".dashboard-stat dd").allTextContents().then((values) => values.join(",") === "1,1,1,2"), "real totals without campaign duplication");
@@ -95,7 +94,7 @@ async function main() {
     await page.setViewportSize({ width, height: 1000 });
     await page.evaluate(() => window.scrollTo(0, 0));
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `no horizontal overflow at ${width}px`);
-    for (const label of ["Accueil", "Mes produits", "Mes expériences", "Campagnes", "Résultats", "Paramètres"]) {
+    for (const label of ["Accueil", "Mes produits", "Mes expériences", "Résultats", "Paramètres"]) {
       const link = page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: label, exact: true });
       const box = await link.boundingBox();
       check(await link.isVisible() && box && box.x >= 0 && box.y >= 0 &&
@@ -130,7 +129,7 @@ async function main() {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(admin + "/");
   await page.getByRole("heading", { name: "Votre prochaine action" }).waitFor();
-  for (const label of ["Accueil", "Mes produits", "Mes expériences", "Campagnes", "Résultats", "Paramètres"]) {
+  for (const label of ["Accueil", "Mes produits", "Mes expériences", "Résultats", "Paramètres"]) {
     await page.keyboard.press("Tab");
     check(await page.evaluate(() => document.activeElement?.textContent?.trim()) === label, `keyboard reaches ${label}`);
   }

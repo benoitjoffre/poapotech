@@ -2,7 +2,8 @@ import { Link } from "react-router-dom";
 import type { ExperienceListItem } from "@poapo/types";
 import Icon from "../Icon";
 import { publicQuizLink, experienceEditorPath, quizPath } from "../../lib/experienceLinks";
-import { campaignCountLabel, questionCountLabel } from "../../lib/experiences";
+import { questionCountLabel } from "../../lib/experiences";
+import { periodSummary } from "../../lib/occasions";
 import ExperienceBadges from "./ExperienceBadges";
 import ExperienceStats from "./ExperienceStats";
 
@@ -37,7 +38,7 @@ export default function ExperienceCard({ experience, selected, onSelect, tenantI
       <ul className="xp-tags">
         <li>{experience.catalog.name}</li>
         <li>{questionCountLabel(experience.questionCount)}</li>
-        <li>{campaignCountLabel(experience.campaigns.length)}</li>
+        {periodSummary(experience) && <li>{periodSummary(experience)}</li>}
       </ul>
       {experience.correction && <p className="xp-warning">{experience.correction}</p>}
       <ExperienceStats experience={experience} days={days} />

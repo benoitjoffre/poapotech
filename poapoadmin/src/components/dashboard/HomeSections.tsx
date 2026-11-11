@@ -75,7 +75,7 @@ export function HomeResources({ experience }: { experience?: DashboardExperience
         title={experience ? "Personnaliser un quiz" : "Créer un quiz pour le personnaliser"} description="Préparer les questions et les réponses" />
       <ResourceLink to={experience ? quizPath(experience) : "/experiences/new"} icon="copy"
         title={experience ? "Intégrer un quiz" : "Créer un quiz pour l'intégrer"} description="Accéder au lien et au code d'intégration" />
-      {experience && <p className="dashboard-muted">Quiz sélectionné : {experience.name}. L'apparence et la publication restent dans l'éditeur de campagne.</p>}
+      {experience && <p className="dashboard-muted">Quiz sélectionné : {experience.name}. L'apparence et la publication se règlent dans l'éditeur.</p>}
     </DashboardPanel>
   </div>;
 }

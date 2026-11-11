@@ -71,7 +71,6 @@ async function main() {
   await page.getByRole("heading", { name: "Quiz sans campagne", level: 1 }).waitFor();
   eq((await page.getByRole("tab").allTextContents()).map((t) => t.replace(/^\d/, "")).join("|"),
     "Réglages|Questions|Apparence|Aperçu|Publication");
-  ok(await page.getByText("Aucune campagne n'utilise cette expérience").isVisible());
   ok(await page.getByRole("link", { name: "← Mes expériences" }).isVisible());
   eq(await state(), "published");
   ok(await page.getByText("Public : accessible").isVisible());
@@ -157,9 +156,7 @@ async function main() {
   // 9. Quiz partagé : campagnes affichées, inactif signalé.
   await page.goto(editor(shared.id));
   await page.getByRole("heading", { name: "Quiz partagé", level: 1 }).waitFor();
-  ok(await page.getByText("Campagnes liées · 2").isVisible());
-  for (const campaign of campaigns) ok(await page.locator(".xe-campaigns").getByRole("link", { name: campaign.name }).isVisible());
-  ok(await page.getByText(/Aucune copie du quiz n'existe par campagne/).isVisible());
+  ok(await page.locator(".xe-campaigns").count() === 0, "plus de panneau de campagnes");
   await shot("editor-1440-partage.png");
   await page.goto(editor(off.id));
   await page.getByRole("heading", { name: "Quiz inactif", level: 1 }).waitFor();

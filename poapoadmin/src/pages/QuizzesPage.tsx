@@ -73,7 +73,7 @@ export default function QuizzesPage() {
     <header className="page-header">
       <div>
         <h1 className="page-title">Mes expériences</h1>
-        <p className="page-subtitle">Créez, modifiez et publiez vos quiz de recommandation. Une expérience est un quiz unique qui peut être utilisé dans plusieurs campagnes, ou sans campagne. <Link to="/help/creer-une-experience">Guide : créer une expérience</Link></p>
+        <p className="page-subtitle">Créez, modifiez et publiez vos quiz de recommandation. Précisez au besoin une occasion et une période (Noël, soldes…) pour vous repérer. <Link to="/help/creer-une-experience">Guide : créer une expérience</Link></p>
       </div>
       <Link className="btn-primary" to={createPath}><Icon name="plus" size={16} />&nbsp;Créer une expérience</Link>
     </header>
@@ -84,7 +84,7 @@ export default function QuizzesPage() {
 
     {!loading && !error && overview && (all.length === 0 ? <div className="xp-state xp-empty">
       <h2>Vous n'avez pas encore d'expérience</h2>
-      <p>Une expérience guide vos clients vers les produits d'un catalogue grâce à quelques questions. Aucune campagne n'est nécessaire pour commencer.</p>
+      <p>Une expérience guide vos clients vers les produits d'un catalogue grâce à quelques questions.</p>
       <Link className="btn-primary" to={createPath}>Créer ma première expérience</Link>
     </div> : <>
       <div className="xp-kpis">

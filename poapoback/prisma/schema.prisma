@@ -110,6 +110,11 @@ model Quiz {
   active         Boolean  @default(true)
   isDefault      Boolean  @default(false)
   useAllProducts Boolean  @default(true)
+  // Occasion et période facultatives, à titre informatif : sans effet sur l'accès public.
+  occasion       CampaignOccasion?
+  occasionLabel  String?
+  startsAt       DateTime?
+  endsAt         DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

@@ -72,11 +72,9 @@ export default function HomePage() {
                 tenantId={user?.tenantId} days={summary.period.days} />)}
               <Link className="home-create-card" to="/experiences/new">
                 <Icon name="plus" size={32} /><strong>Créer une nouvelle expérience</strong>
-                <span>Un quiz personnalisé, avec ou sans campagne.</span><span className="btn-ghost">Commencer</span>
+                <span>Un quiz personnalisé pour vos clients.</span><span className="btn-ghost">Commencer</span>
               </Link>
             </div>}
-            <div className="home-legacy-links"><Link to="/campaigns"><Icon name="megaphone" />Campagnes marketing</Link>
-              <span className="dashboard-muted">Un même quiz peut être partagé entre plusieurs campagnes.</span></div>
           </DashboardPanel>
           <ProductsSummary products={summary.products} catalogs={summary.catalogs} />
         </>}

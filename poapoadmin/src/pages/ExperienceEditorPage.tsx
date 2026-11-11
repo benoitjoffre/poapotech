@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
-import type { Campaign, CampaignListResponse, ExperiencesOverview, Quiz, QuizBranding, QuizEditorDraft, QuizPublicationDiagnostic, QuizPublicationIssue } from "@poapo/types";
+import type { ExperiencesOverview, Quiz, QuizBranding, QuizEditorDraft, QuizPublicationDiagnostic, QuizPublicationIssue } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 import { useCatalogs } from "../lib/catalogs";
 import { publicQuizLink } from "../lib/experienceLinks";
@@ -9,7 +9,7 @@ import { QuizBuilderContent } from "./QuizBuilderPage";
 import QuizAppearancePanel from "../components/QuizAppearancePanel";
 import QuizInteractivePreview from "../components/QuizInteractivePreview";
 import QuizPublicationPanel from "../components/QuizPublicationPanel";
-import ExperienceCampaignsPanel from "../components/quizEditor/ExperienceCampaignsPanel";
+import QuizPeriodFields from "../components/quizEditor/QuizPeriodFields";
 import ExperienceProductsSummary from "../components/quizEditor/ExperienceProductsSummary";
 import {
   QuizAxesFields, QuizGeneralFields, QuizProductSelection, EMPTY_CONFIG, toDraftConfig, useCatalogProducts,
@@ -35,7 +35,7 @@ const isSection = (value: string | null): value is Section => value === "product
 // Les produits recommandables sont dans l'onglet Réglages.
 const tabOf = (value: Section): Exclude<Section, "products"> => value === "products" ? "configuration" : value;
 
-interface EditorContext { quiz: Quiz; campaigns: Campaign[]; branding: QuizBranding & { active?: boolean } }
+interface EditorContext { quiz: Quiz; branding: QuizBranding & { active?: boolean } }
 
 type Config = QuizEditorDraft["config"];
 function sameConfig(a: Config, b: Config): boolean {
@@ -74,12 +74,11 @@ function ExperienceEditorLoader({ quizId }: { quizId: string }) {
     async function load() {
       const id = encodeURIComponent(quizId);
       // Toutes les lectures sont limitées au tenant authentifié par l'API.
-      const [quiz, related, branding] = await Promise.all([
+      const [quiz, branding] = await Promise.all([
         apiFetch<Quiz>(`/api/quizzes/${id}`),
-        apiFetch<CampaignListResponse>(`/api/campaigns?quizId=${id}`),
         apiFetch<QuizBranding & { active?: boolean }>("/api/auth/me"),
       ]);
-      if (!cancelled) setContext({ quiz, campaigns: related.data, branding });
+      if (!cancelled) setContext({ quiz, branding });
     }
     void load().catch((err: unknown) => {
       if (!cancelled) setError(err instanceof Error ? err.message : "Impossible de charger l'éditeur");
@@ -99,7 +98,7 @@ function ExperienceEditorLoader({ quizId }: { quizId: string }) {
 }
 
 function ExperienceEditor({ initial }: { initial: EditorContext }) {
-  const { campaigns, branding } = initial;
+  const { branding } = initial;
   const [quiz, setQuiz] = useState(initial.quiz);
   const [searchParams] = useSearchParams();
   const requested = searchParams.get("section");
@@ -241,7 +240,6 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
         <li className={`xp-badge xe-state ${state.id}`} data-state={state.id} role="status">{state.label}</li>
         <li className="xp-badge">Catalogue : {catalogName}</li>
         {questionCount !== undefined && <li className="xp-badge">{questionCount} question{questionCount > 1 ? "s" : ""}</li>}
-        <li className="xp-badge">{campaigns.length === 0 ? "Aucune campagne" : `${campaigns.length} campagne${campaigns.length > 1 ? "s" : ""}`}</li>
       </ul>
       {state.hint && <p className="section-hint xe-hint">{state.hint}</p>}
     </header>
@@ -305,6 +303,7 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
               <ApplyBar error={formError} dirty={formDirty} applied={applied} />
             </fieldset>
           </form>
+          <QuizPeriodFields quiz={quiz} />
         </div>
 
         {section === "publication" && <section className="xw-card">
@@ -314,9 +313,6 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
         </section>}
       </div>
 
-      <div className="xe-side">
-        <ExperienceCampaignsPanel campaigns={campaigns} quizName={quiz.name} />
-      </div>
     </div>
   </div>;
 }

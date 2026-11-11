@@ -101,7 +101,7 @@ export default function CatalogsPage() {
         <div className="step-table-wrap">
           <table className="table catalogs-table">
             <thead>
-              <tr><th>Catalogue</th><th>Produits</th><th>Quiz</th><th>Campagnes</th><th>Actions</th></tr>
+              <tr><th>Catalogue</th><th>Produits</th><th>Quiz</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {catalogs.map((catalog) => {
@@ -129,7 +129,6 @@ export default function CatalogsPage() {
                       </Link>
                     </td>
                     <td><Link to={withCatalog("/quizzes", catalog.id)}>{catalog.quizCount}</Link></td>
-                    <td><Link to={withCatalog("/campaigns", catalog.id)}>{catalog.campaignCount}</Link></td>
                     <td><div className="catalog-actions">
                       {editing ? (
                         <>
