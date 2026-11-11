@@ -3,6 +3,7 @@ import { useAuth } from "../contexts/AuthContext";
 import type { TenantBranding } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 import { Link } from "react-router-dom";
+import { auth0Configured } from "../lib/auth0Config";
 import { widgetBaseUrl as resolveWidgetBaseUrl } from "../lib/experienceLinks";
 
 interface BrandingForm {
@@ -10,21 +11,14 @@ interface BrandingForm {
   industry: string;
   primaryColor: string;
   logoUrl: string;
-  quizTitle: string;
-  ctaText: string;
   embedDomain: string;
 }
-
-const DEFAULT_QUIZ_TITLE = "Trouve ton produit idéal";
-const DEFAULT_CTA_TEXT = "Découvrir ma sélection";
 
 const EMPTY: BrandingForm = {
   name: "",
   industry: "",
   primaryColor: "#6C47FF",
   logoUrl: "",
-  quizTitle: DEFAULT_QUIZ_TITLE,
-  ctaText: DEFAULT_CTA_TEXT,
   embedDomain: "",
 };
 
@@ -54,8 +48,6 @@ export default function SettingsPage() {
           industry: data.industry ?? "",
           primaryColor: data.primaryColor ?? "#6C47FF",
           logoUrl: data.logoUrl ?? "",
-          quizTitle: data.quizTitle || DEFAULT_QUIZ_TITLE,
-          ctaText: data.ctaText || DEFAULT_CTA_TEXT,
           embedDomain: data.embedDomain ?? "",
         });
       })
@@ -180,7 +172,7 @@ export default function SettingsPage() {
         </section>
 
         <section className="form-section">
-          <h2 className="section-title">Apparence du widget</h2>
+          <h2 className="section-title">Ma marque</h2>
           <div className="form-grid">
             <div className="field-group">
               <label className="field-label" htmlFor="primaryColor">
@@ -211,20 +203,8 @@ export default function SettingsPage() {
                 placeholder="https://..."
               />
             </div>
-            <div className="field-group">
-              <label className="field-label" htmlFor="quizTitle">
-                Titre du quiz
-              </label>
-              <input id="quizTitle" className="field-input" value={form.quizTitle} readOnly />
-            </div>
-            <div className="field-group">
-              <label className="field-label" htmlFor="ctaText">
-                Texte du bouton CTA
-              </label>
-              <input id="ctaText" className="field-input" value={form.ctaText} readOnly />
-            </div>
           </div>
-          <p className="section-hint"><Link to="/quizzes">Préparer le titre, le CTA et les axes dans le brouillon du quiz</Link>. L'activité du compte ne modifie plus les quiz déjà créés.</p>
+          <p className="section-hint">Logo et couleur par défaut de vos quiz. Chaque quiz peut les personnaliser dans l'éditeur, onglet Apparence.</p>
         </section>
 
         {error && <div className="form-error">{error}</div>}
@@ -249,7 +229,7 @@ export default function SettingsPage() {
         <Link className="btn-ghost" to="/catalogs">Gérer mes catalogues</Link>
       </section>
 
-      <form className="product-form" onSubmit={handlePasswordSubmit}>
+      {!auth0Configured && <form className="product-form" onSubmit={handlePasswordSubmit}>
         <section className="form-section">
           <h2 className="section-title">Mot de passe de connexion</h2>
           <p className="section-hint">Définissez ou changez le mot de passe de votre compte.</p>
@@ -300,7 +280,7 @@ export default function SettingsPage() {
             </button>
           </div>
         </section>
-      </form>
+      </form>}
 
       <section className="form-section embed-section">
         <h2 className="section-title">Code d'intégration du quiz par défaut</h2>{" "}

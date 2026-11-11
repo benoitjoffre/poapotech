@@ -26,7 +26,7 @@ export default function ExperienceProductsSummary({ form, catalogName, catalogId
   const coverage = scoringCoverage(recommendable, form.axes);
   const catalogQuery = catalogId ? `?catalogId=${encodeURIComponent(catalogId)}` : "";
   return <section className="form-section xe-products" aria-labelledby="xe-products-title">
-    <h2 className="section-title" id="xe-products-title" tabIndex={-1}>Catalogue et produits</h2>
+    <h2 className="section-title" id="xe-products-title" tabIndex={-1}>Produits proposés</h2>
     <div className="xe-warning" role="note">
       <strong>Les produits ne sont pas protégés par le brouillon.</strong> Modifier, importer ou enrichir une fiche produit s'applique
       immédiatement aux recommandations publiques de tous les quiz qui utilisent ce catalogue. Seule la sélection de produits
@@ -36,7 +36,7 @@ export default function ExperienceProductsSummary({ form, catalogName, catalogId
     <dl className="xe-facts">
       <div><dt>Catalogue associé</dt><dd>{catalogName}</dd></div>
       <div><dt>Mode</dt><dd>{form.useAllProducts ? "Tous les produits actifs" : `Sélection manuelle (${form.productIds.length})`}</dd></div>
-      <div><dt>Produits recommandables</dt><dd>{loading ? "Chargement…" : `${recommendable.length} sur ${products.length} dans le catalogue`}</dd></div>
+      <div><dt>Produits proposés par le quiz</dt><dd>{loading ? "Chargement…" : `${recommendable.length} sur ${products.length} dans le catalogue`}</dd></div>
       <div><dt>Prêts pour le scoring</dt><dd>{loading ? "Chargement…" : form.axes.length === 0 ? "Aucun axe défini" :
         `${coverage.complete} sur ${recommendable.length} avec tous les axes renseignés`}</dd></div>
     </dl>

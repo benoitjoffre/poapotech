@@ -69,29 +69,29 @@ export function QuizGeneralFields({ form, setForm, catalogs, catalogsLoading, on
         <p className="field-hint">Le quiz recommande uniquement des produits de ce catalogue ; ses axes restent propres au quiz.</p>
       </div>
       <div className="field-group">
-        <label className="field-label" htmlFor="quiz-name">Nom interne</label>
+        <label className="field-label" htmlFor="quiz-name">Nom de l'expérience (visible par vous seul)</label>
         <input id="quiz-name" className="field-input" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
       </div>
       <div className="field-group">
         <label className="field-label" htmlFor="quiz-industry">Activité</label>
         <input id="quiz-industry" className="field-input" maxLength={80} placeholder="ex. Café de spécialité, Cosmétique, Vin…"
           value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} />
-        <p className="field-hint">Décrit votre activité à l'IA pour contextualiser les recommandations.</p>
+        <p className="field-hint">Aide à proposer des critères et des questions adaptés à votre activité.</p>
       </div>
       <div className="field-group">
-        <label className="field-label" htmlFor="quiz-title">Titre public</label>
+        <label className="field-label" htmlFor="quiz-title">Titre affiché aux visiteurs</label>
         <input id="quiz-title" className="field-input" required value={form.quizTitle} onChange={(e) => setForm({ ...form, quizTitle: e.target.value })} />
       </div>
       <div className="field-group">
-        <label className="field-label" htmlFor="quiz-cta">Texte du bouton résultat</label>
+        <label className="field-label" htmlFor="quiz-cta">Texte du bouton vers les produits</label>
         <input id="quiz-cta" className="field-input" required value={form.ctaText} onChange={(e) => setForm({ ...form, ctaText: e.target.value })} />
       </div>
     </div>
     {showActivation && <label className="checkbox-label">
       <input type="checkbox" disabled={!canActivate} checked={form.active} onChange={(e) => setForm({ ...form, active: e.target.checked })} />
-      {canActivate ? "Activation préparée dans le brouillon (sans effet sur le quiz public)" : "Un nouveau quiz est créé inactif. Complétez-le puis publiez son brouillon pour l'activer."}
+      {canActivate ? "Rendre l'expérience accessible à mes visiteurs lors de la publication" : "Un nouveau quiz est créé inactif. Complétez-le puis publiez son brouillon pour l'activer."}
     </label>}
-    {isDefault && <p className="section-hint">Ce quiz est utilisé par les anciens liens qui ne précisent pas de quizId.</p>}
+    {isDefault && <p className="section-hint">Cette expérience est celle ouverte par défaut par vos anciens liens.</p>}
   </section>;
 }
 
@@ -101,9 +101,8 @@ export function QuizAxesFields({ form, setForm, publishedAxes, onError, title = 
   return <section className="form-section">
     <h2 className="section-title">{title}</h2>
     <p className="section-hint">
-      Définissez les critères numériques (0 à 1) propres à votre activité : par exemple « Acidité » pour un café,
-      « Hydratation » pour un soin. Chaque produit est positionné sur ces axes et chaque réponse du quiz déplace le
-      profil du visiteur ; le produit le plus proche est recommandé.
+      Un critère est ce qui compte pour votre client : par exemple « Acidité » pour un café ou « Budget » pour un voyage.
+      Chaque produit est noté sur ces critères, et les réponses du quiz permettent de trouver le produit qui correspond le mieux.
     </p>
     {form.axes.map((axis, index) => {
       const update = (patch: Partial<AxisDraft>) => setForm({
@@ -111,39 +110,33 @@ export function QuizAxesFields({ form, setForm, publishedAxes, onError, title = 
       });
       return <div key={index} className="form-grid axis-row">
         <div className="field-group">
-          <label className="field-label" htmlFor={`axis-label-${index}`}>Libellé</label>
+          <label className="field-label" htmlFor={`axis-label-${index}`}>Nom du critère</label>
           <input id={`axis-label-${index}`} className="field-input" required value={axis.label} placeholder="ex. Acidité"
             onChange={(e) => update({ label: e.target.value, ...(axis.isNew && { key: axisKeyFromLabel(e.target.value) }) })} />
         </div>
         <div className="field-group">
-          <label className="field-label" htmlFor={`axis-key-${index}`}>Clé technique</label>
-          <input id={`axis-key-${index}`} className="field-input" required pattern="[A-Za-z][A-Za-z0-9_]*" maxLength={40}
-            value={axis.key} readOnly={!axis.isNew} title={axis.isNew ? "Lettres, chiffres et _ ; utilisée dans les imports CSV" : "La clé d'un axe enregistré ne peut plus changer"}
-            onChange={(e) => update({ key: e.target.value })} />
-        </div>
-        <div className="field-group">
-          <label className="field-label" htmlFor={`axis-low-${index}`}>Libellé bas (0)</label>
+          <label className="field-label" htmlFor={`axis-low-${index}`}>Valeur minimale</label>
           <input id={`axis-low-${index}`} className="field-input" value={axis.lowLabel ?? ""} placeholder="ex. Douce"
             onChange={(e) => update({ lowLabel: e.target.value })} />
         </div>
         <div className="field-group">
-          <label className="field-label" htmlFor={`axis-high-${index}`}>Libellé haut (1)</label>
+          <label className="field-label" htmlFor={`axis-high-${index}`}>Valeur maximale</label>
           <input id={`axis-high-${index}`} className="field-input" value={axis.highLabel ?? ""} placeholder="ex. Vive"
             onChange={(e) => update({ highLabel: e.target.value })} />
         </div>
         <button type="button" className="btn-ghost" onClick={() => {
           if (publishedAxes.some((item) => item.key === axis.key)) {
-            onError("Les clés des axes publiés sont conservées à cette étape. Vous pouvez modifier leurs libellés.");
+            onError("Ce critère est déjà publié : vous pouvez le renommer, pas le supprimer.");
             return;
           }
-          if (!axis.isNew && !window.confirm(`Supprimer l'axe « ${axis.label} » du brouillon ?`)) return;
+          if (!axis.isNew && !window.confirm(`Supprimer le critère « ${axis.label} » ?`)) return;
           setForm({ ...form, axes: form.axes.filter((_, i) => i !== index) });
         }}>Supprimer</button>
       </div>;
     })}
     <button id="quiz-add-axis" type="button" className="btn-ghost" disabled={form.axes.length >= 12}
       onClick={() => setForm({ ...form, axes: [...form.axes, { key: "", label: "", lowLabel: "", highLabel: "", isNew: true }] })}>
-      + Ajouter un axe
+      + Ajouter un critère
     </button>
   </section>;
 }
@@ -152,12 +145,12 @@ export function QuizProductSelection({ form, setForm, catalogName, products, loa
   catalogName: string; products: CatalogProduct[]; loading: boolean;
 }) {
   return <section className="form-section">
-    <h2 className="section-title">Produits recommandables</h2>
+    <h2 className="section-title">Produits proposés par le quiz</h2>
     <label className="checkbox-label">
       <input id="quiz-use-all-products" type="checkbox" checked={form.useAllProducts} onChange={(e) => setForm({ ...form, useAllProducts: e.target.checked })} />
       Tous les produits actifs du catalogue « {catalogName} » (y compris les futurs produits)
     </label>
-    <p className="section-hint">Sélectionnez au besoin un sous-ensemble des produits de ce catalogue. Seuls les produits actifs sont recommandés.</p>
+    <p className="section-hint">Vous pouvez ne proposer qu'une partie de vos produits. Seuls les produits actifs sont recommandés.</p>
     {!form.useAllProducts && <>
       {loading && <p className="section-hint">Chargement des produits...</p>}
       {!loading && products.length === 0 && <p className="section-hint">Ce catalogue ne contient encore aucun produit.</p>}
@@ -167,7 +160,7 @@ export function QuizProductSelection({ form, setForm, catalogName, products, loa
         })} />
         {product.name}{!product.active ? " (inactif)" : ""}
       </label>)}
-      {form.productIds.length === 0 && <p className="form-error">Sans produit sélectionné, ce quiz ne pourra pas recommander de produit.</p>}
+      {form.productIds.length === 0 && <p className="form-error">Sans produit sélectionné, le quiz ne pourra rien recommander.</p>}
     </>}
   </section>;
 }

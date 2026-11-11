@@ -555,6 +555,12 @@ export function QuizBuilderContent({ quiz, embedded = false, visible = true, ses
   let themeError = "";
   try { parseQuizTheme(editor.draft?.theme); }
   catch (err) { themeError = err instanceof Error ? err.message : "Thème invalide"; }
+  // Enregistrement automatique (éditeurs intégrés) : dès une courte pause, sans formulaire ouvert ni erreur en attente.
+  useEffect(() => {
+    if (!embedded || !editor.dirty || saving || importing || loading || localPending || editor.conflict || editor.error || themeError) return;
+    const timer = window.setTimeout(() => { void editor.save(); }, 1200);
+    return () => window.clearTimeout(timer);
+  }, [embedded, editor, editor.dirty, editor.conflict, editor.error, saving, importing, loading, localPending, themeError]);
   useLeaveGuard(unsaved, "Des modifications locales ne sont pas enregistrées dans le brouillon. Quitter sans les enregistrer ?");
 
   // Drag state for questions
@@ -710,21 +716,21 @@ export function QuizBuilderContent({ quiz, embedded = false, visible = true, ses
 
   return (
     <div className="page">
-      <QuizDraftStatus publishHint={session ? "Vérifiez et publiez depuis la section Publication de l'éditeur." : undefined} dirty={unsaved} hasChanges={editor.state?.hasChanges ?? false}
+      <QuizDraftStatus publishHint={session ? "Publiez depuis l'onglet Publication pour les rendre visibles." : undefined} dirty={unsaved} hasChanges={editor.state?.hasChanges ?? false}
         revision={editor.state?.revision ?? 0} saving={saving || importing || loading} conflict={editor.conflict} error={editor.error}
         onReload={() => {
-          if (!unsaved || confirm("Recharger et perdre les modifications locales non enregistrées ?")) void editor.load();
+          if (!unsaved || confirm("Recharger et perdre les modifications non enregistrées ?")) void editor.load();
         }}
         onDiscard={() => {
-          if (confirm("Abandonner toutes les modifications préparatoires de ce quiz ? Le contenu public restera inchangé.")) {
+          if (confirm("Annuler toutes vos modifications non publiées ? Ce que voient vos visiteurs ne change pas.")) {
             void editor.discard().then((ok) => { if (ok) { setShowNewForm(false); setPending({}); } });
           }
         }} />
-      {localPending && <p role="status">Terminez ou annulez les formulaires ouverts avant d'enregistrer le brouillon.</p>}
+      {localPending && <p role="status">Terminez ou annulez le formulaire ouvert : l'enregistrement automatique reprendra ensuite.</p>}
       {themeError && <p id="theme-validation-error" className="form-error" role="alert">{themeError}</p>}
-      <button type="button" className="btn-primary"
+      {(!embedded || !!editor.error) && <button type="button" className="btn-primary"
         disabled={loading || saving || importing || !editor.draft || !editor.dirty || localPending || editor.conflict || !!themeError}
-        onClick={() => void editor.save()}>Enregistrer le brouillon</button>
+        onClick={() => void editor.save()}>{embedded ? "Réessayer d'enregistrer" : "Enregistrer mes modifications"}</button>}
       <div hidden={!visible} className="quiz-editor-panel"
         {...(embedded ? { role: "tabpanel", id: "editor-panel-questions", "aria-labelledby": "editor-tab-questions" } : {})}>
       <fieldset disabled={loading || saving || importing || !editor.draft} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>

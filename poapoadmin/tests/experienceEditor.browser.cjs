@@ -70,18 +70,18 @@ async function main() {
   await page.goto(editor(solo.id));
   await page.getByRole("heading", { name: "Quiz sans campagne", level: 1 }).waitFor();
   eq((await page.getByRole("tab").allTextContents()).map((t) => t.replace(/^\d/, "")).join("|"),
-    "Configuration|Produits|Questions|Apparence|Aperçu|Publication");
+    "Réglages|Questions|Apparence|Aperçu|Publication");
   ok(await page.getByText("Aucune campagne n'utilise cette expérience").isVisible());
   ok(await page.getByRole("link", { name: "← Mes expériences" }).isVisible());
   eq(await state(), "published");
   ok(await page.getByText("Public : accessible").isVisible());
   ok(await page.getByRole("link", { name: "Voir les résultats" }).isVisible());
   ok(await page.getByRole("link", { name: /Lien public/ }).isVisible());
-  ok(await page.getByText("Préférences de recommandation", { exact: true }).isVisible());
+  ok(await page.getByText("Critères de choix", { exact: true }).isVisible());
   await shot("editor-1440-configuration.png");
 
   // 2. Produits : avertissement, couverture réelle des axes, outils.
-  await tab("Produits").click();
+  await tab("Réglages").click();
   ok(await page.getByText("Les produits ne sont pas protégés par le brouillon").isVisible());
   await page.getByText("2 sur 3 dans le catalogue").waitFor();
   ok(await page.getByText("1 sur 2 avec tous les axes renseignés").isVisible());
@@ -89,19 +89,17 @@ async function main() {
   await shot("editor-1440-produits.png");
 
   // 3. Modification locale conservée entre sections, puis appliquée, enregistrée.
-  await tab("Configuration").click();
-  await page.getByLabel("Titre public", { exact: true }).fill("Nouveau titre public");
+  await tab("Réglages").click();
+  await page.getByLabel("Titre affiché aux visiteurs", { exact: true }).fill("Nouveau titre public");
   eq(await state(), "local");
   await tab("Questions").click();
-  await tab("Configuration").click();
-  eq(await page.getByLabel("Titre public", { exact: true }).inputValue(), "Nouveau titre public");
+  await tab("Réglages").click();
+  eq(await page.getByLabel("Titre affiché aux visiteurs", { exact: true }).inputValue(), "Nouveau titre public");
   await tab("Publication").click();
-  ok(await page.locator("#editor-panel-publication").getByRole("button", { name: "Vérifier le quiz" }).isDisabled());
-  await tab("Configuration").click();
-  await page.getByRole("button", { name: "Appliquer au brouillon en cours" }).click();
-  await waitState("applied");
+  ok(await page.locator("#editor-panel-publication").getByRole("button", { name: "Vérifier avant de publier" }).isDisabled());
+  await tab("Réglages").click();
   eq((await prisma.quiz.findUnique({ where: { id: solo.id } })).quizTitle, "Quiz sans campagne (public)");
-  await page.getByRole("button", { name: "Enregistrer le brouillon", exact: true }).click();
+  await page.getByText("Modifications enregistrées automatiquement").first().waitFor({ timeout: 15000 });
   await waitState("saved");
   eq((await prisma.quiz.findUnique({ where: { id: solo.id } })).quizTitle, "Quiz sans campagne (public)", "le brouillon ne publie rien");
   const draft = await request(`/api/quizzes/${solo.id}/draft`);
@@ -109,23 +107,21 @@ async function main() {
   await shot("editor-1440-brouillon.png");
 
   // 4. Protection contre la perte de modifications : le garde de navigation demande confirmation.
-  await tab("Configuration").click();
-  await page.getByLabel("Texte du bouton résultat", { exact: true }).fill("Autre bouton");
+  await tab("Réglages").click();
+  await page.getByLabel("Texte du bouton vers les produits", { exact: true }).fill("Autre bouton");
   const dialogs = [];
   page.once("dialog", (dialog) => { dialogs.push(dialog.message()); void dialog.dismiss(); });
   await page.getByRole("link", { name: "← Mes expériences" }).click();
   await page.waitForTimeout(500);
   eq(dialogs.length, 1);
   ok(page.url().includes("/experiences/"), "reste sur l'éditeur après refus");
-  await page.getByLabel("Texte du bouton résultat", { exact: true }).fill("Voir");
+  await page.getByLabel("Texte du bouton vers les produits", { exact: true }).fill("Voir");
   eq(await state(), "saved");
 
   // 5. Changement de catalogue appliqué au brouillon uniquement.
   await page.getByLabel("Catalogue", { exact: true }).selectOption({ label: "Café" });
-  await page.getByRole("button", { name: "Appliquer au brouillon en cours" }).click();
-  await waitState("applied");
   ok(await page.getByText("Catalogue : Café").isVisible());
-  await page.getByRole("button", { name: "Enregistrer le brouillon", exact: true }).click();
+  await page.getByText("Modifications enregistrées automatiquement").first().waitFor({ timeout: 15000 });
   await waitState("saved");
   eq((await prisma.quiz.findUnique({ where: { id: solo.id } })).catalogId, voyage.id, "catalogue public inchangé");
 
@@ -134,12 +130,10 @@ async function main() {
   const other = await request(`/api/quizzes/${solo.id}/draft`, "PUT", {
     revision: current.body.revision, draft: { ...current.body.draft, config: { ...current.body.draft.config, name: "Nom concurrent" } } });
   eq(other.status, 200);
-  await page.getByLabel("Nom interne", { exact: true }).fill("Mon nom local");
-  await page.getByRole("button", { name: "Appliquer au brouillon en cours" }).click();
-  await page.getByRole("button", { name: "Enregistrer le brouillon", exact: true }).click();
+  await page.getByLabel("Nom de l'expérience (visible par vous seul)", { exact: true }).fill("Mon nom local");
   await waitState("conflict");
-  ok(await page.getByText(/Conflit de révision/).first().isVisible());
-  eq(await page.getByLabel("Nom interne", { exact: true }).inputValue(), "Mon nom local", "modifications locales conservées");
+  ok(await page.getByText(/modifiée ailleurs|Conflit/).first().isVisible());
+  eq(await page.getByLabel("Nom de l'expérience (visible par vous seul)", { exact: true }).inputValue(), "Mon nom local", "modifications locales conservées");
   await shot("editor-1440-conflit.png");
 
   // 7. Aperçu : aucun tracking créé.
@@ -156,8 +150,8 @@ async function main() {
   // 8. Publication : la révision enregistrée seulement.
   await page.goto(editor(solo.id, "publication"));
   await page.locator("h1").waitFor();
-  await page.locator("#editor-panel-publication").getByRole("button", { name: "Vérifier le quiz" }).click();
-  await page.locator("#editor-panel-publication").getByText(/Brouillon|révision|Diagnostic|Publication possible/i).first().waitFor();
+  await page.locator("#editor-panel-publication").getByRole("button", { name: "Vérifier avant de publier" }).click();
+  await page.locator("#editor-panel-publication").getByText(/prêtes à publier|Rien de nouveau|Vérifier avant de publier/i).first().waitFor();
   await shot("editor-1440-publication.png");
 
   // 9. Quiz partagé : campagnes affichées, inactif signalé.
@@ -175,9 +169,9 @@ async function main() {
   // 10. Clavier : flèches entre les sections.
   await page.goto(editor(solo.id));
   await page.locator("h1").waitFor();
-  await tab("Configuration").focus();
+  await tab("Réglages").focus();
   await page.keyboard.press("ArrowRight");
-  eq(await tab("Produits").getAttribute("aria-selected"), "true");
+  eq(await tab("Questions").getAttribute("aria-selected"), "true");
   await page.keyboard.press("End");
   eq(await tab("Publication").getAttribute("aria-selected"), "true");
 
@@ -188,10 +182,8 @@ async function main() {
   eq((await request(`/api/quizzes/${foreign.id}/draft`)).status, 404);
 
   // 12. Anciennes routes toujours disponibles.
-  await page.goto(`${admin}/quiz-builder?quizId=${shared.id}`);
-  await page.getByRole("heading", { name: /Quiz Builder/ }).waitFor();
   await page.goto(`${admin}/quizzes/${shared.id}`);
-  await page.getByRole("heading", { name: /Configurer le brouillon du quiz/ }).waitFor();
+  await page.waitForURL(`**/experiences/${shared.id}/edit`);
   await page.goto(`${admin}/campaigns/${campaigns[0].id}/quiz-editor`);
   await page.getByRole("heading", { name: "Vacances d'été", level: 1 }).waitFor();
   eq(await page.getByRole("tab").count(), 4);
@@ -204,7 +196,7 @@ async function main() {
   await page.getByRole("heading", { name: /Quiz sans campagne|Mon nom|Nom concurrent/, level: 1 }).waitFor();
 
   // 14. Responsive.
-  const tabNames = { configuration: "Configuration", questions: "Questions", publication: "Publication" };
+  const tabNames = { configuration: "Réglages", questions: "Questions", publication: "Publication" };
   for (const width of [320, 375, 768, 1440]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(editor(shared.id));
@@ -214,9 +206,9 @@ async function main() {
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       ok(overflow <= 1, `débordement horizontal ${overflow}px à ${width}px (${section})`);
       ok(await tab("Publication").isVisible());
-      ok(await page.getByRole("link", { name: "Voir les résultats" }).isVisible());
+      ok(await page.getByRole("link", { name: "Voir les résultats" }).first().isVisible());
     }
-    await tab("Configuration").click();
+    await tab("Réglages").click();
     await shot(`editor-${width}.png`);
   }
   eq(errors.length, 0, errors.join("\n"));

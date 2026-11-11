@@ -50,29 +50,30 @@ async function main() {
   await questionCard.locator(".question-meta-form input").first().fill("Rythme publie ?");
   await page.getByRole("tab", { name: "Publication", exact: true }).click();
   const panel = page.locator("#editor-panel-publication");
-  assert.equal(await panel.getByRole("button", { name: "Vérifier le quiz" }).isDisabled(), true);
+  assert.equal(await panel.getByRole("button", { name: "Vérifier avant de publier" }).isDisabled(), true);
   await page.getByRole("tab", { name: "Questions", exact: true }).click();
   assert.equal(await questionCard.locator(".question-meta-form input").first().inputValue(), "Rythme publie ?");
   await questionCard.getByRole("button", { name: "Enregistrer", exact: true }).click();
   await page.getByRole("tab", { name: "Apparence", exact: true }).click();
   await page.getByLabel("Couleur principale (hexadécimal)", { exact: true }).fill("#123456");
+  await page.getByText("Plus d'options").click();
   await page.getByLabel("Couleur de fond (hexadécimal)", { exact: true }).fill("#FAF0DD");
   await page.getByLabel("Police des titres", { exact: true }).selectOption("georgia");
   await page.getByLabel("Forme des boutons", { exact: true }).selectOption("square");
   await page.getByLabel("Démarrer le quiz", { exact: true }).fill("Mon voyage");
-  await page.getByRole("button", { name: "Enregistrer le brouillon", exact: true }).click();
-  await page.getByText("Brouillon enregistré · révision 1", { exact: true }).waitFor();
+  await page.getByText("Modifications enregistrées automatiquement").first().waitFor({ timeout: 15000 });
+  await page.getByText("Modifications enregistrées automatiquement", { exact: true }).waitFor();
   assert.equal((await prisma.question.findUnique({ where: { id: question.id } })).text, "Votre rythme ?");
   assert.equal((await request(`/api/embed/config?clientId=${tenantId}`)).theme, undefined);
   await page.getByRole("tab", { name: "Publication", exact: true }).click();
-  const check = () => panel.getByRole("button", { name: "Vérifier le quiz" }).click();
-  const general = panel.getByLabel("Je confirme le remplacement", { exact: false });
+  const check = () => panel.getByRole("button", { name: "Vérifier avant de publier" }).click();
+  const general = panel.getByLabel("Je confirme : mes visiteurs verront", { exact: false });
   const shared = panel.getByLabel("Je confirme que toutes les campagnes", { exact: false });
-  const publish = panel.getByRole("button", { name: "Publier le brouillon", exact: true });
+  const publish = panel.getByRole("button", { name: "Publier", exact: true });
   await check();
-  await panel.getByText("Aucune erreur bloquante.", { exact: true }).waitFor();
+  await panel.getByText("Rien à corriger.", { exact: true }).waitFor();
   await panel.getByRole("link", { name: "Odyssey secondaire", exact: true }).waitFor();
-  await panel.getByRole("link", { name: "Configurer le quiz", exact: true }).first().waitFor();
+  await panel.getByRole("link", { name: "Corriger dans les réglages", exact: true }).first().waitFor();
   for (const width of [320, 375, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `diagnostic overflow ${width}`);
@@ -84,7 +85,7 @@ async function main() {
   await page.route(publishUrl, (route) => route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({ error: "Echec transaction recette" }) }), { times: 1 });
   await publish.click();
   await panel.getByRole("alert").filter({ hasText: "Echec transaction recette" }).waitFor();
-  assert.equal(await panel.getByText("Quiz publié avec succès.", { exact: false }).count(), 0);
+  assert.equal(await panel.getByText("Expérience publiée", { exact: false }).count(), 0);
   assert.equal((await prisma.question.findUnique({ where: { id: question.id } })).text, "Votre rythme ?");
   await check();
   await general.check(); await shared.check();
@@ -97,13 +98,13 @@ async function main() {
   await enteredGate;
   await page.getByRole("tab", { name: "Apparence", exact: true }).click();
   assert.equal(await page.getByLabel("Couleur principale (hexadécimal)", { exact: true }).isDisabled(), true);
-  assert.equal(await page.getByRole("button", { name: "Abandonner les modifications préparatoires" }).isDisabled(), true);
+  assert.equal(await page.getByRole("button", { name: "Annuler toutes mes modifications non publiées" }).isDisabled(), true);
   await page.getByRole("tab", { name: "Questions", exact: true }).click();
   assert.equal(await questionCard.getByRole("button", { name: /Modifier/ }).first().isDisabled(), true);
   await page.getByRole("tab", { name: "Publication", exact: true }).click();
   release();
   try {
-    await panel.getByText("Quiz publié avec succès.", { exact: false }).waitFor();
+    await panel.getByText("Expérience publiée", { exact: false }).waitFor();
   } catch (err) {
     console.error(await panel.innerText(), publicationResponses);
     throw err;
@@ -151,7 +152,7 @@ async function main() {
   published.draft.config.quizTitle = "Revision concurrente";
   await request(prefix + "/draft", "PUT", { revision: published.revision, draft: published.draft });
   await check();
-  await page.getByText("Conflit de révision.", { exact: false }).first().waitFor();
+  await page.getByText("modifiée ailleurs", { exact: false }).first().waitFor();
   assert.equal((await request(prefix + "/draft")).draft.config.quizTitle, "Revision concurrente");
   assert.equal((await request(`/api/embed/config?clientId=${tenantId}`)).quizTitle, "Votre voyage");
   const invalid = await request(prefix + "/draft");
@@ -162,7 +163,7 @@ async function main() {
   await check();
   await panel.getByText("Question accessible sans réponse active.", { exact: true }).waitFor();
   assert.equal(await publish.count(), 0);
-  await panel.getByRole("button", { name: "Voir l'élément", exact: true }).first().click();
+  await panel.getByRole("button", { name: "Voir", exact: true }).first().click();
   assert.equal(await page.getByRole("tab", { name: "Questions", exact: true }).getAttribute("aria-selected"), "true");
   await questionCard.getByText("Rythme publie ?", { exact: true }).waitFor();
   assert.deepEqual(pageErrors, []);

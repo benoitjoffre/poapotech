@@ -89,7 +89,7 @@ const shot = (page, name) => page.screenshot({ path: path.join(shots, `j-${name}
 
   // 5. Publication : vérification puis mise en ligne (STARTER : 1 expérience publiée autorisée).
   await page.goto(`${stack.admin}/experiences/${quiz.id}/edit?section=publication`);
-  await page.getByRole("heading", { name: "Vérification et publication" }).waitFor({ timeout: 30000 });
+  await page.getByRole("heading", { name: "Publier mon expérience" }).waitFor({ timeout: 30000 });
   const publish = page.getByRole("button", { name: "Publier et rendre accessible" });
   await publish.waitFor();
   await shot(page, "04-publication");

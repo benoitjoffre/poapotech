@@ -250,7 +250,7 @@ export default function ExpressCreationPage() {
         <input id="express-name" className="field-input" value={draft.name} maxLength={120} onChange={(e) => edit({ ...draft, name: e.target.value })} />
       </div>
       <div className="field-group">
-        <label className="field-label" htmlFor="express-title">Titre public</label>
+        <label className="field-label" htmlFor="express-title">Titre affiché aux visiteurs</label>
         <input id="express-title" className="field-input" value={draft.quizTitle} maxLength={120} onChange={(e) => edit({ ...draft, quizTitle: e.target.value })} />
       </div>
       <p className="section-hint">{draft.axes.length} critère(s), {draft.questions.length} question(s). L'expérience est créée inactive : vous la relirez, la testerez et la publierez vous-même.</p>

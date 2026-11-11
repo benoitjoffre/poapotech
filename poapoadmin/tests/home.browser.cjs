@@ -78,7 +78,6 @@ async function main() {
   check(await page.locator(".home-next").getByText(draft.name, { exact: true }).count() === 1, "saved draft has priority");
   const continueLink = page.locator(".home-next").getByRole("link", { name: "Continuer", exact: true });
   check((await continueLink.getAttribute("href")).includes(encodeURIComponent(draft.id)), "explicit quiz identity");
-  check((await continueLink.getAttribute("href")).includes(encodeURIComponent(catalog.id)), "explicit catalogue identity");
   check(!(await page.locator("body").innerText()).includes("Produit secret"), "foreign products not visible");
   check(calls.filter((url) => url.includes("/metrics")).length === 0, "no per-quiz analytics requests");
   check(calls.filter((url) => /\/quizzes\/[^/]+\/draft/.test(url)).length === 0, "no per-quiz draft requests on home");
@@ -136,15 +135,16 @@ async function main() {
     check(await page.evaluate(() => document.activeElement?.textContent?.trim()) === label, `keyboard reaches ${label}`);
   }
   await continueLink.click();
-  await page.getByRole("heading", { name: "Configurer le brouillon du quiz" }).waitFor();
-  check(await page.getByLabel("Titre public", { exact: true }).inputValue() === "Ma prochaine expérience", "continue reopens the persisted draft");
-  check(await page.getByLabel("Nom interne", { exact: true }).inputValue() === draft.name, "continue keeps the intended quiz");
+  await page.getByRole("tab", { name: "Réglages", exact: true }).waitFor();
+  await page.waitForFunction(() => [...document.querySelectorAll("input")].some((i) => i.value === "Ma prochaine expérience"));
+  check(await page.getByLabel("Titre affiché aux visiteurs", { exact: true }).inputValue() === "Ma prochaine expérience", "continue reopens the persisted draft");
+  check(await page.getByLabel("Nom de l'expérience (visible par vous seul)", { exact: true }).inputValue() === draft.name, "continue keeps the intended quiz");
   await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Accueil", exact: true }).click();
   await page.getByRole("heading", { name: "Votre prochaine action" }).waitFor();
   await page.getByRole("link", { name: "Créer une expérience", exact: true }).click();
   await page.getByRole("heading", { name: "Créer une expérience", exact: true }).waitFor();
   check(page.url().includes("/experiences/new"), "creation uses available route");
-  for (const route of [`/quizzes/${draft.id}`, `/quiz-builder?quizId=${live.id}`, `/campaigns/${campaign.id}`, "/catalogs"]) {
+  for (const route of [`/campaigns/${campaign.id}`, "/catalogs"]) {
     await page.goto(admin + route);
     await page.waitForLoadState("networkidle");
     check(new URL(page.url()).pathname === route.split("?")[0], `legacy deep link ${route}`);

@@ -59,7 +59,7 @@ async function main() {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   const shot = async (n) => { if (shots) await page.screenshot({ path: path.join(shots, n), fullPage: true }); };
-  const open = async (id) => { await page.goto(`${admin}/experiences/${id}/edit?section=publication`); await page.getByRole("heading", { name: "Vérification et publication" }).waitFor(); };
+  const open = async (id) => { await page.goto(`${admin}/experiences/${id}/edit?section=publication`); await page.getByRole("heading", { name: "Publier mon expérience" }).waitFor(); };
   const status = (label) => page.locator("[data-publication-status]").filter({ hasText: label }).waitFor();
   const primary = page.getByRole("button", { name: "Publier et rendre accessible" });
   const campaigns = () => prisma.campaign.count({ where: { tenantId } });
@@ -68,9 +68,9 @@ async function main() {
   const a = (await mk("first")).id;
   await saveDraft(a, (d) => ({ ...d, questions: [question("Doux ou corsé ?")] }));
   await open(a);
-  await status("Brouillon non publié");
+  await status("Pas encore publié");
   eq(await page.getByText("Expérience publiée").count(), 0, "pas de confirmation avant publication");
-  eq(await page.locator(".xp-badge.xe-publication").innerText(), "Brouillon non publié");
+  eq(await page.locator(".xp-badge.xe-publication").innerText(), "Pas encore publié");
   eq((await row(a)).active, false, "enregistrer n'active pas");
   await shot("publish-avant.png");
 
@@ -80,7 +80,7 @@ async function main() {
   await page.getByRole("alert").filter({ hasText: "Échec simulé" }).waitFor();
   eq((await row(a)).active, false, "rien n'est activé après un échec");
   eq((await call(`/api/quizzes/${a}/draft`)).body.hasChanges, true, "brouillon conservé");
-  await status("Brouillon non publié");
+  await status("Pas encore publié");
 
   // 3. Réussite : publication + activation, confirmation, liens, aucune campagne créée.
   const before = await campaigns();
@@ -108,7 +108,7 @@ async function main() {
   await saveDraft(b, (d) => ({ ...d, questions: [question("Q ?")] }));
   await publishApi(b);
   await open(b);
-  await status("Publié mais désactivé");
+  await status("Publié mais fermé au public");
   await primary.click();
   await status("Publié et accessible");
   eq((await row(b)).active, true);
@@ -119,7 +119,7 @@ async function main() {
   await prisma.tenant.update({ where: { id: tenantId }, data: { active: false } });
   await open(c);
   await primary.click();
-  await status("Publié mais désactivé");
+  await status("Publié mais fermé au public");
   ok(await page.getByRole("link", { name: "Ouvrir les paramètres" }).isVisible());
   ok(!(await page.getByRole("button", { name: "Copier le lien public" }).count()), "pas de lien public tant que fermé");
   await prisma.tenant.update({ where: { id: tenantId }, data: { active: true } });
@@ -131,7 +131,7 @@ async function main() {
   await saveDraft(d, (x) => ({ ...x, questions: [question("Q ?")] }));
   await prisma.campaign.create({ data: { tenantId, quizId: d, name: "Noël", occasion: "CUSTOM", occasionLabel: "x", status: "ACTIVE" } });
   await open(d);
-  await status("Brouillon non publié");
+  await status("Pas encore publié");
   const n = await campaigns();
   await primary.click();
   await status("Publié et accessible");

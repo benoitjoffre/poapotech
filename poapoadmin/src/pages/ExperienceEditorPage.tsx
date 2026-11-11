@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { Campaign, CampaignListResponse, ExperiencesOverview, Quiz, QuizBranding, QuizEditorDraft, QuizPublicationDiagnostic, QuizPublicationIssue } from "@poapo/types";
 import { apiFetch } from "../lib/api";
@@ -24,15 +24,16 @@ import "../components/quizEditor/experienceWizard.css";
 import "../components/experiences/experiences.css";
 
 const SECTIONS = [
-  { id: "configuration", label: "Configuration" },
-  { id: "products", label: "Produits" },
+  { id: "configuration", label: "Réglages" },
   { id: "questions", label: "Questions" },
   { id: "appearance", label: "Apparence" },
   { id: "preview", label: "Aperçu" },
   { id: "publication", label: "Publication" },
 ] as const;
-type Section = typeof SECTIONS[number]["id"];
-const isSection = (value: string | null): value is Section => SECTIONS.some((item) => item.id === value);
+type Section = typeof SECTIONS[number]["id"] | "products";
+const isSection = (value: string | null): value is Section => value === "products" || SECTIONS.some((item) => item.id === value);
+// Les produits recommandables sont dans l'onglet Réglages.
+const tabOf = (value: Section): Exclude<Section, "products"> => value === "products" ? "configuration" : value;
 
 interface EditorContext { quiz: Quiz; campaigns: Campaign[]; branding: QuizBranding & { active?: boolean } }
 
@@ -46,10 +47,10 @@ function sameConfig(a: Config, b: Config): boolean {
 
 function validateConfig(form: QuizConfigForm): string {
   if (!form.catalogId) return "Choisissez un catalogue.";
-  if (!form.name.trim() || !form.quizTitle.trim() || !form.ctaText.trim()) return "Le nom, le titre public et le texte du bouton sont obligatoires.";
+  if (!form.name.trim() || !form.quizTitle.trim() || !form.ctaText.trim()) return "Le nom, le titre affiché aux visiteurs et le texte du bouton sont obligatoires.";
   const keys = new Set<string>();
   for (const axis of form.axes) {
-    if (!axis.label.trim()) return "Chaque préférence de recommandation doit avoir un libellé.";
+    if (!axis.label.trim()) return "Chaque critère doit avoir un nom.";
     if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(axis.key)) return `La clé technique « ${axis.key} » est invalide (lettres, chiffres et _, commence par une lettre).`;
     if (keys.has(axis.key)) return `La clé technique « ${axis.key} » est utilisée deux fois.`;
     keys.add(axis.key);
@@ -102,13 +103,14 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
   const [quiz, setQuiz] = useState(initial.quiz);
   const [searchParams] = useSearchParams();
   const requested = searchParams.get("section");
-  const [section, setSection] = useState<Section>(isSection(requested) ? requested : "configuration");
+  const [section, setSection] = useState<Exclude<Section, "products">>(isSection(requested) ? tabOf(requested) : "configuration");
   const editor = useQuizEditorDraft(quiz.id);
   const { catalogs, loading: catalogsLoading } = useCatalogs();
   const [form, setForm] = useState<QuizConfigForm>(EMPTY_CONFIG);
   const [formError, setFormError] = useState("");
   const [applied, setApplied] = useState(false);
   const [builderPending, setBuilderPending] = useState(false);
+  const appliedRef = useRef<Config | null>(null);
   const [published, setPublished] = useState<QuizPublicationDiagnostic["summary"] | null>(null);
   // État public réel renvoyé par l'API (jamais déduit de l'interface seule) ; rechargé après chaque publication.
   const [server, setServer] = useState<ServerPublicationState | null>(null);
@@ -129,7 +131,10 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
 
   // Le formulaire local repart du brouillon serveur à chaque chargement, sauvegarde, import ou abandon.
   useEffect(() => {
-    if (editor.state) { setForm(editor.state.draft.config); setFormError(""); setApplied(false); }
+    if (!editor.state) return;
+    // Écho de notre propre enregistrement automatique : on garde ce que l'utilisateur a pu taper depuis.
+    if (appliedRef.current && sameConfig(editor.state.draft.config, appliedRef.current)) { appliedRef.current = null; setApplied(false); return; }
+    setForm(editor.state.draft.config); setFormError(""); setApplied(false);
   }, [editor.state]);
 
   const config = editor.draft?.config;
@@ -152,6 +157,21 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
     setApplied(true);
   };
 
+  // Réglages : validés puis enregistrés automatiquement après une courte pause (rien d'invalide n'est enregistré).
+  useEffect(() => {
+    if (!formDirty || !editor.draft) return;
+    const timer = window.setTimeout(() => {
+      const problem = validateConfig(form);
+      setFormError(problem);
+      if (problem) return;
+      const next = toDraftConfig(form);
+      appliedRef.current = next;
+      editor.setDraft((current) => current ? { ...current, config: next } : current);
+      setApplied(true);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [form]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const localChanges = formDirty || builderPending || editor.dirty;
   const status = server ? publicationStatus({ ...server, hasDraft: server.hasDraft || !!editor.state?.hasChanges }, localChanges) : null;
 
@@ -169,20 +189,20 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
   };
 
   const state = useMemo(() => {
-    if (editor.conflict) return { id: "conflict", label: "Conflit de révision", hint: "Rechargez le brouillon serveur pour continuer." };
-    if (editor.saving) return { id: "saving", label: "Sauvegarde en cours…", hint: "" };
-    if (formDirty || builderPending) return { id: "local", label: "Modification locale non appliquée", hint: "Appliquez ou annulez le formulaire ouvert." };
-    if (editor.dirty) return { id: "applied", label: "Appliquée, non enregistrée", hint: "Enregistrez le brouillon pour la conserver." };
-    if (editor.state?.hasChanges) return { id: "saved", label: `Brouillon enregistré · révision ${editor.state.revision}`, hint: "Non publié : le quiz public est inchangé." };
-    return { id: "published", label: "Aucun brouillon", hint: "Le quiz public correspond à la version publiée." };
+    if (editor.conflict) return { id: "conflict", label: "Conflit de modifications", hint: "Cette expérience a été modifiée ailleurs. Rechargez pour continuer." };
+    if (editor.saving) return { id: "saving", label: "Enregistrement…", hint: "" };
+    if (formDirty || builderPending) return { id: "local", label: "Modifications en cours", hint: "Enregistrement automatique dès que vous faites une pause." };
+    if (editor.dirty) return { id: "applied", label: "Enregistrement en cours…", hint: "" };
+    if (editor.state?.hasChanges) return { id: "saved", label: "Modifications enregistrées automatiquement", hint: "Pas encore publié : vos visiteurs voient toujours l'ancienne version." };
+    return { id: "published", label: "Tout est à jour", hint: "Vos visiteurs voient la dernière version." };
   }, [editor.conflict, editor.saving, editor.dirty, editor.state, formDirty, builderPending]);
 
   const questionCount = editor.draft?.questions.length;
-  const show = (id: Section) => section === id;
+  const show = (id: Section) => section === tabOf(id);
 
   const goTo = (target: Section, questionId?: string) => focusTarget(target, questionId ? `editor-question-${questionId}` : undefined);
   const focusTarget = (target: Section, elementId?: string) => {
-    setSection(target);
+    setSection(tabOf(target));
     // Les panneaux restent montés : les modifications locales survivent au changement de section.
     let attempts = 0;
     const reach = () => {
@@ -204,7 +224,7 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
       <div className="xe-title-row">
         <div>
           <h1 className="page-title">{config?.name ?? quiz.name}</h1>
-          <p className="section-hint">Titre public : {config?.quizTitle ?? quiz.quizTitle}</p>
+          <p className="section-hint">Titre affiché aux visiteurs : {config?.quizTitle ?? quiz.quizTitle}</p>
         </div>
         <div className="xe-actions">
           <Link className="btn-ghost" to={`/analytics?quizId=${encodeURIComponent(quiz.id)}`}>Voir les résultats</Link>
@@ -273,22 +293,12 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
           id="editor-panel-configuration" aria-labelledby="editor-tab-configuration">
           <form className="product-form" onSubmit={applyForm} noValidate>
             <fieldset disabled={!editor.draft || editor.saving} className="xe-fieldset">
-              <h2 className="page-title">Configuration</h2>
-              <p className="section-hint">Ces réglages sont préparés dans le brouillon. « Appliquer » les transmet à l'éditeur ; « Enregistrer le brouillon » les conserve sur le serveur. Le quiz public reste inchangé jusqu'à la publication.</p>
+              <h2 className="page-title">Réglages</h2>
+              <p className="section-hint">Nom, titre et bouton affichés à vos visiteurs, critères de choix et produits proposés. Rien n'est visible par vos visiteurs avant la publication.</p>
               <QuizGeneralFields form={form} setForm={setForm} catalogs={catalogs} catalogsLoading={catalogsLoading}
                 onCatalogChange={changeCatalog} canActivate isDefault={quiz.isDefault} />
-              <QuizAxesFields form={form} setForm={setForm} title="Préférences de recommandation"
+              <QuizAxesFields form={form} setForm={setForm} title="Critères de choix"
                 publishedAxes={quiz.axes ?? []} onError={setFormError} />
-              <ApplyBar error={formError} dirty={formDirty} applied={applied} />
-            </fieldset>
-          </form>
-        </div>
-
-        <div hidden={!show("products")} className="quiz-editor-panel" role="tabpanel"
-          id="editor-panel-products" aria-labelledby="editor-tab-products">
-          <form className="product-form" onSubmit={applyForm} noValidate>
-            <fieldset disabled={!editor.draft || editor.saving} className="xe-fieldset">
-              <h2 className="page-title">Produits</h2>
               <ExperienceProductsSummary form={form} catalogName={catalogName} catalogId={form.catalogId}
                 products={products} loading={productsLoading} error={productsError} />
               <QuizProductSelection form={form} setForm={setForm} catalogName={catalogName} products={products} loading={productsLoading} />
@@ -296,6 +306,7 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
             </fieldset>
           </form>
         </div>
+
         {section === "publication" && <section className="xw-card">
           <WizardPublicationStatus status={status} error={serverError} onRetry={() => void refreshServer()} />
           {status && (status.id === "live" || status.id === "disabled") && !localChanges &&
@@ -310,10 +321,6 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
   </div>;
 }
 
-function ApplyBar({ error, dirty, applied }: { error: string; dirty: boolean; applied: boolean }) {
-  return <div className="xe-apply">
-    {error && <p className="form-error" role="alert">{error}</p>}
-    <button type="submit" className="btn-primary" disabled={!dirty}>Appliquer au brouillon en cours</button>
-    <span className="xe-muted" role="status">{dirty ? "Modifications locales non appliquées." : applied ? "Appliqué. Pensez à enregistrer le brouillon." : "Aucune modification locale."}</span>
-  </div>;
+function ApplyBar({ error }: { error: string; dirty: boolean; applied: boolean }) {
+  return error ? <div className="xe-apply"><p className="form-error" role="alert">{error}</p></div> : null;
 }

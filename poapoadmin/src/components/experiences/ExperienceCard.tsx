@@ -33,7 +33,7 @@ export default function ExperienceCard({ experience, selected, onSelect, tenantI
           {experience.name}<span className="sr-only"> — afficher les détails</span>
         </button>
       </h3>
-      <p className="xp-muted">Titre public : {experience.quizTitle}</p>
+      <p className="xp-muted">Titre affiché aux visiteurs : {experience.quizTitle}</p>
       <ul className="xp-tags">
         <li>{experience.catalog.name}</li>
         <li>{questionCountLabel(experience.questionCount)}</li>

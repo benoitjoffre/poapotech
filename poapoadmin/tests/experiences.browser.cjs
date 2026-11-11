@@ -33,7 +33,7 @@ async function main() {
   const shared = await make({ name: "Quel est votre style de voyage ?", quizTitle: "Trouvez votre destination" });
   const standalone = await make({ name: "Ma routine beauté", quizTitle: "Votre routine", catalogId: soins.id });
   const inactive = await make({ name: "Votre style mode", quizTitle: "Votre style", active: false });
-  const long = await make({ name: "Une expérience au nom exagérément long pour vérifier que la mise en page ne déborde jamais sur mobile", quizTitle: "Titre public tout aussi long que le nom interne de cette expérience de test" });
+  const long = await make({ name: "Une expérience au nom exagérément long pour vérifier que la mise en page ne déborde jamais sur mobile", quizTitle: "Titre affiché aux visiteurs tout aussi long que le nom interne de cette expérience de test" });
   await prisma.quiz.create({ data: { tenantId: foreignId, catalogId: foreignCatalog.id, name: "Quiz secret étranger", quizTitle: "Secret", ctaText: "Voir" } });
   for (const quizId of [shared.id, standalone.id]) await prisma.question.create({ data: {
     tenantId, quizId, text: "Question ?", answers: { create: [{ text: "Oui", order: 0, impacts: {} }] } } });

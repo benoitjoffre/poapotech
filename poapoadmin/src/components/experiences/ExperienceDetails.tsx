@@ -22,7 +22,7 @@ export default function ExperienceDetails({ experience, tenantId, days, onClose,
     <button type="button" className="btn-ghost xp-back" onClick={onClose}>← Retour à la liste</button>
     <ExperienceBadges experience={experience} shopActive={shopActive} />
     <h2 id="xp-details-title">{experience.name}</h2>
-    <p className="xp-muted">Titre public : {experience.quizTitle}{experience.industry ? ` · ${experience.industry}` : ""}</p>
+    <p className="xp-muted">Titre affiché aux visiteurs : {experience.quizTitle}{experience.industry ? ` · ${experience.industry}` : ""}</p>
     <dl className="xp-summary">
       <div><dt>Catalogue</dt><dd>{experience.catalog.name}</dd></div>
       <div><dt>Questions</dt><dd>{questionCountLabel(experience.questionCount)}</dd></div>
