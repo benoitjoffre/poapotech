@@ -59,7 +59,7 @@ async function main() {
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   const shot = async (n) => { if (shots) await page.screenshot({ path: path.join(shots, n), fullPage: true }); };
-  const open = async (id) => { await page.goto(`${admin}/experiences/${id}/setup?step=5`); await page.getByRole("heading", { name: "Vérifier et publier" }).waitFor(); };
+  const open = async (id) => { await page.goto(`${admin}/experiences/${id}/edit?section=publication`); await page.getByRole("heading", { name: "Vérification et publication" }).waitFor(); };
   const status = (label) => page.locator("[data-publication-status]").filter({ hasText: label }).waitFor();
   const primary = page.getByRole("button", { name: "Publier et rendre accessible" });
   const campaigns = () => prisma.campaign.count({ where: { tenantId } });
@@ -141,7 +141,7 @@ async function main() {
   eq((await call(`/api/quizzes/${foreign.id}/draft`)).status >= 400, true, "brouillon étranger refusé");
   const overview = (await call("/api/experiences")).body;
   ok(!overview.experiences.some((e) => e.id === foreign.id), "expérience étrangère absente");
-  await page.goto(`${admin}/experiences/${foreign.id}/setup`);
+  await page.goto(`${admin}/experiences/${foreign.id}/edit`);
   await page.getByRole("alert").first().waitFor();
   eq((await row(foreign.id)).active, false);
 

@@ -11,12 +11,11 @@ import ImportPage from "./pages/ImportPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import TenantsAdminPage from "./pages/TenantsAdminPage";
 import QuizzesPage from "./pages/QuizzesPage";
-import ExperienceCreatePage from "./pages/ExperienceCreatePage";
 import ExpressCreationPage from "./pages/ExpressCreationPage";
 import CampaignsPage from "./pages/CampaignsPage";
 import CampaignFormPage from "./pages/CampaignFormPage";
 import CampaignDetailPage from "./pages/CampaignDetailPage";
-import ExperienceEditorPage, { ExperienceSetupPage } from "./pages/ExperienceEditorPage";
+import ExperienceEditorPage from "./pages/ExperienceEditorPage";
 import CampaignQuizEditorPage from "./pages/CampaignQuizEditorPage";
 import ProductEnrichmentPage from "./pages/ProductEnrichmentPage";
 import HelpCenterPage from "./pages/HelpCenterPage";
@@ -118,9 +117,9 @@ function App() {
             <Route path="/enrichment" element={<ProductEnrichmentPage />} />
             <Route path="/quizzes" element={<QuizzesPage />} />
             <Route path="/quizzes/:quizId" element={<LegacyQuizRedirect />} />
-            <Route path="/experiences/new" element={<ExperienceCreatePage />} />
-            <Route path="/experiences/new/express" element={<ExpressCreationPage />} />
-            <Route path="/experiences/:quizId/setup" element={<ExperienceSetupPage />} />
+            <Route path="/experiences/new" element={<ExpressCreationPage />} />
+            <Route path="/experiences/new/express" element={<Navigate to="/experiences/new" replace />} />
+            <Route path="/experiences/:quizId/setup" element={<LegacyQuizRedirect />} />
             <Route path="/experiences/:quizId/edit" element={<ExperienceEditorPage />} />
             <Route path="/campaigns" element={<CampaignsPage />} />
             <Route path="/campaigns/new" element={<CampaignFormPage />} />

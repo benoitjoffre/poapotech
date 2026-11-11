@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import type { Campaign, CampaignListResponse, ExperiencesOverview, Quiz, QuizBranding, QuizEditorDraft, QuizPublicationDiagnostic, QuizPublicationIssue } from "@poapo/types";
 import { apiFetch } from "../lib/api";
 import { useCatalogs } from "../lib/catalogs";
@@ -15,13 +15,10 @@ import {
   QuizAxesFields, QuizGeneralFields, QuizProductSelection, EMPTY_CONFIG, toDraftConfig, useCatalogProducts,
   type QuizConfigForm,
 } from "../components/quizEditor/QuizConfigFields";
-import { recommendableProducts } from "../components/quizEditor/ExperienceProductsSummary";
 import { issueTarget } from "../lib/publicationIssues";
 import { publicAvailability } from "../lib/experiences";
 import { canPublishAndActivate, publicationStatus, type ServerPublicationState } from "../lib/publicationStatus";
-import { experienceEditorPath, experienceSetupPath } from "../lib/experienceLinks";
-import { parseStep, resumeStep, stepComplete, WIZARD_STEPS, type WizardProgress } from "../lib/experienceWizard";
-import { WizardActivation, WizardFooter, WizardPreferencesIntro, WizardProductsIntro, WizardPublished, WizardPublicationStatus, WizardStepper } from "../components/quizEditor/ExperienceWizardParts";
+import { WizardPublished, WizardPublicationStatus } from "../components/quizEditor/ExperienceWizardParts";
 import "../components/quizEditor/experienceEditor.css";
 import "../components/quizEditor/experienceWizard.css";
 import "../components/experiences/experiences.css";
@@ -65,25 +62,7 @@ export default function ExperienceEditorPage() {
   return <ExperienceEditorLoader key={quizId} quizId={quizId} />;
 }
 
-/** Assistant de création : même éditeur, même session de brouillon, présenté en cinq étapes. */
-export function ExperienceSetupPage() {
-  const { quizId = "" } = useParams();
-  return <ExperienceEditorLoader key={`setup:${quizId}`} quizId={quizId} wizard />;
-}
-
-// Sections du mode éditeur affichées pour chaque étape de l'assistant.
-const STEP_SECTIONS: Record<number, readonly Section[]> = {
-  1: ["products"], 2: ["configuration"], 3: ["questions"], 4: ["appearance", "preview"], 5: ["publication"],
-};
-function stepForTarget(target: Section, elementId?: string): number {
-  if (target === "products") return 1;
-  if (target === "configuration") return elementId && /^(axis-|quiz-add-axis)/.test(elementId) ? 2 : 1;
-  if (target === "questions") return 3;
-  if (target === "appearance" || target === "preview") return 4;
-  return 5;
-}
-
-function ExperienceEditorLoader({ quizId, wizard = false }: { quizId: string; wizard?: boolean }) {
+function ExperienceEditorLoader({ quizId }: { quizId: string }) {
   const [context, setContext] = useState<EditorContext | null>(null);
   const [error, setError] = useState("");
   const [attempt, setAttempt] = useState(0);
@@ -115,10 +94,10 @@ function ExperienceEditorLoader({ quizId, wizard = false }: { quizId: string; wi
     </> : <div className="loading-block" role="status">Chargement de l'éditeur…</div>}
   </div>;
 
-  return <ExperienceEditor initial={context} wizard={wizard} />;
+  return <ExperienceEditor initial={context} />;
 }
 
-function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext; wizard?: boolean }) {
+function ExperienceEditor({ initial }: { initial: EditorContext }) {
   const { campaigns, branding } = initial;
   const [quiz, setQuiz] = useState(initial.quiz);
   const [searchParams] = useSearchParams();
@@ -130,17 +109,7 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
   const [formError, setFormError] = useState("");
   const [applied, setApplied] = useState(false);
   const [builderPending, setBuilderPending] = useState(false);
-  const navigate = useNavigate();
-  const [step, setStepState] = useState<number | null>(null);
-  const [maxReached, setMaxReached] = useState(1);
-  const [wizardError, setWizardError] = useState("");
-  const [wizardBusy, setWizardBusy] = useState(false);
   const [published, setPublished] = useState<QuizPublicationDiagnostic["summary"] | null>(null);
-  const setStep = useCallback((next: number) => {
-    setStepState(next);
-    setMaxReached((current) => Math.max(current, next));
-    setWizardError("");
-  }, []);
   // État public réel renvoyé par l'API (jamais déduit de l'interface seule) ; rechargé après chaque publication.
   const [server, setServer] = useState<ServerPublicationState | null>(null);
   const [serverError, setServerError] = useState("");
@@ -156,7 +125,7 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
     }
   }, [quiz.id]);
   useEffect(() => { void refreshServer(); }, [refreshServer]);
-  const { products, loading: productsLoading, error: productsError, loadedFor } = useCatalogProducts(form.catalogId);
+  const { products, loading: productsLoading, error: productsError } = useCatalogProducts(form.catalogId);
 
   // Le formulaire local repart du brouillon serveur à chaque chargement, sauvegarde, import ou abandon.
   useEffect(() => {
@@ -189,11 +158,10 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
   // « Publier et rendre accessible » : l'activation est portée par le brouillon, enregistrée ici,
   // puis appliquée atomiquement par la publication existante (jamais par le simple enregistrement).
   const prepareActivation = async () => {
-    setWizardError("");
     if (!editor.draft) return null;
     const problem = validateConfig(form);
     setFormError(problem);
-    if (problem) { setWizardError(problem); return null; }
+    if (problem) return null;
     const next = { ...editor.draft, config: { ...toDraftConfig(form), active: true } };
     editor.setDraft(next);
     setForm({ ...form, active: true });
@@ -210,26 +178,10 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
   }, [editor.conflict, editor.saving, editor.dirty, editor.state, formDirty, builderPending]);
 
   const questionCount = editor.draft?.questions.length;
-  const progress: WizardProgress = {
-    catalogId: config?.catalogId ?? "",
-    recommendableProducts: config && !productsLoading ? recommendableProducts(config, products).length : null,
-    axisCount: config?.axes.length ?? 0,
-    playableQuestions: editor.draft?.questions.filter((q) => q.active && q.answers.some((a) => a.active)).length ?? 0,
-  };
-  const productsReady = !!config && !productsLoading && (!config.catalogId || loadedFor === config.catalogId);
-  const requestedStep = parseStep(searchParams.get("step"));
-  // L'étape initiale n'est fixée qu'une fois le brouillon et les produits chargés : reprise sur la première étape incomplète.
-  useEffect(() => {
-    if (!wizard || step !== null || !editor.state || !productsReady) return;
-    const resume = resumeStep(progress);
-    setStepState(requestedStep ?? resume);
-    setMaxReached(Math.max(requestedStep ?? 1, resume));
-  }, [wizard, step, editor.state, productsReady, progress, requestedStep]);
-  const show = (id: Section) => wizard ? !!step && STEP_SECTIONS[step].includes(id) : section === id;
+  const show = (id: Section) => section === id;
 
   const goTo = (target: Section, questionId?: string) => focusTarget(target, questionId ? `editor-question-${questionId}` : undefined);
   const focusTarget = (target: Section, elementId?: string) => {
-    if (wizard) setStep(stepForTarget(target, elementId));
     setSection(target);
     // Les panneaux restent montés : les modifications locales survivent au changement de section.
     let attempts = 0;
@@ -244,52 +196,11 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
   };
   const locateIssue = (issue: QuizPublicationIssue) => issueTarget(issue, form);
 
-  // Applique le formulaire local puis enregistre le brouillon ; rien d'invalide n'est enregistré.
-  const commit = async (): Promise<boolean> => {
-    setWizardError("");
-    if (builderPending) { setWizardError("Terminez ou annulez le formulaire de question ouvert avant de continuer."); return false; }
-    if (!editor.draft) return false;
-    let next = editor.draft;
-    if (formDirty) {
-      const problem = validateConfig(form);
-      setFormError(problem);
-      if (problem) { setWizardError(problem); return false; }
-      next = { ...editor.draft, config: toDraftConfig(form) };
-      editor.setDraft(next);
-      setApplied(true);
-    }
-    if (!formDirty && !editor.dirty) return true;
-    setWizardBusy(true);
-    try {
-      const saved = await editor.save(next);
-      if (!saved) setWizardError("Le brouillon n'a pas pu être enregistré. Vos modifications locales sont conservées.");
-      return saved;
-    } finally { setWizardBusy(false); }
-  };
-  const goStep = async (target: number) => {
-    if (step === null || target === step) return;
-    // Revenir en arrière ne force pas d'enregistrement : les formulaires restent montés et conservent leurs modifications.
-    if (target < step) { setStep(target); return; }
-    if (await commit()) setStep(target);
-  };
-  const [quitting, setQuitting] = useState(false);
-  const saveAndQuit = async () => { if (await commit()) setQuitting(true); };
-  // La navigation attend que la garde de sortie voie l'état enregistré.
-  const clean = !formDirty && !editor.dirty && !builderPending;
-  useEffect(() => { if (quitting && clean) navigate("/quizzes"); }, [quitting, clean, navigate]);
-  const stepComplete5 = WIZARD_STEPS.map((item) => stepComplete(item.id, progress));
-
-  if (wizard && step === null) return <div className="page campaign-quiz-editor experience-editor">
-    <Link className="table-link" to="/quizzes">← Mes expériences</Link>
-    <div className="loading-block" role="status">{editor.error ? editor.error : "Préparation de l'assistant…"}</div>
-  </div>;
-
-  return <div className={`page campaign-quiz-editor experience-editor${wizard ? " xw-wizard" : ""}`}>
+  return <div className="page campaign-quiz-editor experience-editor">
     <header className="quiz-editor-header xe-header">
       <nav className="quiz-editor-breadcrumb" aria-label="Fil d'Ariane">
         <Link to={`/quizzes?experience=${encodeURIComponent(quiz.id)}`}>← Mes expériences</Link>
       </nav>
-      {wizard && <p className="xe-muted xw-eyebrow">Assistant de création · étape {step} sur {WIZARD_STEPS.length}</p>}
       <div className="xe-title-row">
         <div>
           <h1 className="page-title">{config?.name ?? quiz.name}</h1>
@@ -300,12 +211,7 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
           {availability.accessible
             ? <a className="btn-ghost" href={publicQuizLink(quiz.tenantId, quiz.id)} target="_blank" rel="noreferrer">Lien public (version publiée)</a>
             : <span className="xe-muted" id="xe-no-link">Lien public indisponible : {availability.reason?.toLowerCase()}</span>}
-          {wizard
-            ? <Link className="btn-ghost" to={experienceEditorPath(quiz.id)}>Éditeur complet</Link>
-            : <>
-              <Link className="btn-ghost" to={experienceSetupPath(quiz.id)}>Assistant guidé</Link>
-              {section !== "publication" && <button type="button" className="btn-primary" onClick={() => goTo("publication")}>Aller à la publication</button>}
-            </>}
+          {section !== "publication" && <button type="button" className="btn-primary" onClick={() => goTo("publication")}>Aller à la publication</button>}
         </div>
       </div>
       <ul className="xp-badges xe-chips" aria-label="Résumé de l'expérience">
@@ -322,8 +228,7 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
 
     <div className="xe-layout">
       <div className="xe-main">
-        {wizard && step !== null && <WizardStepper step={step} maxReached={maxReached} complete={stepComplete5} onSelect={(target) => void goStep(target)} />}
-        {!wizard && <div className="quiz-editor-tabs" role="tablist" aria-label="Sections de l'éditeur d'expérience">
+        <div className="quiz-editor-tabs" role="tablist" aria-label="Sections de l'éditeur d'expérience">
           {SECTIONS.map((item, index) => <button key={item.id} type="button" role="tab"
             id={`editor-tab-${item.id}`} aria-selected={section === item.id} aria-controls={`editor-panel-${item.id}`}
             tabIndex={section === item.id ? 0 : -1} className={`quiz-editor-tab${section === item.id ? " active" : ""}`}
@@ -342,7 +247,7 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
             <span className="quiz-editor-step" aria-hidden="true">{index + 1}</span>
             <span>{item.label}</span>
           </button>)}
-        </div>}
+        </div>
 
         <QuizBuilderContent quiz={quiz} embedded session={editor} visible={show("questions")}
           externalPending={formDirty} onPendingChange={onBuilderPending}
@@ -352,7 +257,7 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
             visible={show("preview")} pending={pending} />}
           renderPublication={(session, pending, onBusyChange) => <QuizPublicationPanel editor={session} quizId={quiz.id}
             pending={pending} onBusyChange={onBusyChange} visible={show("publication")} navigate={goTo}
-            primaryAction={wizard && status && canPublishAndActivate(status, server?.shopActive ?? true)
+            primaryAction={status && canPublishAndActivate(status, server?.shopActive ?? true)
               ? { label: "Publier et rendre accessible", prepare: prepareActivation } : undefined}
             locate={locateIssue} onLocate={(issue) => { const target = locateIssue(issue); if (target) focusTarget(target.section, target.elementId); }}
             onPublished={(result, diagnostic) => {
@@ -370,9 +275,8 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
             <fieldset disabled={!editor.draft || editor.saving} className="xe-fieldset">
               <h2 className="page-title">Configuration</h2>
               <p className="section-hint">Ces réglages sont préparés dans le brouillon. « Appliquer » les transmet à l'éditeur ; « Enregistrer le brouillon » les conserve sur le serveur. Le quiz public reste inchangé jusqu'à la publication.</p>
-              {!wizard && <QuizGeneralFields form={form} setForm={setForm} catalogs={catalogs} catalogsLoading={catalogsLoading}
-                onCatalogChange={changeCatalog} canActivate isDefault={quiz.isDefault} />}
-              {wizard && <WizardPreferencesIntro form={form} setForm={setForm} />}
+              <QuizGeneralFields form={form} setForm={setForm} catalogs={catalogs} catalogsLoading={catalogsLoading}
+                onCatalogChange={changeCatalog} canActivate isDefault={quiz.isDefault} />
               <QuizAxesFields form={form} setForm={setForm} title="Préférences de recommandation"
                 publishedAxes={quiz.axes ?? []} onError={setFormError} />
               <ApplyBar error={formError} dirty={formDirty} applied={applied} />
@@ -385,11 +289,6 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
           <form className="product-form" onSubmit={applyForm} noValidate>
             <fieldset disabled={!editor.draft || editor.saving} className="xe-fieldset">
               <h2 className="page-title">Produits</h2>
-              {wizard && <>
-                <WizardProductsIntro productCount={progress.recommendableProducts ?? 0} loading={productsLoading} catalogId={form.catalogId} />
-                <QuizGeneralFields form={form} setForm={setForm} catalogs={catalogs} catalogsLoading={catalogsLoading}
-                  onCatalogChange={changeCatalog} canActivate isDefault={quiz.isDefault} showActivation={false} />
-              </>}
               <ExperienceProductsSummary form={form} catalogName={catalogName} catalogId={form.catalogId}
                 products={products} loading={productsLoading} error={productsError} />
               <QuizProductSelection form={form} setForm={setForm} catalogName={catalogName} products={products} loading={productsLoading} />
@@ -397,17 +296,11 @@ function ExperienceEditor({ initial, wizard = false }: { initial: EditorContext;
             </fieldset>
           </form>
         </div>
-        {wizard && step === 5 && <section className="xw-card">
-          <WizardActivation form={form} setForm={setForm} disabled={!editor.draft || editor.saving} />
-          {(formDirty || editor.dirty) && <button type="button" className="btn-primary" disabled={wizardBusy || editor.saving} onClick={() => void commit()}>Appliquer et enregistrer</button>}
-          <p className="section-hint">L'activation est préparée dans le brouillon et ne devient effective qu'à la publication de la révision enregistrée.</p>
+        {section === "publication" && <section className="xw-card">
           <WizardPublicationStatus status={status} error={serverError} onRetry={() => void refreshServer()} />
           {status && (status.id === "live" || status.id === "disabled") && !localChanges &&
             <WizardPublished tenantId={quiz.tenantId} quizId={quiz.id} availability={server ? { accessible: server.accessible, label: status?.label ?? "", reason: status?.reason ?? null } : availability} published={published} />}
         </section>}
-        {wizard && step !== null && <WizardFooter step={step} busy={wizardBusy || editor.saving}
-          canContinue={step < WIZARD_STEPS.length} continueLabel="Enregistrer et continuer" error={wizardError}
-          onBack={() => void goStep(step - 1)} onContinue={() => void goStep(step + 1)} onSaveQuit={() => void saveAndQuit()} />}
       </div>
 
       <div className="xe-side">

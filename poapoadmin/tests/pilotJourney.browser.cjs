@@ -63,7 +63,7 @@ const shot = (page, name) => page.screenshot({ path: path.join(shots, `j-${name}
   await shot(page, "01-enrichissement-verrouille");
 
   // 3. Création express (autorisée en STARTER).
-  await page.goto(stack.admin + "/experiences/new/express");
+  await page.goto(stack.admin + "/experiences/new");
   await page.getByRole("button", { name: /Analyser mon catalogue/ }).click();
   for (let i = 0; i < 6 && !(await page.getByRole("heading", { name: /Enregistrer en brouillon/ }).isVisible()); i++) {
     await page.getByRole("heading", { name: /^[2-5]\./ }).first().waitFor({ timeout: 30000 });
@@ -88,8 +88,8 @@ const shot = (page, name) => page.screenshot({ path: path.join(shots, `j-${name}
   await shot(page, "03-editeur");
 
   // 5. Publication : vérification puis mise en ligne (STARTER : 1 expérience publiée autorisée).
-  await page.goto(`${stack.admin}/experiences/${quiz.id}/setup?step=5`);
-  await page.getByRole("heading", { name: "Vérifier et publier" }).waitFor({ timeout: 30000 });
+  await page.goto(`${stack.admin}/experiences/${quiz.id}/edit?section=publication`);
+  await page.getByRole("heading", { name: "Vérification et publication" }).waitFor({ timeout: 30000 });
   const publish = page.getByRole("button", { name: "Publier et rendre accessible" });
   await publish.waitFor();
   await shot(page, "04-publication");

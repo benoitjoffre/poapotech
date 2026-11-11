@@ -31,8 +31,3 @@ export function embedSnippet(tenantId: string, quizId: string): string {
   const base = widgetBaseUrl();
   return `<script src="${base}/poapo-widget.js" data-url="${base}" data-client-id="${tenantId}" data-quiz-id="${quizId}" async></script>`;
 }
-
-/** Assistant guidé de création, basé sur le quiz (aucune campagne requise). */
-export function experienceSetupPath(quizId: string, step?: number): string {
-  return `/experiences/${encodeURIComponent(quizId)}/setup${step ? `?step=${step}` : ""}`;
-}

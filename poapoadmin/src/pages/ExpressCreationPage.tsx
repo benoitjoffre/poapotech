@@ -30,10 +30,9 @@ const RELIABILITY = {
 export default function ExpressCreationPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const templateMode = params.get("mode") === "template";
   const { catalogs, loading, error: catalogsError } = useCatalogs();
   const [chosen, setChosen] = useState(params.get("catalogId") ?? "");
-  const [sector, setSector] = useState<ExpressSector | "">(templateMode ? "coffee" : "");
+  const [sector, setSector] = useState<ExpressSector | "">("");
   const [questionCount, setQuestionCount] = useState<ExpressQuestionCount | 0>(0);
   const [step, setStep] = useState<Step>("setup");
   const [advanced, setAdvanced] = useState(false);
@@ -113,13 +112,13 @@ export default function ExpressCreationPage() {
   }
 
   const nav = (prev: Step | null, next: (() => void) | null, nextLabel = "Continuer →") => <div className="xw-footer">
-    {prev ? <button type="button" className="btn-ghost" onClick={() => setStep(prev)}>← Retour</button> : <Link className="btn-ghost" to="/experiences/new">Quitter</Link>}
+    {prev ? <button type="button" className="btn-ghost" onClick={() => setStep(prev)}>← Retour</button> : <Link className="btn-ghost" to="/quizzes">Quitter</Link>}
     {next && <button type="button" className="btn-primary" disabled={busy} onClick={next}>{busy ? "Patientez…" : nextLabel}</button>}
   </div>;
 
   return <div className="page experience-editor xw-create">
-    <Link className="table-link" to="/experiences/new">← Autres façons de créer</Link>
-    <h1 className="page-title">{templateMode ? "Partir d'un modèle" : "Création express"}</h1>
+    <Link className="table-link" to="/quizzes">← Mes expériences</Link>
+    <h1 className="page-title">Créer une expérience</h1>
     <ol className="xw-steps" aria-label="Étapes">{STEPS.map((item) => <li key={item.id} aria-current={item.id === step ? "step" : undefined}
       style={{ fontWeight: item.id === step ? 700 : 400 }}>{item.label}</li>)}</ol>
     {error && <p className="form-error" role="alert">{error}</p>}
@@ -134,14 +133,15 @@ export default function ExpressCreationPage() {
         <input type="radio" name="catalog" checked={catalogId === catalog.id} onChange={() => setChosen(catalog.id)} />
         <span><strong>{catalog.name}</strong><br /><span className="xe-muted">{catalog.activeProductCount} produit(s) actif(s)</span></span>
       </label>)}
-      {templateMode && <div className="field-group">
-        <label className="field-label" htmlFor="express-sector">Modèle</label>
+      <div className="field-group">
+        <label className="field-label" htmlFor="express-sector">Modèle de départ</label>
         <select id="express-sector" className="field-input" value={sector} onChange={(e) => setSector(e.target.value as ExpressSector)}>
+          <option value="">Automatique (d'après mes produits)</option>
           {SECTORS.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
           <option value="generic">Aucun (uniquement mes données)</option>
         </select>
         <p className="field-hint">Le modèle propose des critères et des questions types ; seuls ceux qui correspondent à vos produits sont considérés comme fiables.</p>
-      </div>}
+      </div>
       <div className="field-group">
         <label className="field-label" htmlFor="express-count">Nombre de questions</label>
         <select id="express-count" className="field-input" value={questionCount} onChange={(e) => setQuestionCount(Number(e.target.value) as ExpressQuestionCount | 0)}>
@@ -150,7 +150,7 @@ export default function ExpressCreationPage() {
       </div>
       <p className="section-hint">POAPO lit vos produits et prépare un brouillon modifiable. Rien n'est publié et aucun produit n'est modifié.</p>
       <div className="xw-footer">
-        <Link className="btn-ghost" to="/experiences/new">Quitter</Link>
+        <Link className="btn-ghost" to="/quizzes">Quitter</Link>
         <button type="button" className="btn-primary" disabled={busy || !catalogId} onClick={() => void analyse([])}>{busy ? "Analyse…" : "Analyser mon catalogue →"}</button>
       </div>
     </section>}
@@ -164,7 +164,7 @@ export default function ExpressCreationPage() {
 
     {step === "criteria" && proposal && <section className="xw-card">
       <h2 className="section-title">2. Critères de recommandation</h2>
-      {!draft && <p>Aucune proposition honnête n'est possible avec ces données. <Link to="/enrichment">Enrichissez vos produits</Link>, choisissez <Link to="/experiences/new/express?mode=template">un modèle</Link> ou utilisez la <Link to="/experiences/new?mode=manual">création manuelle</Link>.</p>}
+      {!draft && <p>Aucune proposition honnête n'est possible avec ces données. <Link to="/enrichment">Enrichissez vos produits</Link> ou choisissez un modèle de départ à l'étape précédente.</p>}
       {draft && <>
         <p className="section-hint">Ce sont les caractéristiques qui comparent vos produits aux réponses des visiteurs.</p>
         {draft.axes.map((axis) => <div key={axis.key} className="xw-radio" style={{ flexDirection: "column" }}>
