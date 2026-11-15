@@ -111,6 +111,20 @@ test("PostgreSQL : accueil isolé, données réelles et lecture seule", {
       assert.equal(await prisma.quizSession.count({ where: { tenantId: id } }), 0);
       assert.equal(await prisma.quizEditorDraft.count({ where: { tenantId: id } }), 2);
     });
+    await t.test("questionCount : nombre réel de questions, 0 pour un quiz par défaut vide", async () => {
+      const data = await summary();
+      for (const item of data.experiences) {
+        const real = await prisma.question.count({ where: { tenantId: id, quizId: item.id } });
+        assert.equal(item.questionCount, real, `questionCount de ${item.name}`);
+      }
+      const catalog = await prisma.catalog.findFirstOrThrow({ where: { tenantId: id } });
+      const empty = await prisma.quiz.create({ data: { id: `default_${id}`, tenantId: id, catalogId: catalog.id, name: "Quiz par défaut", isDefault: true, quizTitle: "Titre", ctaText: "Voir", axes: [] } });
+      const after = await summary();
+      const item = after.experiences.find((entry) => entry.id === empty.id);
+      assert.equal(item?.questionCount, 0);
+      assert.equal(item?.correction, "Aucune question active.");
+      assert.equal((await summary(other)).experiences.length, 0, "isolation tenant");
+    });
   } finally {
     if (server) await new Promise<void>((resolve, reject) => server!.close((err) => err ? reject(err) : resolve()));
     await prisma.tenant.deleteMany({ where: { id: { in: [id, other] } } });

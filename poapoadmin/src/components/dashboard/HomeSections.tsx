@@ -1,81 +1,74 @@
 import { Link } from "react-router-dom";
-import type { DashboardExperience, DashboardSummary } from "@poapo/types";
+import type { DashboardExperience } from "@poapo/types";
+import { experienceEditorPath } from "../../lib/experienceLinks";
 import Icon from "../Icon";
-import { DashboardPanel, ResourceLink } from "./DashboardCard";
-import { quizPath } from "../../lib/experienceLinks";
+import type { HomeState, Step } from "../../lib/journey";
 
-export function HomeHero() {
-  return <section className="home-hero" aria-labelledby="home-title">
-    <div className="home-hero-copy">
-      <span className="home-eyebrow">Bienvenue sur POAPO</span>
-      <h1 id="home-title">Aidez vos clients à choisir les bons produits</h1>
-      <p>Créez des expériences de recommandation personnalisées en quelques étapes.</p>
-      <Link className="btn-primary" to="/experiences/new"><Icon name="plus" />Créer une expérience</Link>
-    </div>
-    <div className="home-hero-visual" aria-hidden="true">
-      <div className="home-visual-orbit" />
-      <div className="home-visual-phone">
-        <span className="home-visual-speaker" /><Icon name="sparkles" size={26} />
-        <span className="home-visual-line" />
-        {(["quiz", "box", "check"] as const).map((icon) => <div className="home-visual-option" key={icon}>
-          <Icon name={icon} /><span />
-        </div>)}
-        <span className="home-visual-button" />
-      </div>
-      <div className="home-visual-result"><Icon name="box" size={28} /><span /><span /></div>
-      <div className="home-visual-spark"><Icon name="sparkles" size={24} /></div>
-    </div>
+const GUIDE_TITLE = { new: "Votre quiz en trois étapes", progress: "Reprenez votre quiz", live: "Votre progression" } as const;
+
+/**
+ * Guide unique de l'accueil : mêmes étapes que la barre de parcours.
+ * Carte de trois étapes avant publication ; panneau « Votre progression » à quatre étapes une fois le quiz en ligne.
+ * L'installation n'est jamais affichée comme terminée : POAPO ne peut pas la vérifier.
+ */
+export function HomeGuide({ steps, state }: { steps: Step[]; state: HomeState }) {
+  const panel = state.kind === "live";
+  const visible = (panel ? steps : steps.slice(0, 3)).map((step) => ({ ...step, done: step.id === "site" ? false : step.done }));
+  const current = visible.findIndex((step) => !step.done);
+  if (current === -1) return null;
+  const done = visible.filter((step) => step.done).length;
+  const step = visible[current];
+  const resume = state.kind === "progress" && step.id === "publish" && state.quiz;
+  const intro = state.kind === "new" && !steps[0].done
+    ? "POAPO prépare un quiz à partir de vos produits : vos clients répondent à quelques questions et reçoivent la sélection qui leur correspond."
+    : null;
+  return <section className={`home-guide${panel ? " home-guide--panel" : ""}`} aria-labelledby="home-guide-title">
+    <h2 id="home-guide-title">{GUIDE_TITLE[state.kind]}{!panel && <span className="home-guide-count"> {done} étape{done > 1 ? "s" : ""} sur {visible.length}</span>}</h2>
+    {intro && <p className="home-guide-intro">{intro}</p>}
+    <ol className="home-steps">
+      {visible.map((item, index) => <li key={item.id} className={`home-step${item.done ? " done" : ""}${index === current ? " current" : ""}`}
+        aria-current={index === current ? "step" : undefined}>
+        <span className="home-step-mark" aria-hidden="true">{item.done ? "✓" : index + 1}</span>
+        <div className="home-step-body">
+          <strong>{item.title}{item.done && <span className="sr-only"> (terminé)</span>}</strong>
+          {index === current && <>
+            <p>{item.id === "site" ? "Intégrez le quiz à votre boutique pour le rendre visible à vos clients." : item.help}</p>
+            {resume && <div className="home-resume" data-testid="home-resume">
+              <p><strong>{resume.name}</strong><span className="home-quiz-status">{resume.hasDraft ? "Brouillon" : "Pas encore publié"}</span></p>
+              <p>{state.nextText}</p>
+            </div>}
+            <Link className="btn-primary" to={item.to} aria-label={resume ? `Continuer mon quiz : ${item.cta.toLowerCase()}` : undefined}>{resume ? "Continuer mon quiz" : item.cta}</Link>
+            {item.id === "site" && <p className="home-install-note dashboard-muted" data-testid="home-install-note"><Icon name="help" size={14} /> POAPO ne peut pas vérifier automatiquement l'installation sur votre site.</p>}
+          </>}
+        </div>
+      </li>)}
+    </ol>
   </section>;
 }
 
-export function NextActionCard({ action, experience, hasExperiences }: {
-  action: DashboardSummary["nextAction"];
-  experience?: DashboardExperience;
-  hasExperiences: boolean;
-}) {
-  return <DashboardPanel id="home-next-title" title="Votre prochaine action" icon="target" className="home-next">
-    <div className="home-next-body">
-      <h3>{action.kind === "draft" ? "Reprendre votre brouillon" : action.kind === "correction"
-        ? "Compléter votre expérience" : hasExperiences ? "Créer une nouvelle expérience" : "Créer votre première expérience"}</h3>
-      {experience ? <>
-        <div className="home-next-experience"><span className="dashboard-icon"><Icon name="quiz" /></span>
-          <div><strong>{experience.name}</strong><p className="dashboard-muted">Catalogue : {experience.catalog.name}</p></div>
-        </div>
-        <p className="dashboard-muted">{action.kind === "draft"
-          ? "Votre brouillon est enregistré. Reprenez sa configuration sans modifier la version publique."
-          : experience.correction}</p>
-      </> : <p className="dashboard-muted">Choisissez vos produits et préparez les questions de votre quiz.</p>}
-      <Link className="btn-primary" to={experience ? quizPath(experience) : "/experiences/new"}>Continuer</Link>
-    </div>
-  </DashboardPanel>;
+/** Bandeau de situation du quiz en ligne : n'affirme jamais une installation, seulement ce que les données montrent. */
+export function HomeBanner({ used }: { used: boolean }) {
+  return <p className={`home-banner${used ? " success" : ""}`} role="status" data-testid="home-banner">
+    <Icon name="check" size={20} />
+    {used ? "Votre quiz est en ligne et a déjà reçu des réponses !" : "Votre quiz est en ligne. Aucun visiteur ne l'a encore commencé."}
+  </p>;
 }
 
-export function ProductsSummary({ products, catalogs }: Pick<DashboardSummary, "products" | "catalogs">) {
-  return <DashboardPanel id="home-products-title" title="Mes produits" icon="box" className="home-products"
-    action={<Link className="btn-ghost btn-sm" to="/catalog">Gérer mes produits →</Link>}>
-    <div className="home-product-counts">
-      <div><strong>{products.toLocaleString("fr-FR")}</strong><p>produit{products > 1 ? "s" : ""} dans votre boutique</p></div>
-      {catalogs > 1 && <div><strong>{catalogs.toLocaleString("fr-FR")}</strong><p>catalogues de votre boutique</p></div>}
+export function HomeExperienceRow({ experience }: { experience: DashboardExperience }) {
+  const status = experience.accessible ? (experience.hasDraft ? "En ligne · modifications non publiées" : "En ligne")
+    : experience.hasDraft ? "Brouillon" : "Pas encore publié";
+  // « Résultats » n'a de sens que pour un quiz visible ou déjà utilisé.
+  const hasResults = experience.accessible || experience.started > 0;
+  return <li className={`home-quiz-row${experience.accessible ? " live" : ""}`}>
+    <span className="home-quiz-thumb" aria-hidden="true"><Icon name="quiz" size={20} /></span>
+    <div className="home-quiz-main">
+      <strong>{experience.name}</strong>
+      <span className={`home-quiz-status${experience.accessible ? " live" : ""}`}>{status}</span>
+      {experience.correction && <p className="dashboard-muted">{experience.correction}</p>}
     </div>
-    <div className="home-product-links"><Link to="/catalog/import">Importer des produits</Link>
-      <Link to="/enrichment">Compléter les caractéristiques avec l'IA (facultatif)</Link></div>
-  </DashboardPanel>;
-}
-
-export function HomeResources({ experience }: { experience?: DashboardExperience }) {
-  return <div className="home-resources">
-    <DashboardPanel id="home-tip-title" title="Un conseil pour démarrer" icon="bulb" className="home-tip">
-      <p>Commencez par quelques produits et des questions simples. Vous pourrez enrichir votre expérience à votre rythme.</p>
-      <Link to="/catalog">Préparer mes produits →</Link>
-    </DashboardPanel>
-    <DashboardPanel id="home-help-title" title="Pour bien démarrer" icon="book" className="home-guidance">
-      <ResourceLink to="/experiences/new" icon="plus" title="Créer sa première expérience" description="Ouvrir le parcours de création" />
-      <ResourceLink to="/catalog/import" icon="box" title="Importer des produits" description="Depuis votre fichier CSV" />
-      <ResourceLink to={experience ? quizPath(experience, "/quiz-builder") : "/experiences/new"} icon="builder"
-        title={experience ? "Personnaliser un quiz" : "Créer un quiz pour le personnaliser"} description="Préparer les questions et les réponses" />
-      <ResourceLink to={experience ? quizPath(experience) : "/experiences/new"} icon="copy"
-        title={experience ? "Intégrer un quiz" : "Créer un quiz pour l'intégrer"} description="Accéder au lien et au code d'intégration" />
-      {experience && <p className="dashboard-muted">Quiz sélectionné : {experience.name}. L'apparence et la publication se règlent dans l'éditeur.</p>}
-    </DashboardPanel>
-  </div>;
+    <div className="home-quiz-actions">
+      {hasResults && <Link className="btn-ghost btn-sm" to={`/analytics?quizId=${encodeURIComponent(experience.id)}`}><Icon name="chart" size={15} /> Résultats</Link>}
+      <Link className="btn-ghost btn-sm" to={experienceEditorPath(experience.id)}><Icon name="edit" size={15} /> Modifier</Link>
+    </div>
+  </li>;
 }

@@ -87,7 +87,7 @@ function ExperienceEditorLoader({ quizId }: { quizId: string }) {
   }, [quizId, attempt]);
 
   if (!context) return <div className="page campaign-quiz-editor experience-editor">
-    <Link className="table-link" to="/quizzes">← Mes expériences</Link>
+    <Link className="table-link" to="/quizzes">← Mes quiz</Link>
     {error ? <>
       <div className="form-error" role="alert">{error}</div>
       <button type="button" className="btn-ghost" onClick={() => setAttempt((value) => value + 1)}>Réessayer</button>
@@ -218,7 +218,7 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
   return <div className="page campaign-quiz-editor experience-editor">
     <header className="quiz-editor-header xe-header">
       <nav className="quiz-editor-breadcrumb" aria-label="Fil d'Ariane">
-        <Link to={`/quizzes?experience=${encodeURIComponent(quiz.id)}`}>← Mes expériences</Link>
+        <Link to={`/quizzes?experience=${encodeURIComponent(quiz.id)}`}>← Mes quiz</Link>
       </nav>
       <div className="xe-title-row">
         <div>
@@ -307,8 +307,8 @@ function ExperienceEditor({ initial }: { initial: EditorContext }) {
         </div>
 
         {section === "publication" && <section className="xw-card">
-          <WizardPublicationStatus status={status} error={serverError} onRetry={() => void refreshServer()} />
-          {status && (status.id === "live" || status.id === "disabled") && !localChanges &&
+          <WizardPublicationStatus status={status} error={serverError} onRetry={() => void refreshServer()} server={server} />
+          {status && (status.id === "live" || (status.id === "disabled" && !!published)) && !localChanges &&
             <WizardPublished tenantId={quiz.tenantId} quizId={quiz.id} availability={server ? { accessible: server.accessible, label: status?.label ?? "", reason: status?.reason ?? null } : availability} published={published} />}
         </section>}
       </div>

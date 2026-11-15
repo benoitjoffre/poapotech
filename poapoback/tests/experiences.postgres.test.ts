@@ -91,6 +91,7 @@ test("PostgreSQL : synthèse « Mes expériences » isolée, sans double comptag
       assert.ok(sharedItem.draftUpdatedAt);
       assert.equal(sharedItem.questionCount, 1);
       assert.equal(sharedItem.accessible, true);
+      assert.equal(sharedItem.active, true);
       assert.equal(sharedItem.catalog.name, "Principal");
       const standaloneItem = byId.get(standalone.id)!;
       assert.equal(standaloneItem.stats, null);
@@ -98,6 +99,7 @@ test("PostgreSQL : synthèse « Mes expériences » isolée, sans double comptag
       assert.equal(standaloneItem.catalog.name, "Second");
       const inactiveItem = byId.get(inactive.id)!;
       assert.equal(inactiveItem.accessible, false);
+      assert.equal(inactiveItem.active, false);
       assert.equal(inactiveItem.correction, "Aucune question active.");
     });
 
@@ -115,6 +117,7 @@ test("PostgreSQL : synthèse « Mes expériences » isolée, sans double comptag
       const result = await overview();
       assert.equal(result.shopActive, false);
       assert.ok(result.experiences.every((item) => !item.accessible));
+      assert.ok(result.experiences.some((item) => item.active), "une boutique désactivée ne masque pas l'état actif du quiz");
       assert.equal(await prisma.quiz.count({ where: { tenantId: id } }), before);
     });
   } finally {

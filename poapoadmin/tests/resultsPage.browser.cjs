@@ -74,7 +74,7 @@ async function main() {
   check(!(await page.locator("body").innerText()).includes(question.id), "libellé de question, jamais l'identifiant technique");
   await page.getByText("Séjour Bali").first().waitFor();
   check((await page.getByRole("link", { name: "Ouvrir l'éditeur" }).getAttribute("href")) === `/experiences/${travel.id}/edit`, "lien éditeur");
-  check((await page.getByRole("link", { name: "Mes expériences" }).count()) >= 1, "lien Mes expériences");
+  check((await page.getByRole("link", { name: "Mes quiz" }).count()) >= 1, "lien Mes quiz");
   check(!(await overflow(page)), "pas de défilement horizontal à 1440");
   await shot(page, "results-1440");
 

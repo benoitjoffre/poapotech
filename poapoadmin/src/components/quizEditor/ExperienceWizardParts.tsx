@@ -3,15 +3,20 @@ import { useState } from "react";
 import type { QuizPublicationDiagnostic } from "@poapo/types";
 import { embedSnippet, publicQuizLink } from "../../lib/experienceLinks";
 import type { PublicAvailability } from "../../lib/experiences";
-import type { PublicationStatus } from "../../lib/publicationStatus";
+import type { PublicationStatus, ServerPublicationState } from "../../lib/publicationStatus";
 
-export function WizardPublicationStatus({ status, error, onRetry }: { status: PublicationStatus | null; error: string; onRetry: () => void }) {
+export function WizardPublicationStatus({ status, error, onRetry, server }: { status: PublicationStatus | null; error: string; onRetry: () => void; server?: ServerPublicationState | null }) {
   if (!status) return <div className="xp-state" role="status">
     {error ? <><p className="form-error" role="alert">{error}</p><button type="button" className="btn-ghost" onClick={onRetry}>Réessayer</button></> : "Lecture de l'état de publication…"}
   </div>;
   return <div className={`xw-status ${status.id}`} data-publication-status={status.id} role="status">
     <p><strong>{status.label}</strong></p>
     <p className="section-hint">{status.hint}</p>
+    {server && <dl className="xw-state-lines" data-testid="publication-state">
+      <div><dt>Brouillon</dt><dd>{server.hasDraft ? "Des modifications enregistrées attendent d'être publiées" : "Aucune modification en attente"}</dd></div>
+      <div><dt>Version en ligne</dt><dd>{server.questionCount > 0 ? `${server.questionCount} question(s) enregistrée(s)` : "Aucune question publiée pour l'instant"}</dd></div>
+      <div><dt>Accessible au public</dt><dd>{server.accessible ? "Oui : vos visiteurs peuvent l'ouvrir" : server.shopActive ? "Non : l'expérience n'est pas activée, personne ne peut l'ouvrir" : "Non : votre boutique est désactivée"}</dd></div>
+    </dl>}
     {error && <p className="form-error" role="alert">{error} <button type="button" className="table-link" onClick={onRetry}>Réessayer</button></p>}
     {status.id === "disabled" && status.reason === "Boutique désactivée" && <Link className="btn-ghost" to="/settings">Ouvrir les paramètres</Link>}
   </div>;
@@ -39,7 +44,7 @@ export function WizardPublished({ tenantId, quizId, availability, published, onC
       {availability.accessible && <a className="btn-ghost" href={link} target="_blank" rel="noreferrer">Tester l'expérience publiée</a>}
       <button type="button" className="btn-ghost" onClick={() => copy("code", embedSnippet(tenantId, quizId))}>Copier le code d'intégration</button>
       <Link className="btn-ghost" to={`/analytics?quizId=${encodeURIComponent(quizId)}`}>Voir les résultats</Link>
-      <Link className="btn-ghost" to="/quizzes">Retour à Mes expériences</Link>
+      <Link className="btn-ghost" to="/quizzes">Retour à Mes quiz</Link>
     </div>
     <p className="xe-muted" role="status" aria-live="polite">{copied === "link" ? "Lien public copié." : copied === "code" ? "Code d'intégration copié." : ""}</p>
     {availability.accessible && <p className="xe-muted">Lien : <a href={link} target="_blank" rel="noreferrer">{link}</a></p>}

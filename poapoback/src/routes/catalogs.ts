@@ -6,12 +6,13 @@ import { verifyToken, AuthRequest } from "../middleware/auth";
 import { ensureDefaultCatalog, parseCatalogInput, resolveAccountTenantId, serializeCatalog } from "../services/catalogs";
 import { asyncRoute, QuizError } from "../services/quizzes";
 import productEnrichmentRouter from "./productEnrichment";
-import { assertResourceQuota, requireFeature, withTenantLock } from "../services/entitlements";
+import { assertResourceQuota, withTenantLock } from "../services/entitlements";
 
 // Gestion des catalogues d'un tenant : chaque produit et chaque quiz appartient à un seul catalogue.
 const router = Router();
 router.use(verifyToken);
-router.use("/:catalogId/enrichment", requireFeature("aiEnrichment", ["GET", "POST", "PUT", "PATCH", "DELETE"]), productEnrichmentRouter);
+// La garde « aiEnrichment » s'applique route par route (POST /estimate seulement) : l'estimation locale et l'enregistrement ne sont pas de l'IA.
+router.use("/:catalogId/enrichment", productEnrichmentRouter);
 
 async function tenantOf(req: AuthRequest): Promise<string> {
   const tenantId = await resolveAccountTenantId(req);

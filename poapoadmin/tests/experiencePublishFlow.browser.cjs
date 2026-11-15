@@ -19,7 +19,11 @@ const eq = (a, b, m) => { count++; assert.equal(a, b, m); };
 async function main() {
   stack = await resolveStack();
   const { api, admin } = stack;
-  for (const id of [tenantId, foreignId]) await prisma.tenant.create({ data: { id, email: `${id}@example.test` } });
+  for (const id of [tenantId, foreignId]) {
+    await prisma.tenant.create({ data: { id, email: `${id}@example.test` } });
+    // Fixtures hors quotas : ce scénario active plusieurs quiz (le quota a sa propre recette, quizQuota.browser.cjs).
+    await prisma.subscription.create({ data: { tenantId: id, plan: "BUSINESS", source: "LEGACY" } });
+  }
   const catalog = await prisma.catalog.create({ data: { tenantId, name: "Cafés", isDefault: true } });
   const fcatalog = await prisma.catalog.create({ data: { tenantId: foreignId, name: "Autre", isDefault: true } });
   await prisma.product.createMany({ data: [

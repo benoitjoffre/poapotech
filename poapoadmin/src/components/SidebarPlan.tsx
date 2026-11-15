@@ -5,7 +5,7 @@ import { apiFetch } from "../lib/api";
 
 const ROWS: { key: SubscriptionQuotaKey; label: string }[] = [
   { key: "catalogs", label: "Catalogues" },
-  { key: "publishedExperiences", label: "Expériences" },
+  { key: "publishedExperiences", label: "Quiz en ligne" },
   { key: "recommendationsPerMonth", label: "Recos / mois" },
 ];
 

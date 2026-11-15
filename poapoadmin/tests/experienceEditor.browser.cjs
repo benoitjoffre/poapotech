@@ -67,7 +67,7 @@ async function main() {
   await page.getByRole("heading", { name: "Quiz sans campagne", level: 1 }).waitFor();
   eq((await page.getByRole("tab").allTextContents()).map((t) => t.replace(/^\d/, "")).join("|"),
     "Réglages|Questions|Apparence|Aperçu|Publication");
-  ok(await page.getByRole("link", { name: "← Mes expériences" }).isVisible());
+  ok(await page.getByRole("link", { name: "← Mes quiz" }).isVisible());
   eq(await state(), "published");
   ok(await page.getByText("Public : accessible").isVisible());
   ok(await page.getByRole("link", { name: "Voir les résultats" }).isVisible());
@@ -106,7 +106,7 @@ async function main() {
   await page.getByLabel("Texte du bouton vers les produits", { exact: true }).fill("Autre bouton");
   const dialogs = [];
   page.once("dialog", (dialog) => { dialogs.push(dialog.message()); void dialog.dismiss(); });
-  await page.getByRole("link", { name: "← Mes expériences" }).click();
+  await page.getByRole("link", { name: "← Mes quiz" }).click();
   await page.waitForTimeout(500);
   eq(dialogs.length, 1);
   ok(page.url().includes("/experiences/"), "reste sur l'éditeur après refus");
@@ -180,10 +180,10 @@ async function main() {
   await page.getByRole("tab").first().waitFor();
   eq(await page.getByRole("tab").count(), 5);
 
-  // 13. Depuis Mes expériences : « Éditer » ouvre le nouvel éditeur.
+  // 13. Depuis Mes quiz : « Éditer » ouvre le nouvel éditeur.
   await page.goto(`${admin}/quizzes`);
-  const card = page.locator(".xp-card", { hasText: "Quiz sans campagne" }).first();
-  await card.getByRole("link", { name: /Reprendre le brouillon|Éditer/ }).click();
+  const card = page.locator(".qz-card", { hasText: "Quiz sans campagne" }).first();
+  await card.getByRole("link", { name: /Reprendre le brouillon|Continuer|Modifier/ }).click();
   await page.waitForURL(new RegExp(`/experiences/${encodeURIComponent(solo.id)}/edit`));
   await page.getByRole("heading", { name: /Quiz sans campagne|Mon nom|Nom concurrent/, level: 1 }).waitFor();
 

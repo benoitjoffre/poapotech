@@ -22,6 +22,8 @@ import LandingPage from "./landing/LandingPage";
 import { experienceEditorPath } from "./lib/experienceLinks";
 import Icon from "./components/Icon";
 import { QuizProvider } from "./contexts/QuizContext";
+import { JourneyProvider } from "./contexts/JourneyContext";
+import JourneyBar from "./components/JourneyBar";
 import { TourProvider } from "./tour/TourContext";
 
 function ProtectedRoute() {
@@ -52,6 +54,7 @@ function AppLayout() {
   const tourUserId = user && !user.isSuperAdmin ? user.tenantId : null;
   const link = ({ isActive }: { isActive: boolean }) => `admin-side-link${isActive ? " active" : ""}`;
   return (
+    <JourneyProvider enabled={!user?.isSuperAdmin}>
     <TourProvider userId={tourUserId} suppressOffer={!!experienceEditor}>
     <div className={`admin-layout${user?.isSuperAdmin ? "" : " merchant-layout"}`}>
       <aside className="admin-sidebar">
@@ -65,7 +68,7 @@ function AppLayout() {
           ) : <>
             <NavLink className={link} data-tour="nav-home" to="/" end><Icon name="home" />Accueil</NavLink>
             <NavLink className={link} data-tour="nav-products" to="/catalog"><Icon name="box" />Mes produits</NavLink>
-            <NavLink className={({ isActive }) => link({ isActive: isActive || !!experienceEditor })} data-tour="nav-experiences" to="/quizzes"><Icon name="quiz" />Mes expériences</NavLink>
+            <NavLink className={({ isActive }) => link({ isActive: isActive || !!experienceEditor })} data-tour="nav-experiences" to="/quizzes"><Icon name="quiz" />Mes quiz</NavLink>
             <NavLink className={link} data-tour="nav-results" to="/analytics"><Icon name="chart" />Résultats</NavLink>
             <NavLink className={link} to="/settings"><Icon name="gear" />Paramètres</NavLink>
             <NavLink className={link} to="/help"><Icon name="help" />Centre d'aide</NavLink>
@@ -81,10 +84,12 @@ function AppLayout() {
         </div>
       </aside>
       <main className="admin-main">
+        {!user?.isSuperAdmin && <JourneyBar />}
         <Outlet />
       </main>
     </div>
     </TourProvider>
+    </JourneyProvider>
   );
 }
 

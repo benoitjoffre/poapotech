@@ -16,6 +16,8 @@ export interface ExperienceListItem {
   catalog: { id: string; name: string };
   /** Quiz actif ET boutique active : c'est la seule condition d'accès public. */
   accessible: boolean;
+  /** État du quiz seul (compté dans le quota « Quiz en ligne »), indépendamment de la boutique. */
+  active: boolean;
   questionCount: number;
   hasDraft: boolean;
   draftUpdatedAt: string | null;

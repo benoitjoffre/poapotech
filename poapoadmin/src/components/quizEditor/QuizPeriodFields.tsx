@@ -11,20 +11,23 @@ export default function QuizPeriodFields({ quiz }: { quiz: Quiz }) {
   const [end, setEnd] = useState(toDateInput(quiz.endsAt));
   const [status, setStatus] = useState<"" | "saving" | "saved">("");
   const [error, setError] = useState("");
-  const first = useRef(true);
+  // Dernière valeur connue du serveur : on n'écrit que si le formulaire s'en écarte réellement.
+  // (Un indicateur « premier rendu » ne suffit pas : React StrictMode rejoue l'effet au montage.)
+  const payloadOf = (o: QuizOccasion | "", l: string, s: string, e: string) =>
+    JSON.stringify({ occasion: o || null, occasionLabel: o === "CUSTOM" ? l.trim() : null, startsAt: fromDateInput(s), endsAt: fromDateInput(e, true) });
+  const saved = useRef(payloadOf(occasion, label, start, end));
 
   useEffect(() => {
-    if (first.current) { first.current = false; return; }
+    const body = payloadOf(occasion, label, start, end);
+    if (body === saved.current) { setStatus(""); setError(""); return; }
     setStatus(""); setError("");
     if (occasion === "CUSTOM" && !label.trim()) return;
     if (start && end && end < start) { setError("La date de fin doit être après la date de début."); return; }
     const timer = window.setTimeout(async () => {
       setStatus("saving");
       try {
-        await apiFetch(`/api/quizzes/${encodeURIComponent(quiz.id)}`, {
-          method: "PUT",
-          body: JSON.stringify({ occasion: occasion || null, occasionLabel: occasion === "CUSTOM" ? label.trim() : null, startsAt: fromDateInput(start), endsAt: fromDateInput(end, true) }),
-        });
+        await apiFetch(`/api/quizzes/${encodeURIComponent(quiz.id)}`, { method: "PUT", body });
+        saved.current = body;
         setStatus("saved");
       } catch (err) { setStatus(""); setError(err instanceof Error ? err.message : "Enregistrement impossible"); }
     }, 800);

@@ -41,3 +41,31 @@
 .xw-status.disabled { border-color: #c0392b; background: #fdf0ee; }
 .xw-status p { margin: 0 0 4px; }
 .publication-primary { margin: 12px 0; display: grid; gap: 6px; }
+.xw-phases { display: flex; flex-wrap: wrap; gap: 8px 20px; list-style: none; margin: 8px 0; padding: 0; }
+.xw-phases li { display: inline-flex; align-items: center; gap: 8px; color: #45475b; }
+.xw-phases li[aria-current="step"] { color: #3d25a8; font-weight: 700; }
+.xw-phase-number { width: 26px; height: 26px; border-radius: 50%; display: inline-grid; place-items: center; background: #eef0f5; color: #2b2d42; font-weight: 600; }
+.xw-phases li[aria-current="step"] .xw-phase-number { background: #6c47ff; color: #fff; }
+.xw-phases li.done .xw-phase-number { background: #e3f6ee; color: #0b6b4a; }
+/* Étape « Caractéristiques » : groupes repliables, barre d'action accessible, cibles tactiles */
+.feat-summary { margin: 8px 0; }
+.feat-bulk { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.feat-group { border: 1px solid var(--border); border-radius: 12px; padding: 4px 12px 12px; margin: 10px 0; background: #fff; }
+.feat-group > summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; padding: 6px 0; }
+.xw-create .enrichment-row .checkbox-label { min-height: 44px; display: flex; align-items: center; gap: 10px; }
+.xw-create .enrichment-row input[type="checkbox"] { width: 22px; height: 22px; flex: none; }
+.xw-actionbar { position: sticky; bottom: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; padding: 10px 12px; margin-top: 12px; background: #fff; border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 -2px 8px rgba(20, 20, 40, 0.06); }
+.xw-actionbar .btn-primary { min-height: 44px; }
+.xw-footer--flat { position: static; }
+@media (max-width: 640px) {
+  .xw-create .xw-footer { position: static; flex-direction: column; align-items: stretch; }
+  .xw-create .xw-footer > span { display: flex; flex-direction: column; gap: 8px; }
+  .xw-create .xw-footer .btn-ghost, .xw-create .xw-footer .btn-primary, .feat-bulk .btn-ghost, .xw-actionbar .btn-primary { width: 100%; min-height: 44px; }
+  .xw-actionbar { flex-direction: column; align-items: stretch; text-align: left; }
+}
+.xw-state-lines { margin: 8px 0 0; display: grid; gap: 4px; }
+.xw-state-lines > div { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.xw-state-lines dt { font-weight: 600; min-width: 150px; }
+.xw-state-lines dd { margin: 0; }
+.publication-advice { margin: 12px 0; }
+.publication-advice summary { cursor: pointer; min-height: 32px; }

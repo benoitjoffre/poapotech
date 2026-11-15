@@ -121,7 +121,7 @@ test("PostgreSQL : publication contrôlée, concurrence et activation", {
       q.id = localQ; q.answers[0].id = localA; q.text = "Nouvelle racine"; q.order = 0;
       draft.questions = [q, { ...draft.questions[1], conditionAnswerId: localA }];
       const other = await prisma.catalog.create({ data: { tenantId: f.tenantId, name: "Nouveau catalogue" } });
-      const product = await prisma.product.create({ data: { tenantId: f.tenantId, catalogId: other.id, name: "Nouveau", tags: [] } });
+      const product = await prisma.product.create({ data: { tenantId: f.tenantId, catalogId: other.id, name: "Nouveau", tags: [], attributes: { pace: 0.4 } } });
       draft.config.catalogId = other.id; draft.config.productIds = [product.id];
       assert.equal((await f.save(draft, 0)).status, 200);
       const result = await f.publish(1);
@@ -208,6 +208,9 @@ test("PostgreSQL : publication contrôlée, concurrence et activation", {
       valid.questions[1].abVariant = "A";
       valid.theme = { primaryColor: "#FFFFFF", textColor: "#FFFFFF", backgroundColor: "#FFFFFF" };
       await prisma.product.update({ where: { id: f.product.id }, data: { attributes: {} } });
+      // Couverture partielle : un second produit valorisé rend l'axe exploitable (le premier reste signalé).
+      await prisma.product.create({ data: { tenantId: f.tenantId, catalogId: f.catalog.id, name: "Valorisé", tags: [], attributes: { pace: 0.6 } } });
+      valid.config.useAllProducts = true;
       assert.equal((await f.save(valid, 1)).status, 200);
       const diagnosis = await (await f.check(2)).json() as QuizPublicationDiagnostic;
       assert.equal(diagnosis.valid, true);
@@ -255,6 +258,48 @@ test("PostgreSQL : publication contrôlée, concurrence et activation", {
         await prisma.$executeRawUnsafe(`DROP FUNCTION IF EXISTS "${name}"()`);
       }
       assert.equal((await f.publish(1)).status, 200);
+    });
+    await t.test("axes inexploitables : brouillon enregistrable, publication et activation refusées côté API ; axes partiels et absence d'axes inchangés", async () => {
+      const f = await fixture();
+      const message = "Les informations de vos produits ne permettent pas encore de proposer des recommandations fiables.";
+      const codes = async (revision: number) => ((await (await f.check(revision)).json()) as QuizPublicationDiagnostic);
+      // Aucun produit ne porte de valeur valide sur l'axe : valeurs absentes, hors 0–1 ou non numériques.
+      await prisma.product.update({ where: { id: f.product.id }, data: { attributes: { pace: 3, other: 0.5 } } });
+      const { draft } = await f.read();
+      draft.config.name = "Brouillon sans données";
+      assert.equal((await f.save(draft, 0)).status, 200); // le brouillon reste enregistrable
+      const blocked = await codes(1);
+      assert.equal(blocked.valid, false);
+      const issue = blocked.errors.find((e) => e.code === "NO_USABLE_ATTRIBUTES");
+      assert.equal(issue?.message, message);
+      const refused = await f.publish(1);
+      assert.equal(refused.status, 422);
+      assert.equal((await prisma.quiz.findUniqueOrThrow({ where: { id: f.quiz.id } })).name, "Historique");
+      // Activation directe (PUT /:id) : même contrôle.
+      await prisma.quiz.update({ where: { id: f.quiz.id }, data: { active: false } });
+      const activation = await f.request(f.prefix, "PUT", { active: true });
+      assert.equal(activation.status, 422);
+      assert.match((await activation.json()).error, /recommandations fiables/);
+      // Désactiver reste possible, et le diagnostic n'a rien modifié automatiquement.
+      assert.equal((await f.request(f.prefix, "PUT", { active: false })).status, 200);
+      // Partiel : un seul produit valorisé sur un seul axe suffit (règles inchangées, avertissements conservés).
+      await prisma.product.create({ data: { tenantId: f.tenantId, catalogId: f.catalog.id, name: "Valorisé", tags: [], attributes: { pace: 0.8 } } });
+      const withAll = (await f.read()).draft;
+      withAll.config.useAllProducts = true;
+      assert.equal((await f.save(withAll, 1)).status, 200);
+      const partial = await codes(2);
+      assert.equal(partial.errors.some((e) => e.code === "NO_USABLE_ATTRIBUTES"), false);
+      assert.equal(partial.valid, true);
+      assert.ok(partial.warnings.some((w) => w.code === "MISSING_ATTRIBUTES"));
+      // Sans axe : avertissement NO_AXES uniquement, pas de blocage.
+      // Le brouillon ne permet pas de retirer un axe publié : un quiz sans axe n'existe que côté base (quiz historique).
+      const legacy = await fixture();
+      await prisma.quiz.update({ where: { id: legacy.quiz.id }, data: { axes: [] } });
+      await prisma.answer.updateMany({ where: { question: { quizId: legacy.quiz.id } }, data: { impacts: {} } });
+      await prisma.product.update({ where: { id: legacy.product.id }, data: { attributes: {} } });
+      const none = (await (await legacy.check(0)).json()) as QuizPublicationDiagnostic;
+      assert.equal(none.errors.some((e) => e.code === "NO_USABLE_ATTRIBUTES"), false);
+      assert.ok(none.warnings.some((w) => w.code === "NO_AXES"));
     });
   } finally {
     await new Promise<void>((resolve, reject) => server.close((err) => err ? reject(err) : resolve()));

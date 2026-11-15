@@ -7,7 +7,7 @@ import {
 
 const item = (id: string, patch: Partial<ExperienceListItem> = {}): ExperienceListItem => ({
   id, name: id, quizTitle: id, industry: "", isDefault: false, catalog: { id: "c1", name: "Principal" },
-  accessible: true, questionCount: 3, hasDraft: false, draftUpdatedAt: null, correction: null,
+  accessible: true, active: true, questionCount: 3, hasDraft: false, draftUpdatedAt: null, correction: null,
   updatedAt: "2026-10-01T00:00:00.000Z", lastModifiedAt: "2026-10-01T00:00:00.000Z", stats: null, occasion: null, occasionLabel: null, startsAt: null, endsAt: null, ...patch,
 });
 const none: ExperienceFilters = { query: "", availability: "all", draft: "all", catalogId: "" };

@@ -68,7 +68,7 @@ async function createShop(page, name) {
   ok(tenant.primaryColor === "#6C47FF" && tenant.name === "Café Alice", "paramètres initiaux");
   ok(await prisma.quiz.count({ where: { tenantId: tenant.id } }) <= 1, "aucun quiz superflu créé");
   await page.getByRole("button", { name: "Passer la visite" }).click();
-  ok(await page.getByRole("link", { name: "Mes produits", exact: true }).isVisible() && await page.getByRole("link", { name: "Mes expériences", exact: true }).isVisible(), "accès produits et expériences");
+  ok(await page.getByRole("link", { name: "Mes produits", exact: true }).isVisible() && await page.getByRole("link", { name: "Mes quiz", exact: true }).isVisible(), "accès produits et expériences");
 
   // Catalogue par défaut présent ; STARTER limité à 1 catalogue : la création d'un second est refusée avec un message clair.
   await page.goto(stack.admin + "/catalogs");

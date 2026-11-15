@@ -1,3 +1,4 @@
+import { unpublishedDraftsOf } from "./quizEditorDrafts";
 import { Prisma } from "@prisma/client";
 import type { ExperienceListItem, ExperiencesOverview, ExperienceStats } from "@poapo/types";
 import { prisma } from "../lib/prisma";
@@ -29,13 +30,11 @@ export async function experiencesOverview(tenantId: string, now = new Date()): P
         where: { tenantId, createdAt: { gte: since, lte: now }, type: { in: ["quiz_start", "quiz_complete", "buy_click"] } },
         _count: { _all: true },
       }),
-      // Draft metadata only: the editor document can be large.
-      db.$queryRaw<{ quizId: string; updatedAt: Date }[]>`
-        SELECT "quizId", "updatedAt" FROM "QuizEditorDraft"
-        WHERE "tenantId" = ${tenantId} AND content IS NOT NULL AND content <> 'null'::jsonb`,
+      // Seuls les brouillons réellement différents de la version publiée comptent comme « modifications en cours ».
+      unpublishedDraftsOf(db, tenantId),
     ]);
     const activeProducts = new Map(products.map((group) => [group.catalogId, group._count._all]));
-    const draftByQuiz = new Map(drafts.map((draft) => [draft.quizId, draft.updatedAt]));
+    const draftByQuiz = drafts;
     const stats = new Map<string, ExperienceStats>();
     for (const event of events) {
       const value = stats.get(event.quizId) ?? { started: 0, completed: 0, productClicks: 0 };
@@ -50,7 +49,7 @@ export async function experiencesOverview(tenantId: string, now = new Date()): P
       const lastModified = draftAt && draftAt > quiz.updatedAt ? draftAt : quiz.updatedAt;
       return {
         id: quiz.id, name: quiz.name, quizTitle: quiz.quizTitle, industry: quiz.industry, isDefault: quiz.isDefault,
-        catalog: quiz.catalog, accessible: shop.active && quiz.active, questionCount: quiz._count.questions,
+        catalog: quiz.catalog, accessible: shop.active && quiz.active, active: quiz.active, questionCount: quiz._count.questions,
         hasDraft: draftAt !== null, draftUpdatedAt: draftAt?.toISOString() ?? null,
         correction: !quiz._count.questions ? "Aucune question active."
           : !productCount ? "Aucun produit actif recommandable." : null,
