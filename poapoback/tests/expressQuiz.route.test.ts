@@ -53,6 +53,7 @@ before(async () => {
   stub(prisma.tenant, "findUnique", (async () => ({ id: "tenant-a", industry: "café" })) as unknown as typeof prisma.tenant.findUnique);
   stub(prisma.product, "findMany", (async ({ where }: { where: Row }) => products.filter((p) =>
     p.tenantId === where.tenantId && p.catalogId === where.catalogId && (!where.id || where.id.in.includes(p.id)))) as unknown as typeof prisma.product.findMany);
+  stub(prisma.importBatch, "findMany", (async () => []) as unknown as typeof prisma.importBatch.findMany);
   stub(prisma.quiz, "findMany", (async () => []) as unknown as typeof prisma.quiz.findMany);
   stub(prisma.quiz, "findUnique", (async () => ({ id: "default_tenant-a" })) as unknown as typeof prisma.quiz.findUnique);
   stub(prisma.quiz, "create", (async ({ data }: { data: Row }) => { writes.push("quiz.create"); const quiz = { ...data, id: "new-quiz" }; created.push(quiz); return quiz; }) as unknown as typeof prisma.quiz.create);

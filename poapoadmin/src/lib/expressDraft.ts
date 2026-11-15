@@ -9,9 +9,18 @@ function signature(impacts: Record<string, number>): string {
   return JSON.stringify(Object.entries(impacts).filter(([, v]) => v !== 0).sort(([a], [b]) => a.localeCompare(b)));
 }
 
-export function hasDistinctEffects(question: ExpressQuestion): boolean {
-  return new Set(question.answers.map((answer) => signature(answer.impacts))).size >= 2;
+/** Signature d'une réponse : impacts + effets de filtre ou de préférence (« Sans préférence » est neutre). */
+function answerSignature(answer: ExpressQuestion["answers"][number]): string {
+  const active = (answer.effects?.effects ?? []).filter((effect) => effect.type === "category" || effect.type === "range");
+  return active.length ? `${signature(answer.impacts)}#${JSON.stringify(active)}` : signature(answer.impacts);
 }
+
+export function hasDistinctEffects(question: ExpressQuestion): boolean {
+  return new Set(question.answers.map(answerSignature)).size >= 2;
+}
+
+/** Une réponse sert encore si elle a un impact ou un effet (y compris « Sans préférence »). */
+const hasAnyEffect = (answer: ExpressQuestion["answers"][number]) => Object.keys(answer.impacts).length > 0 || !!answer.effects?.effects.length;
 
 function strip(question: ExpressQuestion, keep: Set<string>): ExpressQuestion {
   return {
@@ -39,7 +48,7 @@ export function renameAxis(draft: ExpressDraft, key: string, label: string): Exp
 export function replaceQuestion(draft: ExpressDraft, index: number, suggestion: ExpressQuestion): ExpressDraft | null {
   const keep = new Set(draft.axes.map((axis) => axis.key));
   const stripped = strip(suggestion, keep);
-  const answers = stripped.answers.filter((answer) => Object.keys(answer.impacts).length > 0);
+  const answers = stripped.answers.filter(hasAnyEffect);
   const next = { ...stripped, answers };
   if (answers.length < 2 || !hasDistinctEffects(next)) return null;
   return { ...draft, questions: draft.questions.map((question, i) => i === index ? next : question) };

@@ -1,4 +1,5 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type { AnswerEffects } from "@poapo/types";
 import { parseAxes } from "./axes";
 
 /** Borne des impacts saisis manuellement (builder, import CSV, brouillon modifié). */
@@ -29,6 +30,8 @@ export interface NewAnswer {
   active?: boolean;
   /** Impacts déjà filtrés sur les axes du quiz. */
   impacts: Record<string, number>;
+  /** Effets avancés (validés en amont) ; absent ou null : comportement historique. */
+  effects?: AnswerEffects | null;
 }
 
 export interface NewQuestion {
@@ -80,6 +83,7 @@ export async function createQuestionsWithAnswers(
           active: answer.active ?? true,
           order: answerOrder++,
           impacts: answer.impacts,
+          ...(answer.effects ? { effects: answer.effects as unknown as Prisma.InputJsonObject } : {}),
         },
       });
       createdAnswers++;

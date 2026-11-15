@@ -9,7 +9,9 @@ import { verifyToken, AuthRequest } from "../middleware/auth";
 import { prisma } from "../lib/prisma";
 import { catalogAxes, resolveAccountTenantId, resolveCatalog, toCatalogRef } from "../services/catalogs";
 import { kickEmbeddingWorker } from "../services/embeddings";
-import { suggestMapping, validateMapping, ATTRIBUTE_KEY_PATTERN, type FieldMapping, type ImportIssue } from "../services/importMapping";
+import { duplicateHeaders, FORBIDDEN_ATTRIBUTE_KEYS, suggestMapping, validateMapping, ATTRIBUTE_KEY_PATTERN, type FieldMapping, type ImportIssue } from "../services/importMapping";
+import { describeImportColumns } from "../services/importColumns";
+import { ATTRIBUTE_VALUE_WARN_LENGTH, parseAttributeValue, parsePrice } from "../services/importValues";
 import { asyncRoute } from "../services/quizzes";
 
 const router = Router();
@@ -34,13 +36,20 @@ const upload = multer({
 export type { FieldMapping };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-function parseCSVBuffer(buffer: Buffer): Promise<{ headers: string[]; rows: Record<string, string>[] }> {
+export function parseCSVBuffer(buffer: Buffer): Promise<{ headers: string[]; rows: Record<string, string>[] }> {
   return new Promise((resolve, reject) => {
     const rows: Record<string, string>[] = [];
     const stream = Readable.from([buffer]);
 
     stream
       .pipe(csvParser({ separator: detectCsvSeparator(buffer) }))
+      .on("headers", (headers: string[]) => {
+        const duplicated = duplicateHeaders(headers);
+        if (duplicated.length) {
+          reject(new Error(`Colonnes en double dans le fichier : ${duplicated.map((h) => `« ${h} »`).join(", ")}. Renommez-les pour ne perdre aucune donnée.`));
+          stream.destroy();
+        }
+      })
       .on("data", (row: Record<string, string>) => rows.push(row))
       .on("end", () => {
         const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
@@ -51,15 +60,8 @@ function parseCSVBuffer(buffer: Buffer): Promise<{ headers: string[]; rows: Reco
 }
 
 const ARRAY_FIELDS = new Set(["tags"]);
-const NUMBER_FIELDS = new Set(["price"]);
+const PRICE_FIELD = "price";
 const BOOL_FIELDS = new Set(["active", "featured"]);
-
-function parseNumber(raw: string): number | null {
-  const normalized = raw.replace(",", ".");
-  if (!/^-?\d+(\.\d+)?$/.test(normalized)) return null;
-  const value = Number(normalized);
-  return Number.isFinite(value) ? value : null;
-}
 
 /**
  * Convertit une ligne CSV selon le mapping. Les colonnes mappées sur
@@ -84,10 +86,15 @@ export function applyMapping(
         .split(/[,;|]/)
         .map((s) => s.trim())
         .filter(Boolean);
-    } else if (NUMBER_FIELDS.has(targetField)) {
-      const n = parseNumber(raw);
-      if (n === null || n < 0) throw new Error(`Valeur numérique invalide pour « ${sourceColumn} » : « ${raw.slice(0, 40)} »`);
-      result[targetField] = n;
+    } else if (targetField === PRICE_FIELD) {
+      const price = parsePrice(raw);
+      if (!price.ok) {
+        const shown = `« ${raw.slice(0, 40)} »`;
+        throw new Error(price.reason === "negative" ? `Prix négatif refusé pour « ${sourceColumn} » : ${shown}`
+          : price.reason === "ambiguous" ? `Prix ambigu pour « ${sourceColumn} » : ${shown} (milliers ou décimales ? écrivez par exemple 1234 ou 1,23)`
+          : `Valeur numérique invalide pour « ${sourceColumn} » : ${shown}`);
+      }
+      result[targetField] = price.value;
     } else if (BOOL_FIELDS.has(targetField)) {
       const flag = raw.toLowerCase();
       if (["true", "1", "oui", "yes"].includes(flag)) result[targetField] = true;
@@ -99,13 +106,14 @@ export function applyMapping(
       if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
         throw new Error("Le champ attributes doit contenir un objet JSON");
       }
+      const forbidden = Object.keys(parsed as object).find((name) => FORBIDDEN_ATTRIBUTE_KEYS.has(name));
+      if (forbidden) throw new Error(`Nom d'information interdit dans « ${sourceColumn} » : ${forbidden}`);
       Object.assign(attributes, parsed);
       hasAttributes = true;
     } else if (targetField.startsWith("attribute.")) {
       const key = targetField.slice("attribute.".length);
-      if (!ATTRIBUTE_KEY_PATTERN.test(key)) throw new Error(`Nom d’attribut invalide : '${key}'`);
-      const value = parseNumber(raw);
-      attributes[key] = value ?? raw;
+      if (!ATTRIBUTE_KEY_PATTERN.test(key) || FORBIDDEN_ATTRIBUTE_KEYS.has(key)) throw new Error(`Nom d’attribut invalide : '${key}'`);
+      attributes[key] = parseAttributeValue(raw);
       hasAttributes = true;
     } else {
       result[targetField] = raw;
@@ -118,6 +126,27 @@ export function applyMapping(
   }
   if (hasAttributes) result.attributes = attributes;
   return result;
+}
+
+/** Ligne validée → données du produit à créer. Pure : sert aussi à relire, dans les tests, ce qui est réellement enregistré. */
+export function toProductData(tenantId: string, catalogId: string, d: Record<string, unknown>) {
+  return {
+    tenantId,
+    catalogId,
+    name: (d.name as string).trim(),
+    brand: typeof d.brand === "string" ? d.brand : null,
+    description: typeof d.description === "string" ? d.description : null,
+    price: typeof d.price === "number" ? d.price : null,
+    imageUrl: typeof d.imageUrl === "string" ? d.imageUrl : null,
+    purchaseUrl: typeof d.purchaseUrl === "string" ? d.purchaseUrl : null,
+    tags: Array.isArray(d.tags) ? (d.tags as string[]) : [],
+    attributes:
+      typeof d.attributes === "object" && d.attributes !== null && !Array.isArray(d.attributes)
+        ? (d.attributes as object)
+        : {},
+    active: typeof d.active === "boolean" ? d.active : true,
+    featured: typeof d.featured === "boolean" ? d.featured : false,
+  };
 }
 
 // ─── POST /api/catalog/import/parse ──────────────────────────────────────────
@@ -141,8 +170,10 @@ router.post("/parse", verifyToken, upload.single("file"), asyncRoute(async (req:
 
     // Suggestion locale et déterministe (aucun appel IA) : seules les correspondances évidentes sont proposées.
     const suggestedMapping = suggestMapping(headers, axes);
+    // Lecture additive des colonnes : type détecté, exemple, avertissements et informations supplémentaires proposées (à confirmer).
+    const columns = describeImportColumns(headers, rows, suggestedMapping, new Set(axes.map((axis) => axis.key)));
 
-    res.json({ headers, rows, suggestedMapping, total: rows.length, catalog: catalog && toCatalogRef(catalog) });
+    res.json({ headers, rows, suggestedMapping, columns, total: rows.length, catalog: catalog && toCatalogRef(catalog) });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Erreur de parsing";
     res.status(400).json({ error: message });
@@ -167,6 +198,12 @@ function evaluateRows(rows: Record<string, string>[], mapping: FieldMapping[], a
       if (typeof data.name !== "string" || !data.name.trim()) {
         issues.push({ severity: "error", message: "Nom du produit manquant" });
         return { line, data: null, issues };
+      }
+      for (const { sourceColumn, targetField } of mapping) {
+        const value = targetField?.startsWith("attribute.") ? (row[sourceColumn] ?? "").trim() : "";
+        if (value.length > ATTRIBUTE_VALUE_WARN_LENGTH) {
+          issues.push({ severity: "warning", message: `Texte très long dans « ${sourceColumn} » (${value.length} caractères) : conservé tel quel, mais peu utile pour poser une question.` });
+        }
       }
       for (const { sourceColumn, targetField } of axisColumns) {
         if (!(row[sourceColumn] ?? "").trim()) {
@@ -318,26 +355,7 @@ router.post("/execute", verifyToken, asyncRoute(async (req: AuthRequest, res: Re
     // Tout ou rien : une interruption ne laisse jamais d'import partiel.
     const products = await prisma.product.createManyAndReturn({
       select: { id: true },
-      data: valid.map(({ data }) => {
-        const d = data as Record<string, unknown>;
-        return {
-          tenantId,
-          catalogId: catalog.id,
-          name: (d.name as string).trim(),
-          brand: typeof d.brand === "string" ? d.brand : null,
-          description: typeof d.description === "string" ? d.description : null,
-          price: typeof d.price === "number" ? d.price : null,
-          imageUrl: typeof d.imageUrl === "string" ? d.imageUrl : null,
-          purchaseUrl: typeof d.purchaseUrl === "string" ? d.purchaseUrl : null,
-          tags: Array.isArray(d.tags) ? (d.tags as string[]) : [],
-          attributes:
-            typeof d.attributes === "object" && d.attributes !== null && !Array.isArray(d.attributes)
-              ? (d.attributes as object)
-              : {},
-          active: typeof d.active === "boolean" ? d.active : true,
-          featured: typeof d.featured === "boolean" ? d.featured : false,
-        };
-      }),
+      data: valid.map(({ data }) => toProductData(tenantId, catalog.id, data as Record<string, unknown>)),
     });
     createdIds = products.map((p) => p.id);
   } catch (err) {
@@ -348,7 +366,12 @@ router.post("/execute", verifyToken, asyncRoute(async (req: AuthRequest, res: Re
   // Les produits sont créés PENDING (file persistante) : le worker calcule leurs embeddings locaux (poapoai, sans OpenAI).
   // « queued » : file active ; l'état réel (prêts / en échec) est lu via GET /api/catalog/embeddings.
   const embeddings = createdIds.length === 0 ? "none" : process.env.AI_SERVICE_URL ? "queued" : "unavailable";
-  const result = { created: createdIds.length, skipped: evaluations.length - createdIds.length, errors, embeddings, catalog: toCatalogRef(catalog) };
+  // En-têtes d'origine des informations conservées (clé stable → libellé du commerçant, accents et unités compris) : relus pour formuler les questions.
+  const labels = Object.fromEntries((req.body.mapping as FieldMapping[]).flatMap(({ sourceColumn, targetField }) => {
+    const header = sourceColumn.trim().slice(0, 80);
+    return targetField?.startsWith("attribute.") && header ? [[targetField.slice("attribute.".length), header]] : [];
+  }));
+  const result = { created: createdIds.length, skipped: evaluations.length - createdIds.length, errors, embeddings, catalog: toCatalogRef(catalog), labels };
   await prisma.importBatch.update({ where: batchKey, data: { status: "completed", result: result as unknown as Prisma.InputJsonObject } });
   if (embeddings === "queued") kickEmbeddingWorker();
   res.json(result);

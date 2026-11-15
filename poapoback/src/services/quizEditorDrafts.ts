@@ -1,10 +1,12 @@
 import { Prisma } from "@prisma/client";
-import type { QuizEditorDraft, QuizEditorDraftResponse, QuizEditorQuestion } from "@poapo/types";
+import type { AnswerEffects, QuizEditorDraft, QuizEditorDraftResponse, QuizEditorQuestion } from "@poapo/types";
 import { parseQuizTheme } from "@poapo/types";
 import { prisma } from "../lib/prisma";
+import { parseAnswerEffects } from "./answerEffects";
 import { AxisValidationError, parseAxes, validateAxes } from "./axes";
 import { resolveCatalog, validateCatalogProducts } from "./catalogs";
 import { QuizError, resolveQuiz, type ScopedQuiz } from "./quizzes";
+import { differsFromPublished, unpublishedDrafts } from "./quizDraftChanges";
 
 const CONFLICT = "Conflit de révision : le brouillon a été modifié ou abandonné ailleurs. Rechargez-le avant de réessayer.";
 const NEW_ID = /^draft_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -47,12 +49,10 @@ function list(raw: unknown, label: string): unknown[] {
   return raw;
 }
 
-export async function publishedContent(quiz: ScopedQuiz, db: Prisma.TransactionClient = prisma): Promise<QuizEditorDraft> {
-  const questions = await db.question.findMany({
-    where: { tenantId: quiz.tenantId, quizId: quiz.id },
-    orderBy: [{ order: "asc" }, { id: "asc" }],
-    include: { answers: { orderBy: [{ order: "asc" }, { id: "asc" }] } },
-  });
+type PublishedQuestions = Prisma.QuestionGetPayload<{ include: { answers: true } }>[];
+
+/** Contenu publié d'un quiz, à partir de ses questions déjà chargées (ordonnées par ordre puis identifiant). */
+export function toPublishedContent(quiz: ScopedQuiz, questions: PublishedQuestions): QuizEditorDraft {
   return {
     schemaVersion: 1,
     ...(quiz.publishedTheme != null && { theme: parseQuizTheme(quiz.publishedTheme) }),
@@ -67,21 +67,37 @@ export async function publishedContent(quiz: ScopedQuiz, db: Prisma.TransactionC
       answers: q.answers.map((a) => ({
         id: a.id, text: a.text, emoji: a.emoji, imageUrl: a.imageUrl, order: a.order, active: a.active,
         impacts: object(a.impacts, "Impacts publiés") as Record<string, number>,
+        // Clé absente tant qu'il n'y a pas d'effets : le contenu des réponses existantes reste strictement identique.
+        ...(a.effects ? { effects: a.effects as unknown as AnswerEffects } : {}),
       })),
     })),
   };
 }
 
+export async function publishedContent(quiz: ScopedQuiz, db: Prisma.TransactionClient = prisma): Promise<QuizEditorDraft> {
+  const questions = await db.question.findMany({
+    where: { tenantId: quiz.tenantId, quizId: quiz.id },
+    orderBy: [{ order: "asc" }, { id: "asc" }],
+    include: { answers: { orderBy: [{ order: "asc" }, { id: "asc" }] } },
+  });
+  return toPublishedContent(quiz, questions);
+}
+
+/** Brouillons réellement différents de la version publiée (voir quizDraftChanges). */
+export const unpublishedDraftsOf = (db: Prisma.TransactionClient, tenantId: string) => unpublishedDrafts(db, tenantId, toPublishedContent);
+
 export async function readQuizEditorDraft(tenantId: string, quizId: unknown): Promise<QuizEditorDraftResponse> {
   return prisma.$transaction(async (db) => {
     const quiz = await resolveQuiz(tenantId, quizId, false, db);
     const row = await db.quizEditorDraft.findFirst({ where: { tenantId, quizId: quiz.id } });
+    const published = await publishedContent(quiz, db);
     return {
       quizId: quiz.id,
       revision: row?.revision ?? 0,
-      hasChanges: row?.content != null,
+      // Le brouillon est toujours renvoyé tel qu'enregistré ; seul l'indicateur ignore un brouillon équivalent au publié.
+      hasChanges: row?.content != null && differsFromPublished(row.content, published),
       updatedAt: row?.updatedAt.toISOString() ?? null,
-      draft: row?.content != null ? row.content as unknown as QuizEditorDraft : await publishedContent(quiz, db),
+      draft: row?.content != null ? row.content as unknown as QuizEditorDraft : published,
     };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
@@ -152,10 +168,19 @@ export async function validateContent(quiz: ScopedQuiz, raw: unknown, db: Prisma
           }
           validated[key] = value;
         }
+        // Effets : clé absente = le client ne les connaît pas, on conserve ceux de la version publiée (jamais d'effacement silencieux) ;
+        // null = effacement explicite ; sinon validation stricte.
+        let effects: AnswerEffects | undefined;
+        if (a.effects === undefined) effects = original?.answer.effects ?? undefined;
+        else if (a.effects !== null) {
+          const parsed = parseAnswerEffects(a.effects);
+          if (!parsed.ok) throw new QuizError(400, `Effets invalides : ${parsed.errors.join(" ; ")}`);
+          effects = parsed.value.effects.length ? parsed.value : undefined;
+        }
         return {
           id: answerId, text: text(a.text, "Réponse"), emoji: nullableText(a.emoji, "Emoji"),
           imageUrl: nullableText(a.imageUrl, "Image"), active: bool(a.active, "Activation"),
-          order: order(a.order), impacts: validated,
+          order: order(a.order), impacts: validated, ...(effects ? { effects } : {}),
         };
       }),
     };
@@ -215,7 +240,9 @@ export async function saveQuizEditorDraft(tenantId: string, quizId: unknown, raw
   const content = JSON.parse(JSON.stringify(draft)) as Prisma.InputJsonValue;
   const updatedAt = await writeContent(tenantId, quiz.id, revision, content);
   // Return the acknowledged document/revision, never a later concurrent writer's document.
-  return { quizId: quiz.id, revision: revision + 1, hasChanges: true, updatedAt, draft } satisfies QuizEditorDraftResponse;
+  // L'indicateur reste cohérent avec la lecture : un brouillon revenu à l'identique du publié n'est pas une modification.
+  const hasChanges = differsFromPublished(content, await publishedContent(quiz));
+  return { quizId: quiz.id, revision: revision + 1, hasChanges, updatedAt, draft } satisfies QuizEditorDraftResponse;
 }
 
 export async function discardQuizEditorDraft(tenantId: string, quizId: unknown, rawRevision: unknown) {

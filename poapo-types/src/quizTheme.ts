@@ -121,7 +121,7 @@ export function resolveQuizTheme(branding: QuizBranding, theme?: QuizTheme | nul
     startLabel: theme?.startLabel ?? "Commencer le quiz",
     previousLabel: theme?.previousLabel ?? "Retour",
     nextLabel: theme?.nextLabel ?? "Suivant",
-    submitLabel: theme?.submitLabel ?? "Envoyer mes reponses",
+    submitLabel: theme?.submitLabel ?? "Envoyer mes réponses",
     restartLabel: theme?.restartLabel ?? "Recommencer le quiz",
   };
 }

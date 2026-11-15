@@ -260,6 +260,9 @@ model Answer {
   active     Boolean  @default(true)
   // Impacts sur les axes du quiz : { <clé d'axe>: delta }
   impacts    Json     @default("{}")
+  // Effets additifs d'une réponse (contraintes strictes, préférences catégorielles ou de plage) : { v, effects: [...] }.
+  // NULL = comportement historique (seuls les impacts comptent). Validé par services/answerEffects.ts.
+  effects    Json?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

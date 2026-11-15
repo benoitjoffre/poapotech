@@ -5,7 +5,8 @@ import { verifyToken, AuthRequest } from "../middleware/auth";
 import type { QuizSubmitPayload, MetricType } from "@poapo/types";
 import { publicQuizScope, adminQuizScope, getQuiz, asyncRoute } from "../services/quizzes";
 import { parseAxes } from "../services/axes";
-import { recommendQuiz } from "../services/quizRecommendations";
+import { recommendQuizWithEffects } from "../services/effectsRecommendation";
+import { presentProduct, publishedPresentationContext } from "../services/productPresentation";
 import { QuizError } from "../services/quizzes";
 import { EntitlementError, findReplay, parseIdempotencyKey, recordServedRecommendation, requireFeature, submissionFingerprint } from "../services/entitlements";
 import { validateTrackEvent, validateFeedback, signFeedbackToken, verifyFeedbackToken } from "../services/analyticsEvents";
@@ -92,9 +93,11 @@ router.get("/questions", publicQuizScope, asyncRoute(async (req: Request, res: R
     where: { tenantId: clientId, quizId: getQuiz(res).id, active: true },
     orderBy: { order: "asc" },
     include: {
+      // `effects` reste interne (contraintes et préférences) : la réponse publique garde exactement sa forme historique.
       answers: {
         where: { active: true },
         orderBy: { order: "asc" },
+        omit: { effects: true },
       },
     },
   });
@@ -158,10 +161,15 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
     }
 
     const axes = parseAxes(quiz.axes);
-    const { product, explanation, profileSummary } = await recommendQuiz({
+    // Même traitement des effets que l'aperçu ; sans effets, c'est exactement l'ancien appel au moteur.
+    const { product, explanation, profileSummary, selection, diagnostics } = await recommendQuizWithEffects({
       tenantId: clientId, catalogId: quiz.catalogId, industry: quiz.industry,
-      axes, productIds, impacts: answerDocs.map((ans) => ans.impacts),
+      axes, productIds, answers: answerDocs.map((ans) => ({ questionId: ans.questionId, impacts: ans.impacts, effects: ans.effects })),
     });
+    // Dégradations techniques visibles dans les journaux, jamais dans la réponse publique.
+    if (diagnostics?.degraded.length) console.warn("[quiz] recommandation dégradée:", diagnostics.degraded.join(","), "quiz", quiz.id);
+    // Fiche publique : seules les caractéristiques que le quiz utilise, avec des libellés lisibles ; aucune donnée interne transmise.
+    const presented = presentProduct(product, explanation, await publishedPresentationContext(clientId, quiz, axes));
 
     // La session et la consommation du quota sont créées dans la même transaction (rien n'est consommé en cas d'échec).
     const { response } = await recordServedRecommendation({ tenantId: clientId, key: idempotencyKey, fingerprint, create: async (tx) => {
@@ -177,7 +185,7 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
       },
     });
 
-    return { sessionId: session.id, feedbackToken: signFeedbackToken(session.id, clientId, quiz.id), quizId: quiz.id, industry: quiz.industry, product, explanation, profileSummary };
+    return { sessionId: session.id, feedbackToken: signFeedbackToken(session.id, clientId, quiz.id), quizId: quiz.id, industry: quiz.industry, product: presented.product, explanation: presented.explanation, ...(presented.characteristics.length && { characteristics: presented.characteristics }), profileSummary, ...(selection && { selection }) };
     } });
     res.json(response);
   } catch (err) {
@@ -187,7 +195,7 @@ router.post("/submit", publicQuizScope, async (req: Request, res: Response) => {
       return;
     }
     if (err instanceof QuizError) {
-      res.status(err.status).json({ error: err.message });
+      res.status(err.status).json({ error: err.message, ...(err.code && { code: err.code }) });
       return;
     }
     console.error("[quiz] submit error:", err);

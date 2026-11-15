@@ -58,3 +58,48 @@ export async function recommendQuiz(input: RecommendationInput) {
   if (!product) throw new QuizError(502, "La recommandation renvoyée ne correspond à aucun produit");
   return { product, explanation, profileSummary };
 }
+
+export interface EngineRecommendation {
+  productId: string;
+  score: number;
+  explanation: string[];
+  profileSummary: Record<string, unknown>;
+  /** Meilleurs produits notés par le moteur (≤ 10, limite de l'API Python), du meilleur au moins bon. */
+  topN: { id: string; score: number }[];
+}
+
+export interface EngineRequest {
+  tenantId: string;
+  catalogId: string;
+  industry: string;
+  axes: QuizAxis[];
+  profile: Record<string, number>;
+  productIds?: string[];
+  topN: number;
+}
+
+/**
+ * Appel brut à /recommend avec un `topN` (utilisé par le traitement des effets de réponses). Mêmes délais et mêmes erreurs
+ * publiques que `recommendQuiz`, dont le comportement n'est pas modifié.
+ */
+export async function fetchRecommend(input: EngineRequest): Promise<EngineRecommendation> {
+  const aiUrl = process.env.AI_SERVICE_URL;
+  if (!aiUrl) throw new QuizError(503, "Service IA non disponible");
+  let response: Response;
+  try {
+    response = await fetch(`${aiUrl}/recommend`, {
+      method: "POST", headers: aiHeaders(), body: JSON.stringify(input), signal: AbortSignal.timeout(RECOMMEND_TIMEOUT_MS),
+    });
+  } catch (err) {
+    const timedOut = err instanceof Error && (err.name === "TimeoutError" || err.name === "AbortError");
+    console.error("[recommend]", timedOut ? "timeout" : "service unreachable", err);
+    throw timedOut
+      ? new QuizError(504, "Le moteur de recommandation met trop de temps à répondre. Réessayez dans un instant.")
+      : new QuizError(503, "Le moteur de recommandation est momentanément indisponible. Réessayez dans un instant.");
+  }
+  if (!response.ok) {
+    console.error("[recommend] AI service status", response.status);
+    throw new QuizError(response.status === 503 ? 503 : 502, "Le moteur de recommandation n'a pas pu calculer le résultat. Réessayez dans un instant.");
+  }
+  return await response.json() as EngineRecommendation;
+}

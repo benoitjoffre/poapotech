@@ -1264,3 +1264,12 @@ body {
 .result-restart-btn:hover {
   opacity: 0.7;
 }
+
+.result-notice {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.05);
+  font-size: 0.95rem;
+  text-align: center;
+}

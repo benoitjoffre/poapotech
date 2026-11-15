@@ -7,7 +7,8 @@ import type { AuthRequest } from "../middleware/auth";
 import { ensureDefaultCatalog } from "./catalogs";
 
 export class QuizError extends Error {
-  constructor(public status: number, message: string) {
+  /** `code` : identifiant stable facultatif d'un état explicite (ex. « no_match »), jamais une structure interne. */
+  constructor(public status: number, message: string, public code?: string) {
     super(message);
     this.name = "QuizError";
   }

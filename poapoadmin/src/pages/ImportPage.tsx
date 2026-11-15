@@ -5,31 +5,17 @@ import EmbeddingStatus from "../components/EmbeddingStatus";
 import { useQuiz } from "../contexts/QuizContext";
 import { catalogAxes, CatalogSelect, useCatalogSelection } from "../lib/catalogs";
 import {
-  PRODUCT_TARGETS, destinationKind, destinationLabel, duplicateTargets, exampleCsv,
-  type FieldMapping, type ImportPreview, type ImportResult,
+  KIND_LABELS, PRODUCT_TARGETS, destinationKind, destinationLabel, duplicateTargets, exampleCsv, pendingSuggestions,
+  type FieldMapping, type ImportColumnInsight, type ImportPreview, type ImportResult,
 } from "../lib/importGuide";
-
-/** « Pays d'origine » → « paysDOrigine » : nom d'attribut dérivé de la colonne CSV. */
-function attributeKeyFromColumn(column: string): string {
-  const words = column
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^A-Za-z0-9]+/g, " ")
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
-  const key = words
-    .map((word, index) => (index === 0 ? word.toLowerCase() : word[0].toUpperCase() + word.slice(1).toLowerCase()))
-    .join("")
-    .replace(/^[0-9]+/, "");
-  return (key || "attribut").slice(0, 40);
-}
 
 type Step = 1 | 2 | 3;
 interface ParsedData {
   headers: string[];
   rows: Record<string, string>[];
   suggestedMapping: FieldMapping[];
+  /** Lecture des colonnes (type détecté, exemple, informations supplémentaires proposées). Absent des anciennes réponses. */
+  columns?: ImportColumnInsight[];
   total: number;
 }
 
@@ -66,6 +52,10 @@ export default function ImportPage() {
   const ignoredColumns = mapping.filter((m) => !m.targetField);
   const unmappedAxes = axes.filter((axis) => !mapping.some((m) => m.targetField === `attribute.${axis.key}`));
   const mappingValid = hasNameField && duplicates.size === 0;
+  const insights = useMemo(() => new Map((parsedData?.columns ?? []).map((column) => [column.sourceColumn, column])), [parsedData]);
+  const pending = useMemo(() => pendingSuggestions(parsedData?.columns ?? [], mapping), [parsedData, mapping]);
+  const recommendedPending = pending.filter((column) => column.suggestion?.recommended);
+  const recognizedCount = (parsedData?.columns ?? []).filter((column) => column.status === "standard").length;
 
   const chooseFile = (candidate: File | undefined) => {
     if (!candidate) return;
@@ -117,6 +107,15 @@ export default function ImportPage() {
   const setTargetField = (col: string, target: string | null) => {
     setPreview(null);
     setMapping((prev) => prev.map((m) => (m.sourceColumn === col ? { ...m, targetField: target || null, auto: false } : m)));
+  };
+
+  /** Confirme des informations supplémentaires proposées : la seule façon de les conserver. */
+  const confirmSuggestions = (columns: ImportColumnInsight[]) => {
+    setPreview(null);
+    setMapping((prev) => prev.map((m) => {
+      const column = columns.find((c) => c.sourceColumn === m.sourceColumn);
+      return column?.suggestion && !m.targetField ? { ...m, targetField: column.suggestion.targetField, auto: false } : m;
+    }));
   };
 
   // Étape 3 : validation côté serveur, sans aucune écriture.
@@ -287,17 +286,32 @@ export default function ImportPage() {
             <button type="button" className="btn-ghost" onClick={() => setStep(1)}>← Retour</button>
           </div>
 
+          {parsedData.columns && (
+            <div className="import-summary" data-testid="import-columns-summary">
+              <strong>{plural(recognizedCount, "colonne reconnue", "colonnes reconnues")}</strong> automatiquement ·{" "}
+              <strong>{plural(pending.length, "information supplémentaire proposée", "informations supplémentaires proposées")}</strong> (à confirmer) ·{" "}
+              <strong>{plural(ignoredColumns.length, "colonne ignorée", "colonnes ignorées")}</strong>
+              {recommendedPending.length > 0 && (
+                <> {" "}<button type="button" className="btn-ghost" onClick={() => confirmSuggestions(recommendedPending)}>
+                  Conserver les {recommendedPending.length} colonnes recommandées
+                </button></>
+              )}
+              <p className="section-hint">Les informations supplémentaires (genre, famille, matière…) servent à mieux comprendre vos produits. Elles ne sont enregistrées que si vous les conservez.</p>
+            </div>
+          )}
+
           <div className="table-wrap" style={{ marginTop: 12 }}>
             <table className="table">
               <thead>
-                <tr><th>Colonne du fichier</th><th>Destination POAPO</th><th>Exemple de valeur</th></tr>
+                <tr><th>Colonne du fichier</th><th>Destination POAPO</th><th>Contenu détecté</th></tr>
               </thead>
               <tbody>
                 {mapping.map(({ sourceColumn, targetField, auto }) => {
                   const kind = destinationKind(targetField, axes);
                   const example = parsedData.rows.find((row) => (row[sourceColumn] ?? "").trim())?.[sourceColumn] ?? "—";
-                  const free = `attribute.${attributeKeyFromColumn(sourceColumn)}`;
-                  const freeOptions = [...new Set([free, ...(kind === "attribute" && targetField ? [targetField] : [])])]
+                  const insight = insights.get(sourceColumn);
+                  const free = insight?.suggestion?.targetField;
+                  const freeOptions = [...new Set([...(free ? [free] : []), ...(kind === "attribute" && targetField ? [targetField] : [])])]
                     .filter((value) => !axes.some((axis) => `attribute.${axis.key}` === value));
                   return (
                     <tr key={sourceColumn} className={targetField && duplicates.has(targetField) ? "import-row-conflict" : kind === "ignored" ? "import-row-ignored" : undefined}>
@@ -319,20 +333,44 @@ export default function ImportPage() {
                               {axes.map((axis) => <option key={axis.key} value={`attribute.${axis.key}`}>Axe : {axis.label}</option>)}
                             </optgroup>
                           )}
-                          <optgroup label="Attributs sectoriels (informations libres)">
-                            {freeOptions.map((value) => <option key={value} value={value}>Attribut « {value.slice("attribute.".length)} »</option>)}
-                          </optgroup>
+                          {freeOptions.length > 0 && (
+                            <optgroup label="Conserver comme information supplémentaire">
+                              {freeOptions.map((value) => <option key={value} value={value}>Information « {value.slice("attribute.".length)} »</option>)}
+                            </optgroup>
+                          )}
                         </select>
                         <div className="import-dest-note">
                           {kind === "ignored" && <span className="import-warn">⚠ Colonne ignorée : ses valeurs ne seront pas importées.</span>}
                           {targetField && duplicates.has(targetField) && <span className="import-error">Destination déjà utilisée par une autre colonne.</span>}
                           {kind === "axis" && <span className="import-tag">Axe de recommandation</span>}
-                          {kind === "attribute" && <span className="import-tag">Attribut sectoriel</span>}
+                          {kind === "attribute" && <span className="import-tag">Information supplémentaire</span>}
                           {kind === "product" && <span className="import-tag">Champ produit</span>}
                           {auto && <span className="import-tag import-tag-auto">auto</span>}
                         </div>
+                        {!targetField && insight?.status === "suggested" && insight.suggestion && (
+                          <div className="import-dest-note">
+                            <span className="import-warn">
+                              Suggestion : {insight.suggestion.recommended ? "conserver" : "conserver (facultatif)"} cette colonne comme information supplémentaire « {insight.suggestion.key} »
+                              {insight.suggestion.renamed ? " (nom ajusté, déjà utilisé)" : ""}.
+                            </span>{" "}
+                            <button type="button" className="btn-ghost" onClick={() => confirmSuggestions([insight])}>Conserver</button>
+                          </div>
+                        )}
+                        {!targetField && insight?.status === "empty" && <div className="import-dest-note"><span className="import-warn">Colonne vide : rien à importer.</span></div>}
+                        {!targetField && insight?.status === "unrecognized" && <div className="import-dest-note"><span className="import-warn">Non reconnue : choisissez une destination ou ignorez-la.</span></div>}
+                        {targetField === "price" && insight && insight.detected !== "number" && insight.detected !== "empty" && (
+                          <div className="import-dest-note"><span className="import-warn">Cette colonne ne ressemble pas à des prix : vérifiez l'aperçu avant d'importer.</span></div>
+                        )}
                       </td>
-                      <td className="table-preview-cell">{example}</td>
+                      <td className="table-preview-cell">
+                        <div>{example}</div>
+                        {insight && (
+                          <div className="import-dest-note">
+                            <span className="import-tag">{KIND_LABELS[insight.detected]}</span>
+                            {insight.notes.map((note) => <div key={note} className="section-hint">{note}</div>)}
+                          </div>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -376,6 +414,31 @@ export default function ImportPage() {
 
           {preview.mappingIssues.filter((i) => i.severity === "error").map((i) => <p key={i.message} className="import-error">⛔ {i.message}</p>)}
           {preview.mappingIssues.filter((i) => i.severity === "warning").map((i) => <p key={i.message} className="import-warn">⚠ {i.message}</p>)}
+
+          {parsedData.columns && (
+            <>
+              <h3 className="section-title" style={{ fontSize: 14, marginTop: 16 }}>Vos colonnes</h3>
+              <div className="table-wrap" style={{ overflowX: "auto" }} data-testid="import-columns-recap">
+                <table className="table">
+                  <thead><tr><th>Colonne</th><th>Importée comme</th><th>Contenu</th><th>Exemple</th><th>Remarque</th></tr></thead>
+                  <tbody>
+                    {mapping.map(({ sourceColumn, targetField }) => {
+                      const insight = insights.get(sourceColumn);
+                      return (
+                        <tr key={sourceColumn}>
+                          <td><code style={{ fontSize: 12 }}>{sourceColumn}</code></td>
+                          <td>{targetField ? destinationLabel(targetField, axes).replace(/^Attribut : /, "Information : ") : "Ignorée"}</td>
+                          <td>{insight ? KIND_LABELS[insight.detected] : "—"}</td>
+                          <td className="table-preview-cell">{insight?.example ?? "—"}</td>
+                          <td className="table-preview-cell">{targetField ? insight?.notes.join(" ") : "Non importée."}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
 
           {preview.sample.length > 0 && (
             <>

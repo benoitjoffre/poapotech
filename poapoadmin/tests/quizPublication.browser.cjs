@@ -134,7 +134,7 @@ async function main() {
   assert.equal(style.body, "rgb(250, 240, 221)");
   await publicPage.getByRole("button", { name: "Mon voyage", exact: true }).click();
   await publicPage.getByLabel("Calme", { exact: true }).click();
-  await publicPage.getByRole("button", { name: "Envoyer mes reponses", exact: true }).click();
+  await publicPage.getByRole("button", { name: "Envoyer mes réponses", exact: true }).click();
   try {
     await publicPage.getByRole("heading", { name: product.name }).waitFor({ timeout: 20000 });
   } catch (err) {
