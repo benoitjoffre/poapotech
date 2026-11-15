@@ -72,11 +72,6 @@ test("PostgreSQL : synthèse « Mes expériences » isolée, sans double comptag
       tenantId: id, quizId, text: "Question ?", answers: { create: [{ text: "Oui", order: 0, impacts: {} }] },
     } });
     await prisma.question.create({ data: { tenantId: id, quizId: shared.id, text: "Inactive", active: false, answers: { create: [] } } });
-    for (const name of ["Une", "Deux", "Trois"]) await prisma.campaign.create({ data: {
-      tenantId: id, quizId: shared.id, name, occasion: "PERMANENT", objectives: [],
-      status: name === "Deux" ? "PAUSED" : "ACTIVE",
-    } });
-    await prisma.campaign.create({ data: { tenantId: other, quizId: foreign.id, name: "Campagne étrangère", occasion: "SPRING", objectives: [] } });
     await prisma.quizEditorDraft.create({ data: { tenantId: id, quizId: shared.id, content: { config: { name: "Partagé" } } } });
     await prisma.metric.createMany({ data: [
       { tenantId: id, quizId: shared.id, type: "quiz_start" }, { tenantId: id, quizId: shared.id, type: "quiz_start" },
@@ -91,20 +86,20 @@ test("PostgreSQL : synthèse « Mes expériences » isolée, sans double comptag
       assert.equal(result.experiences.length, 3);
       const byId = new Map(result.experiences.map((item) => [item.id, item]));
       const sharedItem = byId.get(shared.id)!;
-      assert.deepEqual(sharedItem.campaigns.map((item) => item.name).sort(), ["Deux", "Trois", "Une"]);
       assert.deepEqual(sharedItem.stats, { started: 2, completed: 1, productClicks: 1 });
       assert.equal(sharedItem.hasDraft, true);
       assert.ok(sharedItem.draftUpdatedAt);
       assert.equal(sharedItem.questionCount, 1);
       assert.equal(sharedItem.accessible, true);
+      assert.equal(sharedItem.active, true);
       assert.equal(sharedItem.catalog.name, "Principal");
       const standaloneItem = byId.get(standalone.id)!;
-      assert.deepEqual(standaloneItem.campaigns, []);
       assert.equal(standaloneItem.stats, null);
       assert.equal(standaloneItem.hasDraft, false);
       assert.equal(standaloneItem.catalog.name, "Second");
       const inactiveItem = byId.get(inactive.id)!;
       assert.equal(inactiveItem.accessible, false);
+      assert.equal(inactiveItem.active, false);
       assert.equal(inactiveItem.correction, "Aucune question active.");
     });
 
@@ -122,6 +117,7 @@ test("PostgreSQL : synthèse « Mes expériences » isolée, sans double comptag
       const result = await overview();
       assert.equal(result.shopActive, false);
       assert.ok(result.experiences.every((item) => !item.accessible));
+      assert.ok(result.experiences.some((item) => item.active), "une boutique désactivée ne masque pas l'état actif du quiz");
       assert.equal(await prisma.quiz.count({ where: { tenantId: id } }), before);
     });
   } finally {

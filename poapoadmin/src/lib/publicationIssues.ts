@@ -20,6 +20,7 @@ export function issueTarget(issue: QuizPublicationIssue, config: ConfigShape | n
   const message = issue.message;
   switch (issue.code) {
     case "NO_PRODUCTS": return { section: "products", elementId: "quiz-use-all-products" };
+    case "NO_USABLE_ATTRIBUTES":
     case "MISSING_ATTRIBUTES":
     case "MISSING_EMBEDDINGS": return { section: "products", elementId: "xe-products-title" };
     case "INVALID_CONFIG": {

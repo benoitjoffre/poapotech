@@ -80,7 +80,7 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
   const currentQuestion = questions[currentQuestionIndex] ?? null;
   const nextQuestion = questions[currentQuestionIndex + 1] ?? null;
 
-  const quizTitle = config?.quizTitle || "Trouve ton produit idéal";
+  const quizTitle = config?.quizTitle || "Trouvez votre produit idéal";
   const ctaText = config?.ctaText || "Découvrir ma sélection";
 
   useEffect(() => {
@@ -203,7 +203,7 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
     setError("");
     setResult(null);
     if (answeredCount !== questionsCount) {
-      setError("Merci de repondre a toutes les questions avant de valider.");
+      setError("Merci de répondre à toutes les questions avant de valider.");
       return;
     }
     if (!clientId && !preview) {
@@ -235,9 +235,14 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
       });
       if (!res.ok) {
         const failure = (await res.json().catch(() => ({}))) as { code?: string };
+        // États explicites des critères stricts : messages fixes et compréhensibles, jamais de détail technique.
         throw new Error(failure.code === "quota_exceeded"
           ? "Cette sélection personnalisée est momentanément indisponible. Merci de réessayer plus tard."
-          : "Une erreur est survenue. Merci de reessayer.");
+          : failure.code === "no_match"
+            ? "Aucun produit ne correspond à tous vos critères. Modifiez vos réponses (par exemple votre budget) pour élargir la sélection."
+            : failure.code === "constraints_unreliable"
+              ? "Nous ne pouvons pas garantir l'un de vos critères avec les informations actuelles de cette boutique. Essayez sans ce critère."
+              : "Une erreur est survenue. Merci de réessayer.");
       }
       submitKeyRef.current = null;
       const data = (await res.json()) as QuizResult & { sessionId?: string };
@@ -322,10 +327,8 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
 
   const profileAxes = result?.profileSummary?.axes ?? [];
   const productAttributes = result?.product?.attributes ?? {};
-  const axisKeys = new Set(profileAxes.map((axis) => axis.key));
-  const extraAttributes = Object.entries(productAttributes).filter(
-    ([key, value]) => !axisKeys.has(key) && value !== null && typeof value !== "object",
-  );
+  // Caractéristiques préparées par le serveur (libellés lisibles, données internes exclues) ; jamais de clé technique brute.
+  const characteristics = result?.characteristics ?? [];
 
   return (
     <div className="app">
@@ -345,7 +348,7 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
               <h1 className="title">
                 {quizTitle.split(" ").slice(0, -1).join(" ")} <span className="title-accent">{quizTitle.split(" ").slice(-1)[0]}</span>
               </h1>
-              <p>Réponds à quelques questions et découvre la recommandation adaptée à tes préférences.</p>
+              <p>Répondez à quelques questions et découvrez la recommandation adaptée à vos préférences.</p>
             </div>
           </div>
           {!hasStarted ? (
@@ -383,7 +386,7 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
 
       {!result && hasStarted && (
         <form className="quiz" onSubmit={handleSubmit}>
-          {isLoadingQuestions && <div className="question-card">Chargement des questions...</div>}
+          {isLoadingQuestions && <div className="question-card">Chargement des questions…</div>}
 
           {!isLoadingQuestions && currentQuestion && (
             <div className="question-card animate" key={currentQuestion.id}>
@@ -487,7 +490,7 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
                 type="submit"
                 disabled={isSubmitting || isLoadingQuestions || questionsCount === 0 || answeredCount !== questionsCount}
               >
-                {isSubmitting ? "Envoi en cours..." : (labels?.submitLabel ?? "Envoyer mes reponses")}
+                {isSubmitting ? "Envoi en cours…" : (labels?.submitLabel ?? "Envoyer mes réponses")}
               </button>
             )}
           </div>
@@ -496,6 +499,13 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
 
       {result && (
         <section className="result">
+          {result.selection?.limited && (
+            <p className="result-notice" role="status" data-testid="limited-results">
+              {result.selection.matched <= 1
+                ? "Un seul produit correspond exactement à vos critères : le voici."
+                : `Seulement ${result.selection.matched} produits correspondent exactement à vos critères : voici le meilleur.`}
+            </p>
+          )}
           {/* ── Hero ── */}
           <div className="result-hero">
             {result.product?.imageUrl ? (
@@ -551,13 +561,13 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
           )}
 
           {/* ── Caractéristiques ── */}
-          {extraAttributes.length > 0 && (
-            <div className="result-grid">
-              {extraAttributes.map(([key, value]) => (
-                <div key={key}>
-                  <div className="result-subtitle">{key}</div>
+          {characteristics.length > 0 && (
+            <div className="result-grid" data-testid="result-characteristics">
+              {characteristics.map((item) => (
+                <div key={item.key}>
+                  <div className="result-subtitle">{item.label}</div>
                   <div className="chip-row">
-                    <span className="chip">{String(value)}</span>
+                    <span className="chip">{item.value}</span>
                   </div>
                 </div>
               ))}
@@ -568,12 +578,12 @@ export function QuizContent({ preview }: { preview?: QuizPreviewRuntime }) {
           {profileAxes.length > 0 && (
             <div className="result-summary">
               <button type="button" className="accordion-toggle" onClick={() => setIsProfileOpen((prev) => !prev)} aria-expanded={isProfileOpen}>
-                <span>Ton profil</span>
+                <span>Votre profil</span>
                 <span className="accordion-icon">{isProfileOpen ? "−" : "+"}</span>
               </button>
               {isProfileOpen && (
                 <div className="accordion-body">
-                  <div className="result-caption">Ce que tes réponses disent de tes préférences</div>
+                  <div className="result-caption">Ce que vos réponses disent de vos préférences</div>
                   <div className="summary-grid">
                     {profileAxes.map((axis) => (
                       <div className="summary-item" key={axis.key}>

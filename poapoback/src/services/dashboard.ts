@@ -1,3 +1,4 @@
+import { unpublishedDraftsOf } from "./quizEditorDrafts";
 import { Prisma } from "@prisma/client";
 import type { DashboardExperience, DashboardSummary } from "@poapo/types";
 import { prisma } from "../lib/prisma";
@@ -40,12 +41,10 @@ export async function dashboardSummary(tenantId: string, now = new Date()): Prom
         where: { tenantId, createdAt: { gte: since, lte: now }, type: { in: ["quiz_start", "quiz_complete", "buy_click"] } },
         _count: { _all: true },
       }),
-      // Fetch only draft metadata, never the potentially large editor document.
-      db.$queryRaw<{ quizId: string; updatedAt: Date }[]>`
-        SELECT "quizId", "updatedAt" FROM "QuizEditorDraft"
-        WHERE "tenantId" = ${tenantId} AND content IS NOT NULL AND content <> 'null'::jsonb`,
+      // Seuls les brouillons réellement différents de la version publiée comptent comme « modifications en cours ».
+      unpublishedDraftsOf(db, tenantId),
     ]);
-    const draftByQuiz = new Map(drafts.map((draft) => [draft.quizId, draft]));
+    const draftByQuiz = drafts;
     const activeProducts = new Map<string, number>();
     for (const group of products) if (group.active) activeProducts.set(group.catalogId, group._count._all);
     const counts = new Map<string, { started: number; completed: number; productClicks: number }>();
@@ -60,7 +59,8 @@ export async function dashboardSummary(tenantId: string, now = new Date()): Prom
       const productCount = quiz.useAllProducts ? activeProducts.get(quiz.catalogId) ?? 0 : quiz._count.products;
       return {
         id: quiz.id, name: quiz.name, catalog: quiz.catalog, accessible: shop.active && quiz.active,
-        hasDraft: draftByQuiz.has(quiz.id), draftUpdatedAt: draftByQuiz.get(quiz.id)?.updatedAt.toISOString() ?? null,
+        hasDraft: draftByQuiz.has(quiz.id), draftUpdatedAt: draftByQuiz.get(quiz.id)?.toISOString() ?? null,
+        questionCount: quiz._count.questions,
         correction: !quiz._count.questions ? "Aucune question active."
           : !productCount ? "Aucun produit actif recommandable." : null,
         ...(counts.get(quiz.id) ?? { started: 0, completed: 0, productClicks: 0 }),

@@ -1,0 +1,4197 @@
+{
+ "perfume": [
+  {
+   "options": {},
+   "analysis": {
+    "catalogId": "cat-Parfums",
+    "catalogName": "Parfums",
+    "productCount": 40,
+    "semanticProducts": 0,
+    "sector": "perfume",
+    "sectorLabel": "Parfum",
+    "sectorDetected": true,
+    "reliability": "reliable",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : contenance, sku."
+    ],
+    "candidates": [
+     {
+      "key": "freshness",
+      "label": "Fraîcheur",
+      "valuedProducts": 40,
+      "spread": 0.99,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "valuedProducts": 40,
+      "spread": 0.97,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "sweetness",
+      "label": "Douceur",
+      "valuedProducts": 40,
+      "spread": 0.97,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "woody",
+      "label": "Caractère boisé",
+      "valuedProducts": 40,
+      "spread": 0.98,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": []
+   },
+   "draft": {
+    "name": "Expérience express – Parfums",
+    "quizTitle": "Trouvez le parfum qui vous ressemble",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Parfumerie",
+    "axes": [
+     {
+      "key": "freshness",
+      "label": "Fraîcheur",
+      "lowLabel": "Chaleureux",
+      "highLabel": "Frais",
+      "description": "Sensation fraîche, aérienne ou chaude du parfum.",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.99 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.99
+     },
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "lowLabel": "Discret",
+      "highLabel": "Puissant",
+      "description": "Présence et sillage du parfum.",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.97 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.97
+     },
+     {
+      "key": "sweetness",
+      "label": "Douceur",
+      "lowLabel": "Sec",
+      "highLabel": "Gourmand",
+      "description": "Notes sucrées, vanillées ou gourmandes.",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.97 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.97
+     },
+     {
+      "key": "woody",
+      "label": "Caractère boisé",
+      "lowLabel": "Peu boisé",
+      "highLabel": "Très boisé",
+      "description": "Présence de notes de bois (cèdre, santal).",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.98 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.98
+     }
+    ],
+    "questions": [
+     {
+      "text": "Votre signature olfactive ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Propre et lumineuse",
+        "emoji": "🫧",
+        "impacts": {
+         "freshness": 0.2,
+         "woody": -0.1
+        }
+       },
+       {
+        "text": "Sensuelle et ambrée",
+        "emoji": "🌹",
+        "impacts": {
+         "sweetness": 0.15,
+         "intensity": 0.15
+        }
+       },
+       {
+        "text": "Boisée et élégante",
+        "emoji": "🎩",
+        "impacts": {
+         "woody": 0.2,
+         "intensity": 0.1
+        }
+       }
+      ]
+     },
+     {
+      "text": "Pour quelle occasion ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Au bureau, au quotidien",
+        "emoji": "💼",
+        "impacts": {
+         "intensity": -0.15,
+         "freshness": 0.1
+        }
+       },
+       {
+        "text": "Une soirée",
+        "emoji": "🌙",
+        "impacts": {
+         "intensity": 0.2,
+         "sweetness": 0.1
+        }
+       },
+       {
+        "text": "Un week-end nature",
+        "emoji": "🏞️",
+        "impacts": {
+         "woody": 0.2,
+         "freshness": 0.1
+        }
+       }
+      ]
+     },
+     {
+      "text": "Côté douceur ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Sec, peu sucré",
+        "emoji": "🌿",
+        "impacts": {
+         "sweetness": -0.25
+        }
+       },
+       {
+        "text": "Gourmand, vanillé",
+        "emoji": "🍦",
+        "impacts": {
+         "sweetness": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Quelle saison vous inspire ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "L'été",
+        "emoji": "☀️",
+        "impacts": {
+         "freshness": 0.2,
+         "sweetness": -0.1
+        }
+       },
+       {
+        "text": "L'hiver",
+        "emoji": "❄️",
+        "impacts": {
+         "freshness": -0.2,
+         "sweetness": 0.1,
+         "woody": 0.1
+        }
+       },
+       {
+        "text": "La mi-saison",
+        "emoji": "🍂",
+        "impacts": {
+         "woody": 0.1,
+         "intensity": -0.05
+        }
+       }
+      ]
+     },
+     {
+      "text": "Quelle sensation recherchez-vous en vaporisant ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Chaude et enveloppante",
+        "emoji": "🔥",
+        "impacts": {
+         "freshness": -0.25
+        }
+       },
+       {
+        "text": "Fraîche et vive",
+        "emoji": "💧",
+        "impacts": {
+         "freshness": 0.25
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [
+    {
+     "text": "Quel sillage souhaitez-vous ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Discret, de près",
+       "emoji": "🤫",
+       "impacts": {
+        "intensity": -0.25
+       }
+      },
+      {
+       "text": "Présent, qui se remarque",
+       "emoji": "✨",
+       "impacts": {
+        "intensity": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Les notes de bois vous parlent-elles ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Plutôt floral ou fruité",
+       "emoji": "🌸",
+       "impacts": {
+        "woody": -0.25
+       }
+      },
+      {
+       "text": "Oui, boisé (cèdre, santal)",
+       "emoji": "🪵",
+       "impacts": {
+        "woody": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté intensité, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Discret",
+       "emoji": null,
+       "impacts": {
+        "intensity": -0.25
+       }
+      },
+      {
+       "text": "Puissant",
+       "emoji": null,
+       "impacts": {
+        "intensity": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté caractère boisé, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Peu boisé",
+       "emoji": null,
+       "impacts": {
+        "woody": -0.25
+       }
+      },
+      {
+       "text": "Très boisé",
+       "emoji": null,
+       "impacts": {
+        "woody": 0.25
+       }
+      }
+     ]
+    }
+   ],
+   "top3Simulated": {
+    "first": [
+     "prf036",
+     "prf006",
+     "prf019"
+    ],
+    "last": [
+     "prf005",
+     "prf022",
+     "prf029"
+    ]
+   }
+  },
+  {
+   "options": {
+    "questionCount": 3
+   },
+   "analysis": {
+    "catalogId": "cat-Parfums",
+    "catalogName": "Parfums",
+    "productCount": 40,
+    "semanticProducts": 0,
+    "sector": "perfume",
+    "sectorLabel": "Parfum",
+    "sectorDetected": true,
+    "reliability": "reliable",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : contenance, sku."
+    ],
+    "candidates": [
+     {
+      "key": "freshness",
+      "label": "Fraîcheur",
+      "valuedProducts": 40,
+      "spread": 0.99,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "valuedProducts": 40,
+      "spread": 0.97,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "sweetness",
+      "label": "Douceur",
+      "valuedProducts": 40,
+      "spread": 0.97,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "woody",
+      "label": "Caractère boisé",
+      "valuedProducts": 40,
+      "spread": 0.98,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": []
+   },
+   "draft": {
+    "name": "Expérience express – Parfums",
+    "quizTitle": "Trouvez le parfum qui vous ressemble",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Parfumerie",
+    "axes": [
+     {
+      "key": "freshness",
+      "label": "Fraîcheur",
+      "lowLabel": "Chaleureux",
+      "highLabel": "Frais",
+      "description": "Sensation fraîche, aérienne ou chaude du parfum.",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.99 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.99
+     },
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "lowLabel": "Discret",
+      "highLabel": "Puissant",
+      "description": "Présence et sillage du parfum.",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.97 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.97
+     },
+     {
+      "key": "sweetness",
+      "label": "Douceur",
+      "lowLabel": "Sec",
+      "highLabel": "Gourmand",
+      "description": "Notes sucrées, vanillées ou gourmandes.",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.97 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.97
+     },
+     {
+      "key": "woody",
+      "label": "Caractère boisé",
+      "lowLabel": "Peu boisé",
+      "highLabel": "Très boisé",
+      "description": "Présence de notes de bois (cèdre, santal).",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.98 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.98
+     }
+    ],
+    "questions": [
+     {
+      "text": "Votre signature olfactive ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Propre et lumineuse",
+        "emoji": "🫧",
+        "impacts": {
+         "freshness": 0.2,
+         "woody": -0.1
+        }
+       },
+       {
+        "text": "Sensuelle et ambrée",
+        "emoji": "🌹",
+        "impacts": {
+         "sweetness": 0.15,
+         "intensity": 0.15
+        }
+       },
+       {
+        "text": "Boisée et élégante",
+        "emoji": "🎩",
+        "impacts": {
+         "woody": 0.2,
+         "intensity": 0.1
+        }
+       }
+      ]
+     },
+     {
+      "text": "Pour quelle occasion ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Au bureau, au quotidien",
+        "emoji": "💼",
+        "impacts": {
+         "intensity": -0.15,
+         "freshness": 0.1
+        }
+       },
+       {
+        "text": "Une soirée",
+        "emoji": "🌙",
+        "impacts": {
+         "intensity": 0.2,
+         "sweetness": 0.1
+        }
+       },
+       {
+        "text": "Un week-end nature",
+        "emoji": "🏞️",
+        "impacts": {
+         "woody": 0.2,
+         "freshness": 0.1
+        }
+       }
+      ]
+     },
+     {
+      "text": "Côté douceur ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Sec, peu sucré",
+        "emoji": "🌿",
+        "impacts": {
+         "sweetness": -0.25
+        }
+       },
+       {
+        "text": "Gourmand, vanillé",
+        "emoji": "🍦",
+        "impacts": {
+         "sweetness": 0.25
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [
+    {
+     "text": "Quelle sensation recherchez-vous en vaporisant ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Chaude et enveloppante",
+       "emoji": "🔥",
+       "impacts": {
+        "freshness": -0.25
+       }
+      },
+      {
+       "text": "Fraîche et vive",
+       "emoji": "💧",
+       "impacts": {
+        "freshness": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Quel sillage souhaitez-vous ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Discret, de près",
+       "emoji": "🤫",
+       "impacts": {
+        "intensity": -0.25
+       }
+      },
+      {
+       "text": "Présent, qui se remarque",
+       "emoji": "✨",
+       "impacts": {
+        "intensity": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Les notes de bois vous parlent-elles ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Plutôt floral ou fruité",
+       "emoji": "🌸",
+       "impacts": {
+        "woody": -0.25
+       }
+      },
+      {
+       "text": "Oui, boisé (cèdre, santal)",
+       "emoji": "🪵",
+       "impacts": {
+        "woody": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Quelle saison vous inspire ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "L'été",
+       "emoji": "☀️",
+       "impacts": {
+        "freshness": 0.2,
+        "sweetness": -0.1
+       }
+      },
+      {
+       "text": "L'hiver",
+       "emoji": "❄️",
+       "impacts": {
+        "freshness": -0.2,
+        "sweetness": 0.1,
+        "woody": 0.1
+       }
+      },
+      {
+       "text": "La mi-saison",
+       "emoji": "🍂",
+       "impacts": {
+        "woody": 0.1,
+        "intensity": -0.05
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté fraîcheur, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Chaleureux",
+       "emoji": null,
+       "impacts": {
+        "freshness": -0.25
+       }
+      },
+      {
+       "text": "Frais",
+       "emoji": null,
+       "impacts": {
+        "freshness": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté intensité, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Discret",
+       "emoji": null,
+       "impacts": {
+        "intensity": -0.25
+       }
+      },
+      {
+       "text": "Puissant",
+       "emoji": null,
+       "impacts": {
+        "intensity": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté caractère boisé, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Peu boisé",
+       "emoji": null,
+       "impacts": {
+        "woody": -0.25
+       }
+      },
+      {
+       "text": "Très boisé",
+       "emoji": null,
+       "impacts": {
+        "woody": 0.25
+       }
+      }
+     ]
+    }
+   ],
+   "top3Simulated": {
+    "first": [
+     "prf036",
+     "prf006",
+     "prf019"
+    ],
+    "last": [
+     "prf027",
+     "prf034",
+     "prf005"
+    ]
+   }
+  },
+  {
+   "options": {
+    "questionCount": 5
+   },
+   "analysis": {
+    "catalogId": "cat-Parfums",
+    "catalogName": "Parfums",
+    "productCount": 40,
+    "semanticProducts": 0,
+    "sector": "perfume",
+    "sectorLabel": "Parfum",
+    "sectorDetected": true,
+    "reliability": "reliable",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : contenance, sku."
+    ],
+    "candidates": [
+     {
+      "key": "freshness",
+      "label": "Fraîcheur",
+      "valuedProducts": 40,
+      "spread": 0.99,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "valuedProducts": 40,
+      "spread": 0.97,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "sweetness",
+      "label": "Douceur",
+      "valuedProducts": 40,
+      "spread": 0.97,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "woody",
+      "label": "Caractère boisé",
+      "valuedProducts": 40,
+      "spread": 0.98,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": []
+   },
+   "draft": {
+    "name": "Expérience express – Parfums",
+    "quizTitle": "Trouvez le parfum qui vous ressemble",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Parfumerie",
+    "axes": [
+     {
+      "key": "freshness",
+      "label": "Fraîcheur",
+      "lowLabel": "Chaleureux",
+      "highLabel": "Frais",
+      "description": "Sensation fraîche, aérienne ou chaude du parfum.",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.99 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.99
+     },
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "lowLabel": "Discret",
+      "highLabel": "Puissant",
+      "description": "Présence et sillage du parfum.",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.97 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.97
+     },
+     {
+      "key": "sweetness",
+      "label": "Douceur",
+      "lowLabel": "Sec",
+      "highLabel": "Gourmand",
+      "description": "Notes sucrées, vanillées ou gourmandes.",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.97 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.97
+     },
+     {
+      "key": "woody",
+      "label": "Caractère boisé",
+      "lowLabel": "Peu boisé",
+      "highLabel": "Très boisé",
+      "description": "Présence de notes de bois (cèdre, santal).",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.98 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.98
+     }
+    ],
+    "questions": [
+     {
+      "text": "Votre signature olfactive ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Propre et lumineuse",
+        "emoji": "🫧",
+        "impacts": {
+         "freshness": 0.2,
+         "woody": -0.1
+        }
+       },
+       {
+        "text": "Sensuelle et ambrée",
+        "emoji": "🌹",
+        "impacts": {
+         "sweetness": 0.15,
+         "intensity": 0.15
+        }
+       },
+       {
+        "text": "Boisée et élégante",
+        "emoji": "🎩",
+        "impacts": {
+         "woody": 0.2,
+         "intensity": 0.1
+        }
+       }
+      ]
+     },
+     {
+      "text": "Pour quelle occasion ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Au bureau, au quotidien",
+        "emoji": "💼",
+        "impacts": {
+         "intensity": -0.15,
+         "freshness": 0.1
+        }
+       },
+       {
+        "text": "Une soirée",
+        "emoji": "🌙",
+        "impacts": {
+         "intensity": 0.2,
+         "sweetness": 0.1
+        }
+       },
+       {
+        "text": "Un week-end nature",
+        "emoji": "🏞️",
+        "impacts": {
+         "woody": 0.2,
+         "freshness": 0.1
+        }
+       }
+      ]
+     },
+     {
+      "text": "Côté douceur ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Sec, peu sucré",
+        "emoji": "🌿",
+        "impacts": {
+         "sweetness": -0.25
+        }
+       },
+       {
+        "text": "Gourmand, vanillé",
+        "emoji": "🍦",
+        "impacts": {
+         "sweetness": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Quelle saison vous inspire ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "L'été",
+        "emoji": "☀️",
+        "impacts": {
+         "freshness": 0.2,
+         "sweetness": -0.1
+        }
+       },
+       {
+        "text": "L'hiver",
+        "emoji": "❄️",
+        "impacts": {
+         "freshness": -0.2,
+         "sweetness": 0.1,
+         "woody": 0.1
+        }
+       },
+       {
+        "text": "La mi-saison",
+        "emoji": "🍂",
+        "impacts": {
+         "woody": 0.1,
+         "intensity": -0.05
+        }
+       }
+      ]
+     },
+     {
+      "text": "Quelle sensation recherchez-vous en vaporisant ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Chaude et enveloppante",
+        "emoji": "🔥",
+        "impacts": {
+         "freshness": -0.25
+        }
+       },
+       {
+        "text": "Fraîche et vive",
+        "emoji": "💧",
+        "impacts": {
+         "freshness": 0.25
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [
+    {
+     "text": "Quel sillage souhaitez-vous ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Discret, de près",
+       "emoji": "🤫",
+       "impacts": {
+        "intensity": -0.25
+       }
+      },
+      {
+       "text": "Présent, qui se remarque",
+       "emoji": "✨",
+       "impacts": {
+        "intensity": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Les notes de bois vous parlent-elles ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Plutôt floral ou fruité",
+       "emoji": "🌸",
+       "impacts": {
+        "woody": -0.25
+       }
+      },
+      {
+       "text": "Oui, boisé (cèdre, santal)",
+       "emoji": "🪵",
+       "impacts": {
+        "woody": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté intensité, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Discret",
+       "emoji": null,
+       "impacts": {
+        "intensity": -0.25
+       }
+      },
+      {
+       "text": "Puissant",
+       "emoji": null,
+       "impacts": {
+        "intensity": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté caractère boisé, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Peu boisé",
+       "emoji": null,
+       "impacts": {
+        "woody": -0.25
+       }
+      },
+      {
+       "text": "Très boisé",
+       "emoji": null,
+       "impacts": {
+        "woody": 0.25
+       }
+      }
+     ]
+    }
+   ],
+   "top3Simulated": {
+    "first": [
+     "prf036",
+     "prf006",
+     "prf019"
+    ],
+    "last": [
+     "prf005",
+     "prf022",
+     "prf029"
+    ]
+   }
+  },
+  {
+   "options": {
+    "questionCount": 7
+   },
+   "analysis": {
+    "catalogId": "cat-Parfums",
+    "catalogName": "Parfums",
+    "productCount": 40,
+    "semanticProducts": 0,
+    "sector": "perfume",
+    "sectorLabel": "Parfum",
+    "sectorDetected": true,
+    "reliability": "reliable",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : contenance, sku."
+    ],
+    "candidates": [
+     {
+      "key": "freshness",
+      "label": "Fraîcheur",
+      "valuedProducts": 40,
+      "spread": 0.99,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "valuedProducts": 40,
+      "spread": 0.97,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "sweetness",
+      "label": "Douceur",
+      "valuedProducts": 40,
+      "spread": 0.97,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "woody",
+      "label": "Caractère boisé",
+      "valuedProducts": 40,
+      "spread": 0.98,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": []
+   },
+   "draft": {
+    "name": "Expérience express – Parfums",
+    "quizTitle": "Trouvez le parfum qui vous ressemble",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Parfumerie",
+    "axes": [
+     {
+      "key": "freshness",
+      "label": "Fraîcheur",
+      "lowLabel": "Chaleureux",
+      "highLabel": "Frais",
+      "description": "Sensation fraîche, aérienne ou chaude du parfum.",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.99 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.99
+     },
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "lowLabel": "Discret",
+      "highLabel": "Puissant",
+      "description": "Présence et sillage du parfum.",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.97 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.97
+     },
+     {
+      "key": "sweetness",
+      "label": "Douceur",
+      "lowLabel": "Sec",
+      "highLabel": "Gourmand",
+      "description": "Notes sucrées, vanillées ou gourmandes.",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.97 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.97
+     },
+     {
+      "key": "woody",
+      "label": "Caractère boisé",
+      "lowLabel": "Peu boisé",
+      "highLabel": "Très boisé",
+      "description": "Présence de notes de bois (cèdre, santal).",
+      "justification": "Critère typique du secteur parfum ; renseigné sur 40 produit(s) sur 40, écart 0.98 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.98
+     }
+    ],
+    "questions": [
+     {
+      "text": "Votre signature olfactive ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Propre et lumineuse",
+        "emoji": "🫧",
+        "impacts": {
+         "freshness": 0.2,
+         "woody": -0.1
+        }
+       },
+       {
+        "text": "Sensuelle et ambrée",
+        "emoji": "🌹",
+        "impacts": {
+         "sweetness": 0.15,
+         "intensity": 0.15
+        }
+       },
+       {
+        "text": "Boisée et élégante",
+        "emoji": "🎩",
+        "impacts": {
+         "woody": 0.2,
+         "intensity": 0.1
+        }
+       }
+      ]
+     },
+     {
+      "text": "Pour quelle occasion ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Au bureau, au quotidien",
+        "emoji": "💼",
+        "impacts": {
+         "intensity": -0.15,
+         "freshness": 0.1
+        }
+       },
+       {
+        "text": "Une soirée",
+        "emoji": "🌙",
+        "impacts": {
+         "intensity": 0.2,
+         "sweetness": 0.1
+        }
+       },
+       {
+        "text": "Un week-end nature",
+        "emoji": "🏞️",
+        "impacts": {
+         "woody": 0.2,
+         "freshness": 0.1
+        }
+       }
+      ]
+     },
+     {
+      "text": "Côté douceur ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Sec, peu sucré",
+        "emoji": "🌿",
+        "impacts": {
+         "sweetness": -0.25
+        }
+       },
+       {
+        "text": "Gourmand, vanillé",
+        "emoji": "🍦",
+        "impacts": {
+         "sweetness": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Quelle saison vous inspire ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "L'été",
+        "emoji": "☀️",
+        "impacts": {
+         "freshness": 0.2,
+         "sweetness": -0.1
+        }
+       },
+       {
+        "text": "L'hiver",
+        "emoji": "❄️",
+        "impacts": {
+         "freshness": -0.2,
+         "sweetness": 0.1,
+         "woody": 0.1
+        }
+       },
+       {
+        "text": "La mi-saison",
+        "emoji": "🍂",
+        "impacts": {
+         "woody": 0.1,
+         "intensity": -0.05
+        }
+       }
+      ]
+     },
+     {
+      "text": "Quelle sensation recherchez-vous en vaporisant ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Chaude et enveloppante",
+        "emoji": "🔥",
+        "impacts": {
+         "freshness": -0.25
+        }
+       },
+       {
+        "text": "Fraîche et vive",
+        "emoji": "💧",
+        "impacts": {
+         "freshness": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Quel sillage souhaitez-vous ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Discret, de près",
+        "emoji": "🤫",
+        "impacts": {
+         "intensity": -0.25
+        }
+       },
+       {
+        "text": "Présent, qui se remarque",
+        "emoji": "✨",
+        "impacts": {
+         "intensity": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Les notes de bois vous parlent-elles ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Plutôt floral ou fruité",
+        "emoji": "🌸",
+        "impacts": {
+         "woody": -0.25
+        }
+       },
+       {
+        "text": "Oui, boisé (cèdre, santal)",
+        "emoji": "🪵",
+        "impacts": {
+         "woody": 0.25
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [],
+   "top3Simulated": {
+    "first": [
+     "prf036",
+     "prf006",
+     "prf018"
+    ],
+    "last": [
+     "prf027",
+     "prf034",
+     "prf005"
+    ]
+   }
+  },
+  {
+   "options": {
+    "sector": "generic"
+   },
+   "analysis": {
+    "catalogId": "cat-Parfums",
+    "catalogName": "Parfums",
+    "productCount": 40,
+    "semanticProducts": 0,
+    "sector": "generic",
+    "sectorLabel": "Générique",
+    "sectorDetected": false,
+    "reliability": "reliable",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : contenance, sku.",
+     "Seulement 4 question(s) non redondantes disponibles pour ces critères (5 demandées)."
+    ],
+    "candidates": [
+     {
+      "key": "freshness",
+      "label": "Freshness",
+      "valuedProducts": 40,
+      "spread": 0.99,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "intensity",
+      "label": "Intensity",
+      "valuedProducts": 40,
+      "spread": 0.97,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "sweetness",
+      "label": "Sweetness",
+      "valuedProducts": 40,
+      "spread": 0.97,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "woody",
+      "label": "Woody",
+      "valuedProducts": 40,
+      "spread": 0.98,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": []
+   },
+   "draft": {
+    "name": "Expérience express – Parfums",
+    "quizTitle": "Trouvez le produit qui vous correspond",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Parfumerie",
+    "axes": [
+     {
+      "key": "freshness",
+      "label": "Freshness",
+      "lowLabel": null,
+      "highLabel": null,
+      "description": "Position du produit sur « Freshness », de 0 (faible) à 1 (fort).",
+      "justification": "Caractéristique numérique de vos produits ; renseigné sur 40 produit(s) sur 40, écart 0.99 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.99
+     },
+     {
+      "key": "woody",
+      "label": "Woody",
+      "lowLabel": null,
+      "highLabel": null,
+      "description": "Position du produit sur « Woody », de 0 (faible) à 1 (fort).",
+      "justification": "Caractéristique numérique de vos produits ; renseigné sur 40 produit(s) sur 40, écart 0.98 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.98
+     },
+     {
+      "key": "intensity",
+      "label": "Intensity",
+      "lowLabel": null,
+      "highLabel": null,
+      "description": "Position du produit sur « Intensity », de 0 (faible) à 1 (fort).",
+      "justification": "Caractéristique numérique de vos produits ; renseigné sur 40 produit(s) sur 40, écart 0.97 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.97
+     },
+     {
+      "key": "sweetness",
+      "label": "Sweetness",
+      "lowLabel": null,
+      "highLabel": null,
+      "description": "Position du produit sur « Sweetness », de 0 (faible) à 1 (fort).",
+      "justification": "Caractéristique numérique de vos produits ; renseigné sur 40 produit(s) sur 40, écart 0.97 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 40,
+      "spread": 0.97
+     }
+    ],
+    "questions": [
+     {
+      "text": "Côté freshness, qu'est-ce qui vous correspond le mieux ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Plutôt peu de freshness",
+        "emoji": null,
+        "impacts": {
+         "freshness": -0.25
+        }
+       },
+       {
+        "text": "Plutôt beaucoup de freshness",
+        "emoji": null,
+        "impacts": {
+         "freshness": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Côté woody, qu'est-ce qui vous correspond le mieux ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Plutôt peu de woody",
+        "emoji": null,
+        "impacts": {
+         "woody": -0.25
+        }
+       },
+       {
+        "text": "Plutôt beaucoup de woody",
+        "emoji": null,
+        "impacts": {
+         "woody": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Côté intensity, qu'est-ce qui vous correspond le mieux ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Plutôt peu de intensity",
+        "emoji": null,
+        "impacts": {
+         "intensity": -0.25
+        }
+       },
+       {
+        "text": "Plutôt beaucoup de intensity",
+        "emoji": null,
+        "impacts": {
+         "intensity": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Côté sweetness, qu'est-ce qui vous correspond le mieux ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Plutôt peu de sweetness",
+        "emoji": null,
+        "impacts": {
+         "sweetness": -0.25
+        }
+       },
+       {
+        "text": "Plutôt beaucoup de sweetness",
+        "emoji": null,
+        "impacts": {
+         "sweetness": 0.25
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [],
+   "top3Simulated": {
+    "first": [
+     "prf019",
+     "prf026",
+     "prf002"
+    ],
+    "last": [
+     "prf027",
+     "prf020",
+     "prf037"
+    ]
+   }
+  }
+ ],
+ "coffee": [
+  {
+   "options": {},
+   "analysis": {
+    "catalogId": "cat-Cafés",
+    "catalogName": "Cafés",
+    "productCount": 24,
+    "semanticProducts": 0,
+    "sector": "coffee",
+    "sectorLabel": "Café",
+    "sectorDetected": true,
+    "reliability": "reliable",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : poids_g.",
+     "Critères habituels du secteur non renseignés sur vos produits, donc non proposés : Corps, Douceur."
+    ],
+    "candidates": [
+     {
+      "key": "acidity",
+      "label": "Acidité",
+      "valuedProducts": 24,
+      "spread": 0.9,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "valuedProducts": 24,
+      "spread": 0.93,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": [
+     {
+      "key": "body",
+      "label": "Corps"
+     },
+     {
+      "key": "sweetness",
+      "label": "Douceur"
+     }
+    ]
+   },
+   "draft": {
+    "name": "Expérience express – Cafés",
+    "quizTitle": "Trouvez le café qui vous ressemble",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Café",
+    "axes": [
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "lowLabel": "Léger",
+      "highLabel": "Corsé",
+      "description": "Puissance du café en tasse.",
+      "justification": "Critère typique du secteur café ; renseigné sur 24 produit(s) sur 24, écart 0.93 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 24,
+      "spread": 0.93
+     },
+     {
+      "key": "acidity",
+      "label": "Acidité",
+      "lowLabel": "Rond",
+      "highLabel": "Vif",
+      "description": "Vivacité et notes fruitées en bouche.",
+      "justification": "Critère typique du secteur café ; renseigné sur 24 produit(s) sur 24, écart 0.9 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 24,
+      "spread": 0.9
+     }
+    ],
+    "questions": [
+     {
+      "text": "Quelle ambiance de saveurs vous attire ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Fruits rouges et agrumes",
+        "emoji": "🍓",
+        "impacts": {
+         "acidity": 0.2
+        }
+       },
+       {
+        "text": "Boisé et épicé",
+        "emoji": "🌲",
+        "impacts": {
+         "intensity": 0.15,
+         "acidity": -0.15
+        }
+       }
+      ]
+     },
+     {
+      "text": "Comment aimez-vous votre café au réveil ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Léger et facile à boire",
+        "emoji": "☕",
+        "impacts": {
+         "intensity": -0.25
+        }
+       },
+       {
+        "text": "Corsé, bien noir",
+        "emoji": "💪",
+        "impacts": {
+         "intensity": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Quel moment pour votre café ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Le réveil énergique",
+        "emoji": "🌅",
+        "impacts": {
+         "intensity": 0.15
+        }
+       },
+       {
+        "text": "La pause gourmande",
+        "emoji": "🍪",
+        "impacts": {
+         "intensity": -0.1
+        }
+       },
+       {
+        "text": "Une dégustation curieuse",
+        "emoji": "🔍",
+        "impacts": {
+         "acidity": 0.15
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [
+    {
+     "text": "Une pointe de vivacité dans la tasse ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Non, rond et sans acidité",
+       "emoji": "🍫",
+       "impacts": {
+        "acidity": -0.25
+       }
+      },
+      {
+       "text": "Oui, des notes fruitées et vives",
+       "emoji": "🍋",
+       "impacts": {
+        "acidity": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Comment le buvez-vous ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Noir, sans sucre",
+       "emoji": "⚫",
+       "impacts": {
+        "intensity": 0.1
+       }
+      },
+      {
+       "text": "Avec un nuage de lait",
+       "emoji": "🥛",
+       "impacts": {
+        "intensity": -0.1
+       }
+      },
+      {
+       "text": "En espresso serré",
+       "emoji": "⚡",
+       "impacts": {
+        "intensity": 0.15
+       }
+      },
+      {
+       "text": "En filtre, bien long",
+       "emoji": "🫗",
+       "impacts": {
+        "acidity": 0.15
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté acidité, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Rond",
+       "emoji": null,
+       "impacts": {
+        "acidity": -0.25
+       }
+      },
+      {
+       "text": "Vif",
+       "emoji": null,
+       "impacts": {
+        "acidity": 0.25
+       }
+      }
+     ]
+    }
+   ],
+   "top3Simulated": {
+    "first": [
+     "caf007",
+     "caf024",
+     "caf015"
+    ],
+    "last": [
+     "caf013",
+     "caf022",
+     "caf004"
+    ]
+   }
+  },
+  {
+   "options": {
+    "questionCount": 3
+   },
+   "analysis": {
+    "catalogId": "cat-Cafés",
+    "catalogName": "Cafés",
+    "productCount": 24,
+    "semanticProducts": 0,
+    "sector": "coffee",
+    "sectorLabel": "Café",
+    "sectorDetected": true,
+    "reliability": "reliable",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : poids_g.",
+     "Critères habituels du secteur non renseignés sur vos produits, donc non proposés : Corps, Douceur."
+    ],
+    "candidates": [
+     {
+      "key": "acidity",
+      "label": "Acidité",
+      "valuedProducts": 24,
+      "spread": 0.9,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "valuedProducts": 24,
+      "spread": 0.93,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": [
+     {
+      "key": "body",
+      "label": "Corps"
+     },
+     {
+      "key": "sweetness",
+      "label": "Douceur"
+     }
+    ]
+   },
+   "draft": {
+    "name": "Expérience express – Cafés",
+    "quizTitle": "Trouvez le café qui vous ressemble",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Café",
+    "axes": [
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "lowLabel": "Léger",
+      "highLabel": "Corsé",
+      "description": "Puissance du café en tasse.",
+      "justification": "Critère typique du secteur café ; renseigné sur 24 produit(s) sur 24, écart 0.93 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 24,
+      "spread": 0.93
+     },
+     {
+      "key": "acidity",
+      "label": "Acidité",
+      "lowLabel": "Rond",
+      "highLabel": "Vif",
+      "description": "Vivacité et notes fruitées en bouche.",
+      "justification": "Critère typique du secteur café ; renseigné sur 24 produit(s) sur 24, écart 0.9 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 24,
+      "spread": 0.9
+     }
+    ],
+    "questions": [
+     {
+      "text": "Quelle ambiance de saveurs vous attire ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Fruits rouges et agrumes",
+        "emoji": "🍓",
+        "impacts": {
+         "acidity": 0.2
+        }
+       },
+       {
+        "text": "Boisé et épicé",
+        "emoji": "🌲",
+        "impacts": {
+         "intensity": 0.15,
+         "acidity": -0.15
+        }
+       }
+      ]
+     },
+     {
+      "text": "Comment aimez-vous votre café au réveil ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Léger et facile à boire",
+        "emoji": "☕",
+        "impacts": {
+         "intensity": -0.25
+        }
+       },
+       {
+        "text": "Corsé, bien noir",
+        "emoji": "💪",
+        "impacts": {
+         "intensity": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Quel moment pour votre café ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Le réveil énergique",
+        "emoji": "🌅",
+        "impacts": {
+         "intensity": 0.15
+        }
+       },
+       {
+        "text": "La pause gourmande",
+        "emoji": "🍪",
+        "impacts": {
+         "intensity": -0.1
+        }
+       },
+       {
+        "text": "Une dégustation curieuse",
+        "emoji": "🔍",
+        "impacts": {
+         "acidity": 0.15
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [
+    {
+     "text": "Une pointe de vivacité dans la tasse ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Non, rond et sans acidité",
+       "emoji": "🍫",
+       "impacts": {
+        "acidity": -0.25
+       }
+      },
+      {
+       "text": "Oui, des notes fruitées et vives",
+       "emoji": "🍋",
+       "impacts": {
+        "acidity": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Comment le buvez-vous ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Noir, sans sucre",
+       "emoji": "⚫",
+       "impacts": {
+        "intensity": 0.1
+       }
+      },
+      {
+       "text": "Avec un nuage de lait",
+       "emoji": "🥛",
+       "impacts": {
+        "intensity": -0.1
+       }
+      },
+      {
+       "text": "En espresso serré",
+       "emoji": "⚡",
+       "impacts": {
+        "intensity": 0.15
+       }
+      },
+      {
+       "text": "En filtre, bien long",
+       "emoji": "🫗",
+       "impacts": {
+        "acidity": 0.15
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté acidité, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Rond",
+       "emoji": null,
+       "impacts": {
+        "acidity": -0.25
+       }
+      },
+      {
+       "text": "Vif",
+       "emoji": null,
+       "impacts": {
+        "acidity": 0.25
+       }
+      }
+     ]
+    }
+   ],
+   "top3Simulated": {
+    "first": [
+     "caf007",
+     "caf024",
+     "caf015"
+    ],
+    "last": [
+     "caf013",
+     "caf022",
+     "caf004"
+    ]
+   }
+  },
+  {
+   "options": {
+    "questionCount": 5
+   },
+   "analysis": {
+    "catalogId": "cat-Cafés",
+    "catalogName": "Cafés",
+    "productCount": 24,
+    "semanticProducts": 0,
+    "sector": "coffee",
+    "sectorLabel": "Café",
+    "sectorDetected": true,
+    "reliability": "reliable",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : poids_g.",
+     "Critères habituels du secteur non renseignés sur vos produits, donc non proposés : Corps, Douceur."
+    ],
+    "candidates": [
+     {
+      "key": "acidity",
+      "label": "Acidité",
+      "valuedProducts": 24,
+      "spread": 0.9,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "valuedProducts": 24,
+      "spread": 0.93,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": [
+     {
+      "key": "body",
+      "label": "Corps"
+     },
+     {
+      "key": "sweetness",
+      "label": "Douceur"
+     }
+    ]
+   },
+   "draft": {
+    "name": "Expérience express – Cafés",
+    "quizTitle": "Trouvez le café qui vous ressemble",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Café",
+    "axes": [
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "lowLabel": "Léger",
+      "highLabel": "Corsé",
+      "description": "Puissance du café en tasse.",
+      "justification": "Critère typique du secteur café ; renseigné sur 24 produit(s) sur 24, écart 0.93 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 24,
+      "spread": 0.93
+     },
+     {
+      "key": "acidity",
+      "label": "Acidité",
+      "lowLabel": "Rond",
+      "highLabel": "Vif",
+      "description": "Vivacité et notes fruitées en bouche.",
+      "justification": "Critère typique du secteur café ; renseigné sur 24 produit(s) sur 24, écart 0.9 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 24,
+      "spread": 0.9
+     }
+    ],
+    "questions": [
+     {
+      "text": "Quelle ambiance de saveurs vous attire ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Fruits rouges et agrumes",
+        "emoji": "🍓",
+        "impacts": {
+         "acidity": 0.2
+        }
+       },
+       {
+        "text": "Boisé et épicé",
+        "emoji": "🌲",
+        "impacts": {
+         "intensity": 0.15,
+         "acidity": -0.15
+        }
+       }
+      ]
+     },
+     {
+      "text": "Comment aimez-vous votre café au réveil ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Léger et facile à boire",
+        "emoji": "☕",
+        "impacts": {
+         "intensity": -0.25
+        }
+       },
+       {
+        "text": "Corsé, bien noir",
+        "emoji": "💪",
+        "impacts": {
+         "intensity": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Quel moment pour votre café ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Le réveil énergique",
+        "emoji": "🌅",
+        "impacts": {
+         "intensity": 0.15
+        }
+       },
+       {
+        "text": "La pause gourmande",
+        "emoji": "🍪",
+        "impacts": {
+         "intensity": -0.1
+        }
+       },
+       {
+        "text": "Une dégustation curieuse",
+        "emoji": "🔍",
+        "impacts": {
+         "acidity": 0.15
+        }
+       }
+      ]
+     },
+     {
+      "text": "Comment le buvez-vous ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Noir, sans sucre",
+        "emoji": "⚫",
+        "impacts": {
+         "intensity": 0.1
+        }
+       },
+       {
+        "text": "Avec un nuage de lait",
+        "emoji": "🥛",
+        "impacts": {
+         "intensity": -0.1
+        }
+       },
+       {
+        "text": "En espresso serré",
+        "emoji": "⚡",
+        "impacts": {
+         "intensity": 0.15
+        }
+       },
+       {
+        "text": "En filtre, bien long",
+        "emoji": "🫗",
+        "impacts": {
+         "acidity": 0.15
+        }
+       }
+      ]
+     },
+     {
+      "text": "Une pointe de vivacité dans la tasse ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Non, rond et sans acidité",
+        "emoji": "🍫",
+        "impacts": {
+         "acidity": -0.25
+        }
+       },
+       {
+        "text": "Oui, des notes fruitées et vives",
+        "emoji": "🍋",
+        "impacts": {
+         "acidity": 0.25
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [],
+   "top3Simulated": {
+    "first": [
+     "caf003",
+     "caf024",
+     "caf012"
+    ],
+    "last": [
+     "caf009",
+     "caf017",
+     "caf008"
+    ]
+   }
+  },
+  {
+   "options": {
+    "questionCount": 7
+   },
+   "analysis": {
+    "catalogId": "cat-Cafés",
+    "catalogName": "Cafés",
+    "productCount": 24,
+    "semanticProducts": 0,
+    "sector": "coffee",
+    "sectorLabel": "Café",
+    "sectorDetected": true,
+    "reliability": "reliable",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : poids_g.",
+     "Critères habituels du secteur non renseignés sur vos produits, donc non proposés : Corps, Douceur.",
+     "Seulement 5 question(s) non redondantes disponibles pour ces critères (7 demandées)."
+    ],
+    "candidates": [
+     {
+      "key": "acidity",
+      "label": "Acidité",
+      "valuedProducts": 24,
+      "spread": 0.9,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "valuedProducts": 24,
+      "spread": 0.93,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": [
+     {
+      "key": "body",
+      "label": "Corps"
+     },
+     {
+      "key": "sweetness",
+      "label": "Douceur"
+     }
+    ]
+   },
+   "draft": {
+    "name": "Expérience express – Cafés",
+    "quizTitle": "Trouvez le café qui vous ressemble",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Café",
+    "axes": [
+     {
+      "key": "intensity",
+      "label": "Intensité",
+      "lowLabel": "Léger",
+      "highLabel": "Corsé",
+      "description": "Puissance du café en tasse.",
+      "justification": "Critère typique du secteur café ; renseigné sur 24 produit(s) sur 24, écart 0.93 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 24,
+      "spread": 0.93
+     },
+     {
+      "key": "acidity",
+      "label": "Acidité",
+      "lowLabel": "Rond",
+      "highLabel": "Vif",
+      "description": "Vivacité et notes fruitées en bouche.",
+      "justification": "Critère typique du secteur café ; renseigné sur 24 produit(s) sur 24, écart 0.9 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 24,
+      "spread": 0.9
+     }
+    ],
+    "questions": [
+     {
+      "text": "Quelle ambiance de saveurs vous attire ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Fruits rouges et agrumes",
+        "emoji": "🍓",
+        "impacts": {
+         "acidity": 0.2
+        }
+       },
+       {
+        "text": "Boisé et épicé",
+        "emoji": "🌲",
+        "impacts": {
+         "intensity": 0.15,
+         "acidity": -0.15
+        }
+       }
+      ]
+     },
+     {
+      "text": "Comment aimez-vous votre café au réveil ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Léger et facile à boire",
+        "emoji": "☕",
+        "impacts": {
+         "intensity": -0.25
+        }
+       },
+       {
+        "text": "Corsé, bien noir",
+        "emoji": "💪",
+        "impacts": {
+         "intensity": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Quel moment pour votre café ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Le réveil énergique",
+        "emoji": "🌅",
+        "impacts": {
+         "intensity": 0.15
+        }
+       },
+       {
+        "text": "La pause gourmande",
+        "emoji": "🍪",
+        "impacts": {
+         "intensity": -0.1
+        }
+       },
+       {
+        "text": "Une dégustation curieuse",
+        "emoji": "🔍",
+        "impacts": {
+         "acidity": 0.15
+        }
+       }
+      ]
+     },
+     {
+      "text": "Comment le buvez-vous ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Noir, sans sucre",
+        "emoji": "⚫",
+        "impacts": {
+         "intensity": 0.1
+        }
+       },
+       {
+        "text": "Avec un nuage de lait",
+        "emoji": "🥛",
+        "impacts": {
+         "intensity": -0.1
+        }
+       },
+       {
+        "text": "En espresso serré",
+        "emoji": "⚡",
+        "impacts": {
+         "intensity": 0.15
+        }
+       },
+       {
+        "text": "En filtre, bien long",
+        "emoji": "🫗",
+        "impacts": {
+         "acidity": 0.15
+        }
+       }
+      ]
+     },
+     {
+      "text": "Une pointe de vivacité dans la tasse ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Non, rond et sans acidité",
+        "emoji": "🍫",
+        "impacts": {
+         "acidity": -0.25
+        }
+       },
+       {
+        "text": "Oui, des notes fruitées et vives",
+        "emoji": "🍋",
+        "impacts": {
+         "acidity": 0.25
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [],
+   "top3Simulated": {
+    "first": [
+     "caf003",
+     "caf024",
+     "caf012"
+    ],
+    "last": [
+     "caf009",
+     "caf017",
+     "caf008"
+    ]
+   }
+  },
+  {
+   "options": {
+    "sector": "generic"
+   },
+   "analysis": {
+    "catalogId": "cat-Cafés",
+    "catalogName": "Cafés",
+    "productCount": 24,
+    "semanticProducts": 0,
+    "sector": "generic",
+    "sectorLabel": "Générique",
+    "sectorDetected": false,
+    "reliability": "reliable",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : poids_g.",
+     "Seulement 2 question(s) non redondantes disponibles pour ces critères (3 demandées)."
+    ],
+    "candidates": [
+     {
+      "key": "acidity",
+      "label": "Acidity",
+      "valuedProducts": 24,
+      "spread": 0.9,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     },
+     {
+      "key": "intensity",
+      "label": "Intensity",
+      "valuedProducts": 24,
+      "spread": 0.93,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": []
+   },
+   "draft": {
+    "name": "Expérience express – Cafés",
+    "quizTitle": "Trouvez le produit qui vous correspond",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Café",
+    "axes": [
+     {
+      "key": "intensity",
+      "label": "Intensity",
+      "lowLabel": null,
+      "highLabel": null,
+      "description": "Position du produit sur « Intensity », de 0 (faible) à 1 (fort).",
+      "justification": "Caractéristique numérique de vos produits ; renseigné sur 24 produit(s) sur 24, écart 0.93 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 24,
+      "spread": 0.93
+     },
+     {
+      "key": "acidity",
+      "label": "Acidity",
+      "lowLabel": null,
+      "highLabel": null,
+      "description": "Position du produit sur « Acidity », de 0 (faible) à 1 (fort).",
+      "justification": "Caractéristique numérique de vos produits ; renseigné sur 24 produit(s) sur 24, écart 0.9 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 24,
+      "spread": 0.9
+     }
+    ],
+    "questions": [
+     {
+      "text": "Côté intensity, qu'est-ce qui vous correspond le mieux ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Plutôt peu de intensity",
+        "emoji": null,
+        "impacts": {
+         "intensity": -0.25
+        }
+       },
+       {
+        "text": "Plutôt beaucoup de intensity",
+        "emoji": null,
+        "impacts": {
+         "intensity": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Côté acidity, qu'est-ce qui vous correspond le mieux ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Plutôt peu de acidity",
+        "emoji": null,
+        "impacts": {
+         "acidity": -0.25
+        }
+       },
+       {
+        "text": "Plutôt beaucoup de acidity",
+        "emoji": null,
+        "impacts": {
+         "acidity": 0.25
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [],
+   "top3Simulated": {
+    "first": [
+     "caf002",
+     "caf011",
+     "caf019"
+    ],
+    "last": [
+     "caf017",
+     "caf008",
+     "caf016"
+    ]
+   }
+  }
+ ],
+ "fashion": [
+  {
+   "options": {},
+   "analysis": {
+    "catalogId": "cat-Vêtements",
+    "catalogName": "Vêtements",
+    "productCount": 30,
+    "semanticProducts": 0,
+    "sector": "fashion",
+    "sectorLabel": "Mode",
+    "sectorDetected": true,
+    "reliability": "limited",
+    "messages": [
+     "Un seul critère sépare vos produits : les recommandations seront peu variées. Renseignez d'autres caractéristiques (page Enrichissement) pour les fiabiliser.",
+     "Certains critères ne sont renseignés sur aucun produit : ils influencent la recommandation seulement via les descriptions. Renseignez-les pour obtenir un vrai classement."
+    ],
+    "candidates": [
+     {
+      "key": "confort",
+      "label": "Confort",
+      "valuedProducts": 30,
+      "spread": 0.96,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": [
+     {
+      "key": "elegance",
+      "label": "Élégance"
+     },
+     {
+      "key": "originality",
+      "label": "Originalité"
+     },
+     {
+      "key": "casual",
+      "label": "Casual"
+     }
+    ]
+   },
+   "draft": {
+    "name": "Expérience express – Vêtements",
+    "quizTitle": "Trouvez le style qui vous ressemble",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Mode",
+    "axes": [
+     {
+      "key": "confort",
+      "label": "Confort",
+      "lowLabel": "Ajusté",
+      "highLabel": "Très confortable",
+      "description": "Aisance et souplesse portées.",
+      "justification": "Critère typique du secteur mode ; renseigné sur 30 produit(s) sur 30, écart 0.96 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 30,
+      "spread": 0.96
+     },
+     {
+      "key": "elegance",
+      "label": "Élégance",
+      "lowLabel": "Naturel",
+      "highLabel": "Élégant",
+      "description": "Allure soignée et habillée.",
+      "justification": "Critère typique du secteur mode ; aucune valeur produit : ne départage les produits que par leurs descriptions.",
+      "evidence": "semantic",
+      "reused": false,
+      "valuedProducts": 0,
+      "spread": 0
+     },
+     {
+      "key": "originality",
+      "label": "Originalité",
+      "lowLabel": "Classique",
+      "highLabel": "Original",
+      "description": "Pièces qui se remarquent.",
+      "justification": "Critère typique du secteur mode ; aucune valeur produit : ne départage les produits que par leurs descriptions.",
+      "evidence": "semantic",
+      "reused": false,
+      "valuedProducts": 0,
+      "spread": 0
+     },
+     {
+      "key": "casual",
+      "label": "Casual",
+      "lowLabel": "Habillé",
+      "highLabel": "Décontracté",
+      "description": "Style décontracté du quotidien.",
+      "justification": "Critère typique du secteur mode ; aucune valeur produit : ne départage les produits que par leurs descriptions.",
+      "evidence": "semantic",
+      "reused": false,
+      "valuedProducts": 0,
+      "spread": 0
+     }
+    ],
+    "questions": [
+     {
+      "text": "Pour sortir ce week-end ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Un brunch entre amis",
+        "emoji": "🥐",
+        "impacts": {
+         "casual": 0.2,
+         "confort": 0.1
+        }
+       },
+       {
+        "text": "Un dîner élégant",
+        "emoji": "🍷",
+        "impacts": {
+         "elegance": 0.25,
+         "casual": -0.15
+        }
+       },
+       {
+        "text": "Une soirée originale",
+        "emoji": "🎉",
+        "impacts": {
+         "originality": 0.2,
+         "elegance": 0.05
+        }
+       }
+      ]
+     },
+     {
+      "text": "Au bureau ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Costume ou tailleur impeccable",
+        "emoji": "💼",
+        "impacts": {
+         "elegance": 0.2,
+         "confort": -0.1
+        }
+       },
+       {
+        "text": "Smart casual confortable",
+        "emoji": "👕",
+        "impacts": {
+         "confort": 0.15,
+         "casual": 0.1
+        }
+       },
+       {
+        "text": "Une touche d'audace",
+        "emoji": "🧣",
+        "impacts": {
+         "originality": 0.15,
+         "elegance": 0.05
+        }
+       }
+      ]
+     },
+     {
+      "text": "Votre pièce fétiche ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Un basique doux et souple",
+        "emoji": "🧶",
+        "impacts": {
+         "confort": 0.2,
+         "originality": -0.1
+        }
+       },
+       {
+        "text": "Une pièce signature",
+        "emoji": "💎",
+        "impacts": {
+         "originality": 0.2,
+         "casual": -0.05
+        }
+       },
+       {
+        "text": "Une veste ou un blazer",
+        "emoji": "🧥",
+        "impacts": {
+         "elegance": 0.2
+        }
+       }
+      ]
+     },
+     {
+      "text": "Votre allure préférée ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Naturelle, sans apprêt",
+        "emoji": "🌿",
+        "impacts": {
+         "elegance": -0.25
+        }
+       },
+       {
+        "text": "Chic et soignée",
+        "emoji": "🎩",
+        "impacts": {
+         "elegance": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Qu'est-ce qui compte le plus dans un vêtement ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Le tombé, même moins souple",
+        "emoji": "📐",
+        "impacts": {
+         "confort": -0.25
+        }
+       },
+       {
+        "text": "Être à l'aise avant tout",
+        "emoji": "🛋️",
+        "impacts": {
+         "confort": 0.25
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [
+    {
+     "text": "Face à la tendance ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Un classique intemporel",
+       "emoji": "🕰️",
+       "impacts": {
+        "originality": -0.25
+       }
+      },
+      {
+       "text": "Une pièce qui se remarque",
+       "emoji": "🌈",
+       "impacts": {
+        "originality": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Pour le quotidien ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Habillé, même en semaine",
+       "emoji": "👔",
+       "impacts": {
+        "casual": -0.25
+       }
+      },
+      {
+       "text": "Décontracté, jean-baskets",
+       "emoji": "👟",
+       "impacts": {
+        "casual": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté originalité, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Classique",
+       "emoji": null,
+       "impacts": {
+        "originality": -0.25
+       }
+      },
+      {
+       "text": "Original",
+       "emoji": null,
+       "impacts": {
+        "originality": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté casual, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Habillé",
+       "emoji": null,
+       "impacts": {
+        "casual": -0.25
+       }
+      },
+      {
+       "text": "Décontracté",
+       "emoji": null,
+       "impacts": {
+        "casual": 0.25
+       }
+      }
+     ]
+    }
+   ],
+   "top3Simulated": {
+    "first": [
+     "mod019",
+     "mod003",
+     "mod024"
+    ],
+    "last": [
+     "mod010",
+     "mod026",
+     "mod005"
+    ]
+   }
+  },
+  {
+   "options": {
+    "questionCount": 3
+   },
+   "analysis": {
+    "catalogId": "cat-Vêtements",
+    "catalogName": "Vêtements",
+    "productCount": 30,
+    "semanticProducts": 0,
+    "sector": "fashion",
+    "sectorLabel": "Mode",
+    "sectorDetected": true,
+    "reliability": "limited",
+    "messages": [
+     "Un seul critère sépare vos produits : les recommandations seront peu variées. Renseignez d'autres caractéristiques (page Enrichissement) pour les fiabiliser.",
+     "Certains critères ne sont renseignés sur aucun produit : ils influencent la recommandation seulement via les descriptions. Renseignez-les pour obtenir un vrai classement."
+    ],
+    "candidates": [
+     {
+      "key": "confort",
+      "label": "Confort",
+      "valuedProducts": 30,
+      "spread": 0.96,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": [
+     {
+      "key": "elegance",
+      "label": "Élégance"
+     },
+     {
+      "key": "originality",
+      "label": "Originalité"
+     },
+     {
+      "key": "casual",
+      "label": "Casual"
+     }
+    ]
+   },
+   "draft": {
+    "name": "Expérience express – Vêtements",
+    "quizTitle": "Trouvez le style qui vous ressemble",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Mode",
+    "axes": [
+     {
+      "key": "confort",
+      "label": "Confort",
+      "lowLabel": "Ajusté",
+      "highLabel": "Très confortable",
+      "description": "Aisance et souplesse portées.",
+      "justification": "Critère typique du secteur mode ; renseigné sur 30 produit(s) sur 30, écart 0.96 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 30,
+      "spread": 0.96
+     },
+     {
+      "key": "elegance",
+      "label": "Élégance",
+      "lowLabel": "Naturel",
+      "highLabel": "Élégant",
+      "description": "Allure soignée et habillée.",
+      "justification": "Critère typique du secteur mode ; aucune valeur produit : ne départage les produits que par leurs descriptions.",
+      "evidence": "semantic",
+      "reused": false,
+      "valuedProducts": 0,
+      "spread": 0
+     },
+     {
+      "key": "originality",
+      "label": "Originalité",
+      "lowLabel": "Classique",
+      "highLabel": "Original",
+      "description": "Pièces qui se remarquent.",
+      "justification": "Critère typique du secteur mode ; aucune valeur produit : ne départage les produits que par leurs descriptions.",
+      "evidence": "semantic",
+      "reused": false,
+      "valuedProducts": 0,
+      "spread": 0
+     },
+     {
+      "key": "casual",
+      "label": "Casual",
+      "lowLabel": "Habillé",
+      "highLabel": "Décontracté",
+      "description": "Style décontracté du quotidien.",
+      "justification": "Critère typique du secteur mode ; aucune valeur produit : ne départage les produits que par leurs descriptions.",
+      "evidence": "semantic",
+      "reused": false,
+      "valuedProducts": 0,
+      "spread": 0
+     }
+    ],
+    "questions": [
+     {
+      "text": "Pour sortir ce week-end ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Un brunch entre amis",
+        "emoji": "🥐",
+        "impacts": {
+         "casual": 0.2,
+         "confort": 0.1
+        }
+       },
+       {
+        "text": "Un dîner élégant",
+        "emoji": "🍷",
+        "impacts": {
+         "elegance": 0.25,
+         "casual": -0.15
+        }
+       },
+       {
+        "text": "Une soirée originale",
+        "emoji": "🎉",
+        "impacts": {
+         "originality": 0.2,
+         "elegance": 0.05
+        }
+       }
+      ]
+     },
+     {
+      "text": "Au bureau ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Costume ou tailleur impeccable",
+        "emoji": "💼",
+        "impacts": {
+         "elegance": 0.2,
+         "confort": -0.1
+        }
+       },
+       {
+        "text": "Smart casual confortable",
+        "emoji": "👕",
+        "impacts": {
+         "confort": 0.15,
+         "casual": 0.1
+        }
+       },
+       {
+        "text": "Une touche d'audace",
+        "emoji": "🧣",
+        "impacts": {
+         "originality": 0.15,
+         "elegance": 0.05
+        }
+       }
+      ]
+     },
+     {
+      "text": "Votre pièce fétiche ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Un basique doux et souple",
+        "emoji": "🧶",
+        "impacts": {
+         "confort": 0.2,
+         "originality": -0.1
+        }
+       },
+       {
+        "text": "Une pièce signature",
+        "emoji": "💎",
+        "impacts": {
+         "originality": 0.2,
+         "casual": -0.05
+        }
+       },
+       {
+        "text": "Une veste ou un blazer",
+        "emoji": "🧥",
+        "impacts": {
+         "elegance": 0.2
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [
+    {
+     "text": "Votre allure préférée ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Naturelle, sans apprêt",
+       "emoji": "🌿",
+       "impacts": {
+        "elegance": -0.25
+       }
+      },
+      {
+       "text": "Chic et soignée",
+       "emoji": "🎩",
+       "impacts": {
+        "elegance": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Qu'est-ce qui compte le plus dans un vêtement ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Le tombé, même moins souple",
+       "emoji": "📐",
+       "impacts": {
+        "confort": -0.25
+       }
+      },
+      {
+       "text": "Être à l'aise avant tout",
+       "emoji": "🛋️",
+       "impacts": {
+        "confort": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Face à la tendance ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Un classique intemporel",
+       "emoji": "🕰️",
+       "impacts": {
+        "originality": -0.25
+       }
+      },
+      {
+       "text": "Une pièce qui se remarque",
+       "emoji": "🌈",
+       "impacts": {
+        "originality": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Pour le quotidien ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Habillé, même en semaine",
+       "emoji": "👔",
+       "impacts": {
+        "casual": -0.25
+       }
+      },
+      {
+       "text": "Décontracté, jean-baskets",
+       "emoji": "👟",
+       "impacts": {
+        "casual": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté confort, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Ajusté",
+       "emoji": null,
+       "impacts": {
+        "confort": -0.25
+       }
+      },
+      {
+       "text": "Très confortable",
+       "emoji": null,
+       "impacts": {
+        "confort": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté élégance, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Naturel",
+       "emoji": null,
+       "impacts": {
+        "elegance": -0.25
+       }
+      },
+      {
+       "text": "Élégant",
+       "emoji": null,
+       "impacts": {
+        "elegance": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté originalité, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Classique",
+       "emoji": null,
+       "impacts": {
+        "originality": -0.25
+       }
+      },
+      {
+       "text": "Original",
+       "emoji": null,
+       "impacts": {
+        "originality": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté casual, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Habillé",
+       "emoji": null,
+       "impacts": {
+        "casual": -0.25
+       }
+      },
+      {
+       "text": "Décontracté",
+       "emoji": null,
+       "impacts": {
+        "casual": 0.25
+       }
+      }
+     ]
+    }
+   ],
+   "top3Simulated": {
+    "first": [
+     "mod015",
+     "mod020",
+     "mod010"
+    ],
+    "last": [
+     "mod014",
+     "mod019",
+     "mod030"
+    ]
+   }
+  },
+  {
+   "options": {
+    "questionCount": 5
+   },
+   "analysis": {
+    "catalogId": "cat-Vêtements",
+    "catalogName": "Vêtements",
+    "productCount": 30,
+    "semanticProducts": 0,
+    "sector": "fashion",
+    "sectorLabel": "Mode",
+    "sectorDetected": true,
+    "reliability": "limited",
+    "messages": [
+     "Un seul critère sépare vos produits : les recommandations seront peu variées. Renseignez d'autres caractéristiques (page Enrichissement) pour les fiabiliser.",
+     "Certains critères ne sont renseignés sur aucun produit : ils influencent la recommandation seulement via les descriptions. Renseignez-les pour obtenir un vrai classement."
+    ],
+    "candidates": [
+     {
+      "key": "confort",
+      "label": "Confort",
+      "valuedProducts": 30,
+      "spread": 0.96,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": [
+     {
+      "key": "elegance",
+      "label": "Élégance"
+     },
+     {
+      "key": "originality",
+      "label": "Originalité"
+     },
+     {
+      "key": "casual",
+      "label": "Casual"
+     }
+    ]
+   },
+   "draft": {
+    "name": "Expérience express – Vêtements",
+    "quizTitle": "Trouvez le style qui vous ressemble",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Mode",
+    "axes": [
+     {
+      "key": "confort",
+      "label": "Confort",
+      "lowLabel": "Ajusté",
+      "highLabel": "Très confortable",
+      "description": "Aisance et souplesse portées.",
+      "justification": "Critère typique du secteur mode ; renseigné sur 30 produit(s) sur 30, écart 0.96 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 30,
+      "spread": 0.96
+     },
+     {
+      "key": "elegance",
+      "label": "Élégance",
+      "lowLabel": "Naturel",
+      "highLabel": "Élégant",
+      "description": "Allure soignée et habillée.",
+      "justification": "Critère typique du secteur mode ; aucune valeur produit : ne départage les produits que par leurs descriptions.",
+      "evidence": "semantic",
+      "reused": false,
+      "valuedProducts": 0,
+      "spread": 0
+     },
+     {
+      "key": "originality",
+      "label": "Originalité",
+      "lowLabel": "Classique",
+      "highLabel": "Original",
+      "description": "Pièces qui se remarquent.",
+      "justification": "Critère typique du secteur mode ; aucune valeur produit : ne départage les produits que par leurs descriptions.",
+      "evidence": "semantic",
+      "reused": false,
+      "valuedProducts": 0,
+      "spread": 0
+     },
+     {
+      "key": "casual",
+      "label": "Casual",
+      "lowLabel": "Habillé",
+      "highLabel": "Décontracté",
+      "description": "Style décontracté du quotidien.",
+      "justification": "Critère typique du secteur mode ; aucune valeur produit : ne départage les produits que par leurs descriptions.",
+      "evidence": "semantic",
+      "reused": false,
+      "valuedProducts": 0,
+      "spread": 0
+     }
+    ],
+    "questions": [
+     {
+      "text": "Pour sortir ce week-end ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Un brunch entre amis",
+        "emoji": "🥐",
+        "impacts": {
+         "casual": 0.2,
+         "confort": 0.1
+        }
+       },
+       {
+        "text": "Un dîner élégant",
+        "emoji": "🍷",
+        "impacts": {
+         "elegance": 0.25,
+         "casual": -0.15
+        }
+       },
+       {
+        "text": "Une soirée originale",
+        "emoji": "🎉",
+        "impacts": {
+         "originality": 0.2,
+         "elegance": 0.05
+        }
+       }
+      ]
+     },
+     {
+      "text": "Au bureau ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Costume ou tailleur impeccable",
+        "emoji": "💼",
+        "impacts": {
+         "elegance": 0.2,
+         "confort": -0.1
+        }
+       },
+       {
+        "text": "Smart casual confortable",
+        "emoji": "👕",
+        "impacts": {
+         "confort": 0.15,
+         "casual": 0.1
+        }
+       },
+       {
+        "text": "Une touche d'audace",
+        "emoji": "🧣",
+        "impacts": {
+         "originality": 0.15,
+         "elegance": 0.05
+        }
+       }
+      ]
+     },
+     {
+      "text": "Votre pièce fétiche ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Un basique doux et souple",
+        "emoji": "🧶",
+        "impacts": {
+         "confort": 0.2,
+         "originality": -0.1
+        }
+       },
+       {
+        "text": "Une pièce signature",
+        "emoji": "💎",
+        "impacts": {
+         "originality": 0.2,
+         "casual": -0.05
+        }
+       },
+       {
+        "text": "Une veste ou un blazer",
+        "emoji": "🧥",
+        "impacts": {
+         "elegance": 0.2
+        }
+       }
+      ]
+     },
+     {
+      "text": "Votre allure préférée ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Naturelle, sans apprêt",
+        "emoji": "🌿",
+        "impacts": {
+         "elegance": -0.25
+        }
+       },
+       {
+        "text": "Chic et soignée",
+        "emoji": "🎩",
+        "impacts": {
+         "elegance": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Qu'est-ce qui compte le plus dans un vêtement ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Le tombé, même moins souple",
+        "emoji": "📐",
+        "impacts": {
+         "confort": -0.25
+        }
+       },
+       {
+        "text": "Être à l'aise avant tout",
+        "emoji": "🛋️",
+        "impacts": {
+         "confort": 0.25
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [
+    {
+     "text": "Face à la tendance ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Un classique intemporel",
+       "emoji": "🕰️",
+       "impacts": {
+        "originality": -0.25
+       }
+      },
+      {
+       "text": "Une pièce qui se remarque",
+       "emoji": "🌈",
+       "impacts": {
+        "originality": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Pour le quotidien ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Habillé, même en semaine",
+       "emoji": "👔",
+       "impacts": {
+        "casual": -0.25
+       }
+      },
+      {
+       "text": "Décontracté, jean-baskets",
+       "emoji": "👟",
+       "impacts": {
+        "casual": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté originalité, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Classique",
+       "emoji": null,
+       "impacts": {
+        "originality": -0.25
+       }
+      },
+      {
+       "text": "Original",
+       "emoji": null,
+       "impacts": {
+        "originality": 0.25
+       }
+      }
+     ]
+    },
+    {
+     "text": "Côté casual, qu'est-ce qui vous correspond le mieux ?",
+     "helpText": null,
+     "answers": [
+      {
+       "text": "Habillé",
+       "emoji": null,
+       "impacts": {
+        "casual": -0.25
+       }
+      },
+      {
+       "text": "Décontracté",
+       "emoji": null,
+       "impacts": {
+        "casual": 0.25
+       }
+      }
+     ]
+    }
+   ],
+   "top3Simulated": {
+    "first": [
+     "mod019",
+     "mod003",
+     "mod024"
+    ],
+    "last": [
+     "mod010",
+     "mod026",
+     "mod005"
+    ]
+   }
+  },
+  {
+   "options": {
+    "questionCount": 7
+   },
+   "analysis": {
+    "catalogId": "cat-Vêtements",
+    "catalogName": "Vêtements",
+    "productCount": 30,
+    "semanticProducts": 0,
+    "sector": "fashion",
+    "sectorLabel": "Mode",
+    "sectorDetected": true,
+    "reliability": "limited",
+    "messages": [
+     "Un seul critère sépare vos produits : les recommandations seront peu variées. Renseignez d'autres caractéristiques (page Enrichissement) pour les fiabiliser.",
+     "Certains critères ne sont renseignés sur aucun produit : ils influencent la recommandation seulement via les descriptions. Renseignez-les pour obtenir un vrai classement."
+    ],
+    "candidates": [
+     {
+      "key": "confort",
+      "label": "Confort",
+      "valuedProducts": 30,
+      "spread": 0.96,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": [
+     {
+      "key": "elegance",
+      "label": "Élégance"
+     },
+     {
+      "key": "originality",
+      "label": "Originalité"
+     },
+     {
+      "key": "casual",
+      "label": "Casual"
+     }
+    ]
+   },
+   "draft": {
+    "name": "Expérience express – Vêtements",
+    "quizTitle": "Trouvez le style qui vous ressemble",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Mode",
+    "axes": [
+     {
+      "key": "confort",
+      "label": "Confort",
+      "lowLabel": "Ajusté",
+      "highLabel": "Très confortable",
+      "description": "Aisance et souplesse portées.",
+      "justification": "Critère typique du secteur mode ; renseigné sur 30 produit(s) sur 30, écart 0.96 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 30,
+      "spread": 0.96
+     },
+     {
+      "key": "elegance",
+      "label": "Élégance",
+      "lowLabel": "Naturel",
+      "highLabel": "Élégant",
+      "description": "Allure soignée et habillée.",
+      "justification": "Critère typique du secteur mode ; aucune valeur produit : ne départage les produits que par leurs descriptions.",
+      "evidence": "semantic",
+      "reused": false,
+      "valuedProducts": 0,
+      "spread": 0
+     },
+     {
+      "key": "originality",
+      "label": "Originalité",
+      "lowLabel": "Classique",
+      "highLabel": "Original",
+      "description": "Pièces qui se remarquent.",
+      "justification": "Critère typique du secteur mode ; aucune valeur produit : ne départage les produits que par leurs descriptions.",
+      "evidence": "semantic",
+      "reused": false,
+      "valuedProducts": 0,
+      "spread": 0
+     },
+     {
+      "key": "casual",
+      "label": "Casual",
+      "lowLabel": "Habillé",
+      "highLabel": "Décontracté",
+      "description": "Style décontracté du quotidien.",
+      "justification": "Critère typique du secteur mode ; aucune valeur produit : ne départage les produits que par leurs descriptions.",
+      "evidence": "semantic",
+      "reused": false,
+      "valuedProducts": 0,
+      "spread": 0
+     }
+    ],
+    "questions": [
+     {
+      "text": "Pour sortir ce week-end ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Un brunch entre amis",
+        "emoji": "🥐",
+        "impacts": {
+         "casual": 0.2,
+         "confort": 0.1
+        }
+       },
+       {
+        "text": "Un dîner élégant",
+        "emoji": "🍷",
+        "impacts": {
+         "elegance": 0.25,
+         "casual": -0.15
+        }
+       },
+       {
+        "text": "Une soirée originale",
+        "emoji": "🎉",
+        "impacts": {
+         "originality": 0.2,
+         "elegance": 0.05
+        }
+       }
+      ]
+     },
+     {
+      "text": "Au bureau ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Costume ou tailleur impeccable",
+        "emoji": "💼",
+        "impacts": {
+         "elegance": 0.2,
+         "confort": -0.1
+        }
+       },
+       {
+        "text": "Smart casual confortable",
+        "emoji": "👕",
+        "impacts": {
+         "confort": 0.15,
+         "casual": 0.1
+        }
+       },
+       {
+        "text": "Une touche d'audace",
+        "emoji": "🧣",
+        "impacts": {
+         "originality": 0.15,
+         "elegance": 0.05
+        }
+       }
+      ]
+     },
+     {
+      "text": "Votre pièce fétiche ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Un basique doux et souple",
+        "emoji": "🧶",
+        "impacts": {
+         "confort": 0.2,
+         "originality": -0.1
+        }
+       },
+       {
+        "text": "Une pièce signature",
+        "emoji": "💎",
+        "impacts": {
+         "originality": 0.2,
+         "casual": -0.05
+        }
+       },
+       {
+        "text": "Une veste ou un blazer",
+        "emoji": "🧥",
+        "impacts": {
+         "elegance": 0.2
+        }
+       }
+      ]
+     },
+     {
+      "text": "Votre allure préférée ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Naturelle, sans apprêt",
+        "emoji": "🌿",
+        "impacts": {
+         "elegance": -0.25
+        }
+       },
+       {
+        "text": "Chic et soignée",
+        "emoji": "🎩",
+        "impacts": {
+         "elegance": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Qu'est-ce qui compte le plus dans un vêtement ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Le tombé, même moins souple",
+        "emoji": "📐",
+        "impacts": {
+         "confort": -0.25
+        }
+       },
+       {
+        "text": "Être à l'aise avant tout",
+        "emoji": "🛋️",
+        "impacts": {
+         "confort": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Face à la tendance ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Un classique intemporel",
+        "emoji": "🕰️",
+        "impacts": {
+         "originality": -0.25
+        }
+       },
+       {
+        "text": "Une pièce qui se remarque",
+        "emoji": "🌈",
+        "impacts": {
+         "originality": 0.25
+        }
+       }
+      ]
+     },
+     {
+      "text": "Pour le quotidien ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Habillé, même en semaine",
+        "emoji": "👔",
+        "impacts": {
+         "casual": -0.25
+        }
+       },
+       {
+        "text": "Décontracté, jean-baskets",
+        "emoji": "👟",
+        "impacts": {
+         "casual": 0.25
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [],
+   "top3Simulated": {
+    "first": [
+     "mod019",
+     "mod003",
+     "mod024"
+    ],
+    "last": [
+     "mod010",
+     "mod026",
+     "mod005"
+    ]
+   }
+  },
+  {
+   "options": {
+    "sector": "generic"
+   },
+   "analysis": {
+    "catalogId": "cat-Vêtements",
+    "catalogName": "Vêtements",
+    "productCount": 30,
+    "semanticProducts": 0,
+    "sector": "generic",
+    "sectorLabel": "Générique",
+    "sectorDetected": false,
+    "reliability": "limited",
+    "messages": [
+     "Un seul critère sépare vos produits : les recommandations seront peu variées. Renseignez d'autres caractéristiques (page Enrichissement) pour les fiabiliser.",
+     "Seulement 1 question(s) non redondantes disponibles pour ces critères (3 demandées)."
+    ],
+    "candidates": [
+     {
+      "key": "confort",
+      "label": "Confort",
+      "valuedProducts": 30,
+      "spread": 0.96,
+      "discriminant": true,
+      "used": true,
+      "note": null
+     }
+    ],
+    "missingForSector": []
+   },
+   "draft": {
+    "name": "Expérience express – Vêtements",
+    "quizTitle": "Trouvez le produit qui vous correspond",
+    "ctaText": "Découvrir ma sélection",
+    "industry": "Mode",
+    "axes": [
+     {
+      "key": "confort",
+      "label": "Confort",
+      "lowLabel": null,
+      "highLabel": null,
+      "description": "Position du produit sur « Confort », de 0 (faible) à 1 (fort).",
+      "justification": "Caractéristique numérique de vos produits ; renseigné sur 30 produit(s) sur 30, écart 0.96 : il permet de départager les produits.",
+      "evidence": "data",
+      "reused": false,
+      "valuedProducts": 30,
+      "spread": 0.96
+     }
+    ],
+    "questions": [
+     {
+      "text": "Côté confort, qu'est-ce qui vous correspond le mieux ?",
+      "helpText": null,
+      "answers": [
+       {
+        "text": "Plutôt peu de confort",
+        "emoji": null,
+        "impacts": {
+         "confort": -0.25
+        }
+       },
+       {
+        "text": "Plutôt beaucoup de confort",
+        "emoji": null,
+        "impacts": {
+         "confort": 0.25
+        }
+       }
+      ]
+     }
+    ]
+   },
+   "alternatives": [],
+   "top3Simulated": {
+    "first": [
+     "mod002",
+     "mod018",
+     "mod023"
+    ],
+    "last": [
+     "mod010",
+     "mod026",
+     "mod005"
+    ]
+   }
+  }
+ ],
+ "degraded": [
+  {
+   "options": {},
+   "analysis": {
+    "catalogId": "cat-Divers",
+    "catalogName": "Divers",
+    "productCount": 30,
+    "semanticProducts": 0,
+    "sector": "generic",
+    "sectorLabel": "Générique",
+    "sectorDetected": false,
+    "reliability": "insufficient",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : poids.",
+     "Les données du catalogue ne permettent pas de différencier vos produits : renseignez leurs caractéristiques (page Enrichissement) ou complétez leurs descriptions avant de publier. Les recommandations ne seraient pas fiables.",
+     "Aucun secteur reconnu et aucune caractéristique chiffrée exploitable : impossible de proposer des critères sans les inventer. Choisissez un modèle de départ ou enrichissez le catalogue."
+    ],
+    "candidates": [
+     {
+      "key": "score",
+      "label": "Score",
+      "valuedProducts": 30,
+      "spread": 0,
+      "discriminant": false,
+      "used": false,
+      "note": "valeurs trop proches : ne départage pas les produits"
+     },
+     {
+      "key": "note",
+      "label": "Note",
+      "valuedProducts": 12,
+      "spread": 0.77,
+      "discriminant": false,
+      "used": false,
+      "note": "renseigné sur trop peu de produits (12/30)"
+     }
+    ],
+    "missingForSector": []
+   },
+   "draft": null,
+   "alternatives": [],
+   "top3Simulated": null
+  },
+  {
+   "options": {
+    "questionCount": 3
+   },
+   "analysis": {
+    "catalogId": "cat-Divers",
+    "catalogName": "Divers",
+    "productCount": 30,
+    "semanticProducts": 0,
+    "sector": "generic",
+    "sectorLabel": "Générique",
+    "sectorDetected": false,
+    "reliability": "insufficient",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : poids.",
+     "Les données du catalogue ne permettent pas de différencier vos produits : renseignez leurs caractéristiques (page Enrichissement) ou complétez leurs descriptions avant de publier. Les recommandations ne seraient pas fiables.",
+     "Aucun secteur reconnu et aucune caractéristique chiffrée exploitable : impossible de proposer des critères sans les inventer. Choisissez un modèle de départ ou enrichissez le catalogue."
+    ],
+    "candidates": [
+     {
+      "key": "score",
+      "label": "Score",
+      "valuedProducts": 30,
+      "spread": 0,
+      "discriminant": false,
+      "used": false,
+      "note": "valeurs trop proches : ne départage pas les produits"
+     },
+     {
+      "key": "note",
+      "label": "Note",
+      "valuedProducts": 12,
+      "spread": 0.77,
+      "discriminant": false,
+      "used": false,
+      "note": "renseigné sur trop peu de produits (12/30)"
+     }
+    ],
+    "missingForSector": []
+   },
+   "draft": null,
+   "alternatives": [],
+   "top3Simulated": null
+  },
+  {
+   "options": {
+    "questionCount": 5
+   },
+   "analysis": {
+    "catalogId": "cat-Divers",
+    "catalogName": "Divers",
+    "productCount": 30,
+    "semanticProducts": 0,
+    "sector": "generic",
+    "sectorLabel": "Générique",
+    "sectorDetected": false,
+    "reliability": "insufficient",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : poids.",
+     "Les données du catalogue ne permettent pas de différencier vos produits : renseignez leurs caractéristiques (page Enrichissement) ou complétez leurs descriptions avant de publier. Les recommandations ne seraient pas fiables.",
+     "Aucun secteur reconnu et aucune caractéristique chiffrée exploitable : impossible de proposer des critères sans les inventer. Choisissez un modèle de départ ou enrichissez le catalogue."
+    ],
+    "candidates": [
+     {
+      "key": "score",
+      "label": "Score",
+      "valuedProducts": 30,
+      "spread": 0,
+      "discriminant": false,
+      "used": false,
+      "note": "valeurs trop proches : ne départage pas les produits"
+     },
+     {
+      "key": "note",
+      "label": "Note",
+      "valuedProducts": 12,
+      "spread": 0.77,
+      "discriminant": false,
+      "used": false,
+      "note": "renseigné sur trop peu de produits (12/30)"
+     }
+    ],
+    "missingForSector": []
+   },
+   "draft": null,
+   "alternatives": [],
+   "top3Simulated": null
+  },
+  {
+   "options": {
+    "questionCount": 7
+   },
+   "analysis": {
+    "catalogId": "cat-Divers",
+    "catalogName": "Divers",
+    "productCount": 30,
+    "semanticProducts": 0,
+    "sector": "generic",
+    "sectorLabel": "Générique",
+    "sectorDetected": false,
+    "reliability": "insufficient",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : poids.",
+     "Les données du catalogue ne permettent pas de différencier vos produits : renseignez leurs caractéristiques (page Enrichissement) ou complétez leurs descriptions avant de publier. Les recommandations ne seraient pas fiables.",
+     "Aucun secteur reconnu et aucune caractéristique chiffrée exploitable : impossible de proposer des critères sans les inventer. Choisissez un modèle de départ ou enrichissez le catalogue."
+    ],
+    "candidates": [
+     {
+      "key": "score",
+      "label": "Score",
+      "valuedProducts": 30,
+      "spread": 0,
+      "discriminant": false,
+      "used": false,
+      "note": "valeurs trop proches : ne départage pas les produits"
+     },
+     {
+      "key": "note",
+      "label": "Note",
+      "valuedProducts": 12,
+      "spread": 0.77,
+      "discriminant": false,
+      "used": false,
+      "note": "renseigné sur trop peu de produits (12/30)"
+     }
+    ],
+    "missingForSector": []
+   },
+   "draft": null,
+   "alternatives": [],
+   "top3Simulated": null
+  },
+  {
+   "options": {
+    "sector": "generic"
+   },
+   "analysis": {
+    "catalogId": "cat-Divers",
+    "catalogName": "Divers",
+    "productCount": 30,
+    "semanticProducts": 0,
+    "sector": "generic",
+    "sectorLabel": "Générique",
+    "sectorDetected": false,
+    "reliability": "insufficient",
+    "messages": [
+     "Attributs numériques hors de l'échelle 0–1, non utilisés comme critères : poids.",
+     "Les données du catalogue ne permettent pas de différencier vos produits : renseignez leurs caractéristiques (page Enrichissement) ou complétez leurs descriptions avant de publier. Les recommandations ne seraient pas fiables.",
+     "Aucun secteur reconnu et aucune caractéristique chiffrée exploitable : impossible de proposer des critères sans les inventer. Choisissez un modèle de départ ou enrichissez le catalogue."
+    ],
+    "candidates": [
+     {
+      "key": "score",
+      "label": "Score",
+      "valuedProducts": 30,
+      "spread": 0,
+      "discriminant": false,
+      "used": false,
+      "note": "valeurs trop proches : ne départage pas les produits"
+     },
+     {
+      "key": "note",
+      "label": "Note",
+      "valuedProducts": 12,
+      "spread": 0.77,
+      "discriminant": false,
+      "used": false,
+      "note": "renseigné sur trop peu de produits (12/30)"
+     }
+    ],
+    "missingForSector": []
+   },
+   "draft": null,
+   "alternatives": [],
+   "top3Simulated": null
+  }
+ ]
+}

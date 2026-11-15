@@ -37,6 +37,8 @@ async function main() {
   stack = await resolveStack();
   const { api, widget } = stack;
   await prisma.tenant.create({ data: { id: tenantId, email: `${tenantId}@example.test` } });
+  // Les analytics avancés (entonnoir, abandons) font partie des formules Pro/Business : la fixture est abonnée explicitement.
+  await prisma.subscription.create({ data: { tenantId, plan: "BUSINESS", source: "LEGACY" } });
   const catalog = await prisma.catalog.create({ data: { tenantId, name: "Principal", isDefault: true } });
   await prisma.product.createMany({ data: [
     { tenantId, catalogId: catalog.id, name: "Calme", tags: [], attributes: { pace: 0.2 }, purchaseUrl: "http://127.0.0.1:9/achat" },

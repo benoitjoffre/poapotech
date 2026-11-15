@@ -7,9 +7,12 @@ import type {
   ProductEnrichmentResult,
 } from "@poapo/types";
 import type { AuthRequest } from "../middleware/auth";
+import { prisma } from "../lib/prisma";
 import { AiServiceError, callAiService } from "../services/aiClient";
 import { resolveAccountTenantId } from "../services/catalogs";
+import { canonicalPerfumeAxis, estimateAxes } from "../services/deterministicEnrichment";
 import { enqueueEmbeddings } from "../services/embeddings";
+import { entitlementsFor, requireFeature } from "../services/entitlements";
 import {
   applyEnrichment,
   buildEnrichmentBatch,
@@ -25,6 +28,7 @@ import {
   loadEnrichmentCatalog,
   loadEnrichmentProducts,
   loadEnrichmentScope,
+  loadScopeFromBody,
   MAX_ENRICHMENT_ATTEMPTS,
   normalizeEnrichment,
   parseApplyInput,
@@ -73,6 +77,7 @@ router.get("/context", asyncRoute(async (req, res) => {
     quizzes.filter((other) => other.id !== quiz!.id && other.axes.some((axis) => axis.key === key)).map((other) => other.name),
   ]));
   const context: ProductEnrichmentContext = {
+    aiAvailable: (await entitlementsFor(tenantId)).features.aiEnrichment,
     catalog,
     quizzes,
     quiz: quiz ?? null,
@@ -84,7 +89,7 @@ router.get("/context", asyncRoute(async (req, res) => {
 }));
 
 // POST …/estimate — propositions de l'IA pour un lot de produits, sans aucune écriture en base
-router.post("/estimate", asyncRoute(async (req, res) => {
+router.post("/estimate", requireFeature("aiEnrichment"), asyncRoute(async (req, res) => {
   const tenantId = await tenantOf(req);
   const scope = await loadEnrichmentScope(tenantId, req.params.catalogId, req.body?.quizId);
   const { axisKeys, productIds } = parseEstimateInput(req.body, scope);
@@ -153,10 +158,51 @@ router.post("/estimate", asyncRoute(async (req, res) => {
   res.json(response);
 }));
 
+// POST …/estimate-local — propositions par règles déterministes (aucune IA, aucun quota IA, aucune écriture).
+// Disponible dans toutes les formules. Périmètre : un quiz enregistré (`quizId`) ou les axes d'un brouillon (`axes`).
+// L'enregistrement passe ensuite par /apply (mêmes protections : expected, overwrite, verrou optimiste).
+router.post("/estimate-local", asyncRoute(async (req, res) => {
+  const tenantId = await tenantOf(req);
+  const scope = await loadScopeFromBody(tenantId, req.params.catalogId, req.body);
+  const warnings: string[] = [];
+  let input = req.body;
+  if (input?.productIds === undefined) {
+    const rows = await prisma.product.findMany({
+      where: { tenantId, catalogId: scope.catalog.id, active: true }, select: { id: true },
+      orderBy: { name: "asc" }, take: ENRICHMENT_LIMITS.contextProducts + 1,
+    });
+    if (rows.length > ENRICHMENT_LIMITS.contextProducts) warnings.push(`Seuls les ${ENRICHMENT_LIMITS.contextProducts} premiers produits ont été analysés.`);
+    input = { ...input, productIds: rows.slice(0, ENRICHMENT_LIMITS.contextProducts).map((row) => row.id) };
+    if (!input.productIds.length) throw new QuizError(422, "Ce catalogue ne contient aucun produit actif");
+  }
+  const { axisKeys, productIds } = parseEstimateInput(input, scope, ENRICHMENT_LIMITS.contextProducts);
+  const products = await loadEnrichmentProducts(tenantId, scope.catalog.id, productIds);
+  const axes = scope.quiz.axes.filter((axis) => axisKeys.includes(axis.key));
+  const supportedAxes = axes.filter((axis) => canonicalPerfumeAxis(axis)).map((axis) => axis.key);
+  if (!supportedAxes.length) {
+    warnings.push("Aucune règle automatique n'existe pour ces critères : aucune valeur n'est proposée. Renseignez-les à la main, ou avec l'estimation IA si votre formule l'inclut.");
+  }
+  const started = Date.now();
+  const results: ProductEnrichmentResult[] = products.map((product) => ({
+    productId: product.id,
+    productName: product.name,
+    currentValues: currentAxisValues(product.attributes, axisKeys),
+    estimates: estimateAxes(product, axes),
+  }));
+  const response: ProductEnrichmentEstimateResponse = {
+    results,
+    warnings,
+    generation: { model: "local-rules", durationMs: Date.now() - started, attempts: 1, aiProducts: 0 },
+    remaining: enrichmentLimiter.remaining(tenantId),
+    supportedAxes,
+  };
+  res.json(response);
+}));
+
 // POST …/apply — enregistre les valeurs validées par le commerçant
 router.post("/apply", asyncRoute(async (req, res) => {
   const tenantId = await tenantOf(req);
-  const scope = await loadEnrichmentScope(tenantId, req.params.catalogId, req.body?.quizId);
+  const scope = await loadScopeFromBody(tenantId, req.params.catalogId, req.body);
   const updates = parseApplyInput(req.body, scope);
   const { productIds, ...result } = await applyEnrichment(tenantId, scope.catalog.id, updates);
   // Comme après une modification de fiche : l'embedding inclut les valeurs d'axes.

@@ -35,10 +35,31 @@ export default function QuizAppearancePanel({ editor, branding, disabled, error,
 }) {
   const theme = editor.draft?.theme;
   const inherited = resolveQuizTheme(branding);
+  const advancedOpen = !!theme && Object.entries(theme).some(([key, value]) => !!value && !["logoUrl", "primaryColor"].includes(key));
   const effective = resolveQuizTheme(branding, error ? null : theme);
   function change<K extends keyof QuizTheme>(key: K, value: QuizTheme[K]) {
     editor.setDraft((draft) => draft ? { ...draft, theme: { ...draft.theme, [key]: value } } : draft);
   }
+  const renderColor = ({ key, label }: typeof COLORS[number]) => {
+        const value = theme?.[key] ?? "";
+        const invalid = !!value && !isQuizThemeColor(value);
+        return <div className="appearance-color-field" key={key}>
+          <label className="field-label" htmlFor={`quiz-theme-${key}`}>{label}
+            <span className="appearance-inheritance">{value ? "Personnalisée" : "Par défaut"}</span>
+          </label>
+          <div className="appearance-color-inputs">
+            <input type="color" aria-label={`${label} (sélecteur)`}
+              value={isQuizThemeColor(value) ? value : isQuizThemeColor(effective[key]) ? effective[key] : "#6C47FF"}
+              onChange={(event) => change(key, event.target.value)} />
+            <input className="field-input" id={`quiz-theme-${key}`} aria-label={`${label} (hexadécimal)`}
+              value={value} placeholder={effective[key]} maxLength={7} spellCheck={false}
+              aria-invalid={invalid} aria-describedby={invalid ? "theme-validation-error" : undefined}
+              onChange={(event) => change(key, event.target.value || undefined)} />
+            <button type="button" className="btn-ghost btn-sm" disabled={!value} aria-label={`Revenir à la valeur par défaut : ${label}`}
+              onClick={() => change(key, undefined)}>Par défaut</button>
+          </div>
+        </div>;
+  };
   const previewStyle: CSSProperties & Record<string, string> = {
     "--quiz-primary": effective.primaryColor,
     "--quiz-secondary": effective.secondaryColor,
@@ -54,9 +75,8 @@ export default function QuizAppearancePanel({ editor, branding, disabled, error,
   return <section id="editor-panel-appearance" role="tabpanel" aria-labelledby="editor-tab-appearance"
     hidden={!visible} className="quiz-editor-panel appearance-layout">
     <fieldset disabled={disabled} className="appearance-controls">
-      <legend className="page-title">Identité visuelle du quiz</legend>
-      <p className="section-hint">Chaque champ vide hérite du thème de la marque ou du style actuel du quiz.
-        Les changements restent dans ce brouillon, sans modifier les autres quiz.</p>
+      <legend className="page-title">Apparence</legend>
+      <p className="section-hint">Un champ vide garde le réglage par défaut de votre marque. Les changements ne concernent que cette expérience.</p>
       <section className="appearance-section">
         <h3>Logo</h3>
         <label className="field-label" htmlFor="quiz-theme-logo">URL du logo du quiz</label>
@@ -64,52 +84,38 @@ export default function QuizAppearancePanel({ editor, branding, disabled, error,
           value={theme?.logoUrl ?? ""} placeholder={branding.logoUrl || "https://votre-site.fr/logo.png"}
           onChange={(event) => change("logoUrl", event.target.value || undefined)}
           aria-describedby="quiz-logo-hint" />
-        <p id="quiz-logo-hint" className="field-hint">URL HTTP ou HTTPS. Vide : logo de la marque. Aucun fichier n'est envoyé.</p>
-        {theme?.logoUrl && <button type="button" className="btn-ghost btn-sm" onClick={() => change("logoUrl", undefined)}>Utiliser le logo de la marque</button>}
+        <p id="quiz-logo-hint" className="field-hint">URL HTTP ou HTTPS. Laissez vide pour utiliser le logo de votre marque.</p>
+        {theme?.logoUrl && <button type="button" className="btn-ghost btn-sm" onClick={() => change("logoUrl", undefined)}>Utiliser le logo de ma marque</button>}
       </section>
       <section className="appearance-section">
         <h3>Couleurs</h3>
-        {COLORS.map(({ key, label }) => {
-          const value = theme?.[key] ?? "";
-          const invalid = !!value && !isQuizThemeColor(value);
-          return <div className="appearance-color-field" key={key}>
-            <label className="field-label" htmlFor={`quiz-theme-${key}`}>{label}
-              <span className="appearance-inheritance">{value ? "Personnalisée" : "Héritée"}</span>
-            </label>
-            <div className="appearance-color-inputs">
-              <input type="color" aria-label={`${label} (sélecteur)`}
-                value={isQuizThemeColor(value) ? value : isQuizThemeColor(effective[key]) ? effective[key] : "#6C47FF"}
-                onChange={(event) => change(key, event.target.value)} />
-              <input className="field-input" id={`quiz-theme-${key}`} aria-label={`${label} (hexadécimal)`}
-                value={value} placeholder={effective[key]} maxLength={7} spellCheck={false}
-                aria-invalid={invalid} aria-describedby={invalid ? "theme-validation-error" : undefined}
-                onChange={(event) => change(key, event.target.value || undefined)} />
-              <button type="button" className="btn-ghost btn-sm" disabled={!value} aria-label={`Hériter : ${label}`}
-                onClick={() => change(key, undefined)}>Hériter</button>
-            </div>
-          </div>;
-        })}
-        <p className="field-hint">Format #RRGGBB. Sans couleur de fond personnalisée, le dégradé historique est conservé.
-          Vérifiez le contraste de vos textes et boutons dans l'aperçu.</p>
+        {COLORS.slice(0, 1).map(renderColor)}
+        <p className="field-hint">Vérifiez dans l'aperçu que vos textes et boutons restent bien lisibles.</p>
       </section>
+      <details className="appearance-advanced" open={advancedOpen}>
+        <summary>Plus d'options (autres couleurs, polices, textes des boutons)</summary>
+        <section className="appearance-section">
+          <h3>Autres couleurs</h3>
+          {COLORS.slice(1).map(renderColor)}
+        </section>
       <section className="appearance-section">
         <h3>Typographies</h3>
         {(["headingFont", "bodyFont"] as const).map((key) => <div className="field-group" key={key}>
           <label className="field-label" htmlFor={`quiz-theme-${key}`}>{key === "headingFont" ? "Police des titres" : "Police du contenu"}</label>
           <select className="field-select" id={`quiz-theme-${key}`} value={theme?.[key] ?? ""}
             onChange={(event) => change(key, QUIZ_FONTS.find((font) => font.id === event.target.value)?.id)}>
-            <option value="">Hériter du style actuel</option>
+            <option value="">Style par défaut</option>
             {QUIZ_FONTS.map((font) => <option value={font.id} key={font.id}>{font.label}</option>)}
           </select>
         </div>)}
-        <p className="field-hint">Polices locales prédéfinies avec repli système. Aucun téléchargement de police ni CSS libre.</p>
+        <p className="field-hint">Choisissez parmi une sélection de polices.</p>
       </section>
       <section className="appearance-section">
         <h3>Boutons</h3>
         <label className="field-label" htmlFor="quiz-theme-buttonShape">Forme des boutons</label>
         <select className="field-select" id="quiz-theme-buttonShape" value={theme?.buttonShape ?? ""}
           onChange={(event) => change("buttonShape", QUIZ_BUTTON_SHAPES.find((shape) => shape.id === event.target.value)?.id)}>
-          <option value="">Hériter du style actuel (arrondis)</option>
+          <option value="">Style par défaut (arrondis)</option>
           {QUIZ_BUTTON_SHAPES.map((shape) => <option value={shape.id} key={shape.id}>{shape.label}</option>)}
         </select>
         {LABELS.map(({ key, label }) => <div className="field-group" key={key}>
@@ -117,13 +123,14 @@ export default function QuizAppearancePanel({ editor, branding, disabled, error,
           <input className="field-input" id={`quiz-theme-${key}`} value={theme?.[key] ?? ""} maxLength={80}
             placeholder={inherited[key]} onChange={(event) => change(key, event.target.value || undefined)} />
         </div>)}
-        <p className="field-hint">Ces libellés correspondent aux étapes existantes. Le bouton de recommandation produit reste défini dans la configuration du quiz.</p>
+        <p className="field-hint">Textes des boutons du quiz. Le bouton vers les produits se règle dans Réglages.</p>
       </section>
+      </details>
       <button type="button" className="btn-ghost appearance-reset" onClick={() => {
         if (confirm("Réinitialiser uniquement l'apparence au thème de la marque ? Enregistrez ensuite le brouillon pour conserver ce choix.")) {
           editor.setDraft((draft) => draft ? { ...draft, theme: null } : draft);
         }
-      }}>Réinitialiser au thème de la marque</button>
+      }}>Revenir aux réglages de ma marque</button>
     </fieldset>
 
     <aside className="appearance-preview" aria-label="Aperçu graphique du quiz">

@@ -56,7 +56,7 @@ async function main() {
   const panel = page.locator("#editor-panel-publication");
   const shot = async (name) => { if (shots) await page.screenshot({ path: path.join(shots, name), fullPage: true }); };
   const editorUrl = (id) => `${admin}/experiences/${id}/edit`;
-  const save = () => page.getByRole("button", { name: "Enregistrer le brouillon", exact: true }).click();
+  const save = () => page.getByText("Modifications enregistrées automatiquement").first().waitFor({ timeout: 15000 });
   const publicTitle = async () => {
     const publicPage = await context.newPage();
     await publicPage.goto(`${widget}/?clientId=${tenantId}`);
@@ -73,17 +73,14 @@ async function main() {
   // 1-3. Quiz sans campagne : configuration + question, puis enregistrement du brouillon.
   await page.goto(editorUrl(solo.id));
   await page.getByRole("heading", { name: "Quiz recette", level: 1 }).waitFor();
-  eq((await request(`/api/campaigns?quizId=${solo.id}`)).body.data.length, 0, "quiz sans campagne");
   await page.waitForFunction(() => document.querySelector("#quiz-title")?.value === "Quiz recette titre initial");
-  await page.getByLabel("Titre public", { exact: true }).fill("Titre publié par la recette");
-  await page.getByRole("button", { name: "Appliquer au brouillon en cours" }).click();
-  await waitState("applied");
+  await page.getByLabel("Titre affiché aux visiteurs", { exact: true }).fill("Titre publié par la recette");
   await tab("Questions").click();
   const card = page.locator(".questions-list .question-card").first();
   await card.getByRole("button", { name: /Modifier/ }).first().click();
   await card.locator(".question-meta-form input").first().fill("Question publiée par la recette ?");
   await card.getByRole("button", { name: "Enregistrer", exact: true }).click();
-  await page.getByRole("button", { name: "Enregistrer le brouillon", exact: true }).waitFor();
+  await page.getByText("Modifications enregistrées automatiquement").first().waitFor({ timeout: 15000 });
   await save();
   await waitState("saved");
   const draft = (await request(`/api/quizzes/${solo.id}/draft`)).body;
@@ -101,10 +98,10 @@ async function main() {
 
   // 4. Diagnostic serveur.
   await tab("Publication").click();
-  await panel.getByRole("button", { name: "Vérifier le quiz" }).click();
-  await panel.getByText("Aucune erreur bloquante.", { exact: true }).waitFor();
-  const confirm = panel.getByLabel("Je confirme le remplacement", { exact: false });
-  const publish = panel.getByRole("button", { name: "Publier le brouillon", exact: true });
+  await panel.getByRole("button", { name: "Vérifier avant de publier" }).click();
+  await panel.getByText("Rien à corriger.", { exact: true }).waitFor();
+  const confirm = panel.getByLabel("Je confirme : mes visiteurs verront", { exact: false });
+  const publish = panel.getByRole("button", { name: "Publier", exact: true });
   await confirm.check();
 
   // Échec transactionnel simulé : rien n'est publié, le brouillon reste.
@@ -116,11 +113,11 @@ async function main() {
   eq((await request(`/api/quizzes/${solo.id}/draft`)).body.hasChanges, true, "le brouillon est conservé après un échec");
 
   // 5. Publication de la révision enregistrée.
-  await panel.getByRole("button", { name: "Vérifier le quiz" }).click();
-  await panel.getByText("Aucune erreur bloquante.", { exact: true }).waitFor();
+  await panel.getByRole("button", { name: "Vérifier avant de publier" }).click();
+  await panel.getByText("Rien à corriger.", { exact: true }).waitFor();
   await confirm.check();
   await publish.click();
-  await panel.getByText("Quiz publié avec succès.", { exact: false }).waitFor();
+  await panel.getByText("Expérience publiée", { exact: false }).waitFor();
   await shot("publication-publiee.png");
 
   // 6-7. Lien public rechargé : contenu publié, brouillon réinitialisé.
@@ -140,14 +137,12 @@ async function main() {
   await page.goto(editorUrl(solo.id));
   await page.getByRole("heading", { name: "Quiz recette", level: 1 }).waitFor();
   await page.waitForFunction(() => document.querySelector("#quiz-title")?.value === "Titre publié par la recette");
-  await page.getByLabel("Titre public", { exact: true }).fill("Titre en conflit");
-  await page.getByRole("button", { name: "Appliquer au brouillon en cours" }).click();
-  await waitState("applied");
+  await page.getByLabel("Titre affiché aux visiteurs", { exact: true }).fill("Titre en conflit");
   await save();
   await waitState("saved");
   await tab("Publication").click();
-  await panel.getByRole("button", { name: "Vérifier le quiz" }).click();
-  await panel.getByText("Aucune erreur bloquante.", { exact: true }).waitFor();
+  await panel.getByRole("button", { name: "Vérifier avant de publier" }).click();
+  await panel.getByText("Rien à corriger.", { exact: true }).waitFor();
   await confirm.check();
   const current = (await request(`/api/quizzes/${solo.id}/draft`)).body;
   const concurrent = await request(`/api/quizzes/${solo.id}/draft`, "PUT", {
@@ -155,38 +150,38 @@ async function main() {
   eq(concurrent.status, 200);
   await publish.click();
   await waitState("conflict");
-  ok(await page.getByText(/Conflit de révision/).first().isVisible());
+  ok(await page.getByText(/modifiée ailleurs|Conflit/).first().isVisible());
   eq((await publicConfig()).quizTitle, "Titre publié par la recette", "un conflit ne publie rien");
   eq((await request(`/api/quizzes/${solo.id}/draft`)).body.draft.config.quizTitle, "Titre concurrent");
-  await tab("Configuration").click();
-  eq(await page.getByLabel("Titre public", { exact: true }).inputValue(), "Titre en conflit", "modifications locales conservées après conflit");
+  await tab("Réglages").click();
+  eq(await page.getByLabel("Titre affiché aux visiteurs", { exact: true }).inputValue(), "Titre en conflit", "modifications locales conservées après conflit");
   await shot("publication-conflit.png");
 
   // Liens du diagnostic : chaque erreur ouvre la bonne section et cible le champ.
   await page.goto(editorUrl(broken.quiz.id));
   await page.getByRole("heading", { name: "Quiz à corriger", level: 1 }).waitFor();
   await tab("Publication").click();
-  await panel.getByRole("button", { name: "Vérifier le quiz" }).click();
-  await panel.getByRole("heading", { name: /Erreurs bloquantes/ }).waitFor();
+  await panel.getByRole("button", { name: "Vérifier avant de publier" }).click();
+  await panel.getByRole("heading", { name: /À corriger avant de publier/ }).waitFor();
   await shot("diagnostic-erreurs.png");
   const fix = (text) => panel.locator("li", { hasText: text }).getByRole("button", { name: "Corriger" }).first();
   const focused = (id) => page.waitForFunction((target) => document.activeElement?.id === target, id, { timeout: 5000 });
 
   await fix("Aucun produit actif").click();
   await focused("quiz-use-all-products");
-  eq(await tab("Produits").getAttribute("aria-selected"), "true");
+  eq(await tab("Réglages").getAttribute("aria-selected"), "true");
 
   await tab("Publication").click();
   await fix("Question accessible sans réponse active").click();
   await focused(`editor-question-${broken.question.id}`);
   eq(await tab("Questions").getAttribute("aria-selected"), "true");
 
-  await tab("Configuration").click();
-  await page.getByLabel("Nom interne", { exact: true }).fill("Nom local non enregistré");
+  await tab("Réglages").click();
+  await page.getByLabel("Nom de l'expérience (visible par vous seul)", { exact: true }).fill("Nom local non enregistré");
   await tab("Publication").click();
   await fix("Le nom, le titre").click();
-  eq(await tab("Configuration").getAttribute("aria-selected"), "true");
-  eq(await page.getByLabel("Nom interne", { exact: true }).inputValue(), "Nom local non enregistré", "modifications locales préservées par la navigation du diagnostic");
+  eq(await tab("Réglages").getAttribute("aria-selected"), "true");
+  eq(await page.getByLabel("Nom de l'expérience (visible par vous seul)", { exact: true }).inputValue(), "Nom local non enregistré", "modifications locales préservées par la navigation du diagnostic");
   await focused("quiz-cta");
   eq(await page.locator("[data-state]").getAttribute("data-state"), "local");
 

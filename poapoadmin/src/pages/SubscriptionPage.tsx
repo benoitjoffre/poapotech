@@ -4,15 +4,14 @@ import type { SubscriptionFeatureKey, SubscriptionOverview, SubscriptionQuotaKey
 import { apiFetch } from "../lib/api";
 import "./subscription.css";
 
-const QUOTAS: { key: SubscriptionQuotaKey; label: string; unit: string }[] = [
+const QUOTAS: { key: SubscriptionQuotaKey; label: string; unit: string; plural?: string }[] = [
   { key: "catalogs", label: "Catalogues", unit: "catalogue" },
-  { key: "publishedExperiences", label: "Expériences publiées", unit: "expérience" },
+  { key: "publishedExperiences", label: "Quiz en ligne", unit: "quiz", plural: "quiz" },
   { key: "recommendationsPerMonth", label: "Recommandations ce mois-ci", unit: "recommandation" },
 ];
 const FEATURE_NOTES: Record<SubscriptionFeatureKey, string> = {
   aiEnrichment: "Complète automatiquement les caractéristiques de vos produits.",
   advancedAnalytics: "Entonnoir détaillé, abandons, variantes A/B et suggestions.",
-  campaigns: "Planifiez des opérations autour de vos expériences.",
 };
 const STATUS_LABELS = { ACTIVE: "Actif", EXPIRED: "Accès offert expiré", CANCELED: "Annulé" } as const;
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "");
@@ -78,7 +77,7 @@ export default function SubscriptionPage() {
         <h3 id="sub-usage">Consommation</h3>
         <p>Mise à jour à chaque visite de cette page.</p>
         <div className="sub-quotas">
-          {QUOTAS.map(({ key, label, unit }) => {
+          {QUOTAS.map(({ key, label, unit, plural }) => {
             const limit = data.limits[key];
             const used = data.usage[key];
             const rawLvl = level(used, limit);
@@ -97,7 +96,7 @@ export default function SubscriptionPage() {
                   {limit === null
                     ? "Pas de limite sur votre formule, la consommation reste suivie."
                     : rawLvl === "full" ? "— limite atteinte"
-                    : `${left!.toLocaleString("fr-FR")} ${unit}${left! > 1 ? "s" : ""} restante${left! > 1 ? "s" : ""}`}
+                    : `${left!.toLocaleString("fr-FR")} ${left! > 1 ? plural ?? `${unit}s` : unit} restant${left! > 1 ? "s" : ""}`}
                   {key === "recommendationsPerMonth" && ` · remise à zéro le ${fmtDate(data.usagePeriod.resetsAt)}`}
                 </span>
               </article>

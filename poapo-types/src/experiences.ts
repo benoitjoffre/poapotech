@@ -1,17 +1,4 @@
-import type { CampaignOccasion, CampaignStatus } from "./index";
-
-/** Campagne rattachée à un quiz : simple référence, jamais une copie du quiz. */
-export interface ExperienceCampaign {
-  id: string;
-  name: string;
-  status: CampaignStatus;
-  effectiveStatus: CampaignStatus;
-  occasion: CampaignOccasion;
-  occasionLabel: string | null;
-  startsAt: string | null;
-  endsAt: string | null;
-  updatedAt: string;
-}
+import type { QuizOccasion } from "./index";
 
 export interface ExperienceStats {
   started: number;
@@ -29,6 +16,8 @@ export interface ExperienceListItem {
   catalog: { id: string; name: string };
   /** Quiz actif ET boutique active : c'est la seule condition d'accès public. */
   accessible: boolean;
+  /** État du quiz seul (compté dans le quota « Quiz en ligne »), indépendamment de la boutique. */
+  active: boolean;
   questionCount: number;
   hasDraft: boolean;
   draftUpdatedAt: string | null;
@@ -38,7 +27,10 @@ export interface ExperienceListItem {
   lastModifiedAt: string;
   /** null lorsqu'aucun événement n'a été enregistré sur la période. */
   stats: ExperienceStats | null;
-  campaigns: ExperienceCampaign[];
+  occasion: QuizOccasion | null;
+  occasionLabel: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
 }
 
 export interface ExperiencesOverview {

@@ -2,13 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { ExperienceListItem } from "@poapo/types";
 import {
-  campaignCountLabel, filterExperiences, sortExperiences, totalsOf, type ExperienceFilters,
+  filterExperiences, sortExperiences, totalsOf, type ExperienceFilters,
 } from "../../poapoadmin/src/lib/experiences";
 
 const item = (id: string, patch: Partial<ExperienceListItem> = {}): ExperienceListItem => ({
   id, name: id, quizTitle: id, industry: "", isDefault: false, catalog: { id: "c1", name: "Principal" },
-  accessible: true, questionCount: 3, hasDraft: false, draftUpdatedAt: null, correction: null,
-  updatedAt: "2026-10-01T00:00:00.000Z", lastModifiedAt: "2026-10-01T00:00:00.000Z", stats: null, campaigns: [], ...patch,
+  accessible: true, active: true, questionCount: 3, hasDraft: false, draftUpdatedAt: null, correction: null,
+  updatedAt: "2026-10-01T00:00:00.000Z", lastModifiedAt: "2026-10-01T00:00:00.000Z", stats: null, occasion: null, occasionLabel: null, startsAt: null, endsAt: null, ...patch,
 });
 const none: ExperienceFilters = { query: "", availability: "all", draft: "all", catalogId: "" };
 const ids = (items: ExperienceListItem[]) => items.map((entry) => entry.id);
@@ -50,7 +50,4 @@ test("expériences : totaux sans chiffres inventés quand les statistiques sont 
   assert.deepEqual(totalsOf([]), { accessible: 0, started: 0, completed: 0 });
   assert.deepEqual(totalsOf([item("a"), item("b", { accessible: false, stats: { started: 4, completed: 2, productClicks: 1 } })]),
     { accessible: 1, started: 4, completed: 2 });
-  assert.equal(campaignCountLabel(0), "Aucune campagne");
-  assert.equal(campaignCountLabel(1), "1 campagne");
-  assert.equal(campaignCountLabel(3), "3 campagnes");
 });

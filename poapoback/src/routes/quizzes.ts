@@ -1,3 +1,4 @@
+import { parseQuizPeriod, QUIZ_PERIOD_KEYS } from "../services/quizPeriod";
 import { Router } from "express";
 import type { QuizAxis, QuizInput } from "@poapo/types";
 import { prisma } from "../lib/prisma";
@@ -30,7 +31,7 @@ router.post("/:id/publication/check", asyncRoute(async (req: AuthRequest, res) =
 
 router.post("/:id/publication/publish", asyncRoute(async (req: AuthRequest, res) => {
   if (req.body?.confirm !== true) throw new QuizError(400, "Confirmation explicite de publication requise");
-  res.json(await publishQuizDraft(req.tenant!.tenantId, req.params.id, req.body?.revision, req.body?.confirmedCampaignIds));
+  res.json(await publishQuizDraft(req.tenant!.tenantId, req.params.id, req.body?.revision));
 }));
 
 router.post("/:id/preview", asyncRoute(async (req: AuthRequest, res) => {
@@ -165,7 +166,7 @@ router.get(
 router.put(
   "/:id",
   asyncRoute(async (req: AuthRequest, res) => {
-    if (Object.keys(req.body ?? {}).some((key) => key !== "active")) {
+    if (Object.keys(req.body ?? {}).some((key) => key !== "active" && !(QUIZ_PERIOD_KEYS as readonly string[]).includes(key))) {
       await resolveQuiz(req.tenant!.tenantId, req.params.id);
       throw new QuizError(409, "Le contenu du quiz se modifie uniquement via son brouillon avec une révision");
     }
@@ -180,7 +181,10 @@ router.put(
       if (body.active === true) await assertPublishedQuizValid(quiz, db);
       return db.quiz.update({
         where: { id: quiz.id },
-        data: { ...(body.active !== undefined && { active: body.active }) },
+        data: {
+          ...(body.active !== undefined && { active: body.active }),
+          ...((QUIZ_PERIOD_KEYS as readonly string[]).some((key) => (req.body as Record<string, unknown>)[key] !== undefined) && parseQuizPeriod(req.body as Record<string, unknown>, quiz)),
+        },
         include: quizInclude,
       });
     });

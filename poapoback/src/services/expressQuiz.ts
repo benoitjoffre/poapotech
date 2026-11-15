@@ -1,4 +1,5 @@
 import type {
+  AnswerEffects,
   ExpressAnalysis,
   ExpressAxis,
   ExpressAxisCandidate,
@@ -18,8 +19,12 @@ import { computeProfile } from "./scoring";
 import { AXIS_KEY_PATTERN, AxisValidationError, invalidAxisValue, isAxisValue, validateAxes } from "./axes";
 import { catalogAxes, resolveCatalog } from "./catalogs";
 import { createQuestionsWithAnswers, MANUAL_IMPACT_LIMIT } from "./questions";
-import { DISCRIMINANT_SPREAD, DRAFT_TEXT_LIMITS, GENERATION_LIMITS, MIN_AXIS_AMPLITUDE, PREVIEW_TIMEOUT_MS } from "./quizGeneration";
+import { DISCRIMINANT_SPREAD, DRAFT_TEXT_LIMITS, GENERATION_LIMITS, MIN_AXIS_AMPLITUDE, PREVIEW_TIMEOUT_MS } from "./generationLimits";
 import { createQuiz, ensureDefaultQuiz, QuizError } from "./quizzes";
+import { inspectEffectsAgainstCatalog, parseAnswerEffects, validateEffectsWithImpacts } from "./answerEffects";
+import { profileColumns } from "./catalogProfile";
+import { universalAllowedFor, universalQuestionsEnabled } from "./expressFlags";
+import { recommendQuizWithEffects } from "./effectsRecommendation";
 import { type AxisTemplate, type QuestionTemplate, type SectorTemplate, sectorById, SECTORS } from "./expressSectors";
 
 /**
@@ -41,6 +46,8 @@ export interface ExpressProduct {
   id: string;
   name: string;
   brand: string | null;
+  /** Lu uniquement par le diagnostic de colonnes (profileColumns) ; la génération ne l'utilise pas. */
+  price?: number | null;
   description: string | null;
   tags: string[];
   attributes: unknown;
@@ -57,6 +64,8 @@ export interface ExpressContext {
   products: ExpressProduct[];
   /** Axes déjà définis par les quiz de ce catalogue. */
   existingAxes: QuizAxis[];
+  /** En-têtes d'origine (clé d'attribut → libellé du commerçant), relus des imports terminés ; absents des catalogues saisis à la main. */
+  attributeLabels?: Record<string, string>;
 }
 
 export interface ExpressOptions {
@@ -65,6 +74,10 @@ export interface ExpressOptions {
   sector?: ExpressSector;
   /** Clés de critères que le commerçant a retirées : ni elles ni leur équivalent sectoriel ne sont reproposés. */
   exclude?: string[];
+  /** « universal » : générateur avancé (critères tirés des données, catégories, budget) ; « legacy » : modèles sectoriels. Voir universalQuiz.ts. */
+  generator?: "universal" | "legacy";
+  /** Décision explicite du commerçant : proposer un plafond de budget STRICT au lieu d'une simple préférence de budget. */
+  strictBudget?: boolean;
 }
 
 /** Point d'extension : une génération IA ultérieure implémentera la même interface sans toucher aux routes. */
@@ -90,6 +103,12 @@ function lowerFirst(value: string): string {
 
 function signature(impacts: Record<string, number>): string {
   return JSON.stringify(Object.entries(impacts).filter(([, v]) => v !== 0).sort(([a], [b]) => a.localeCompare(b)));
+}
+
+/** Signature d'une réponse : impacts + effets de filtre ou de préférence. « Sans préférence » (none) et le lien d'axe sont neutres. */
+export function answerSignature(impacts: Record<string, number>, effects?: AnswerEffects | null): string {
+  const active = (effects?.effects ?? []).filter((effect) => effect.type === "category" || effect.type === "range");
+  return active.length ? `${signature(impacts)}#${JSON.stringify(active)}` : signature(impacts);
 }
 
 // ─── 1. Analyse du catalogue ──────────────────────────────────────────────────
@@ -340,7 +359,7 @@ function analyse(context: ExpressContext, options: ExpressOptions): Analysis {
     messages.push("Les données du catalogue ne permettent pas de différencier vos produits : renseignez leurs caractéristiques (page Enrichissement) ou complétez leurs descriptions avant de publier. Les recommandations ne seraient pas fiables.");
   }
   if (!selected.length && !semanticPlans.length) {
-    messages.push("Aucun secteur reconnu et aucune caractéristique chiffrée exploitable : impossible de proposer des critères sans les inventer. Enrichissez le catalogue, choisissez un modèle ou utilisez la création manuelle.");
+    messages.push("Aucun secteur reconnu et aucune caractéristique chiffrée exploitable : impossible de proposer des critères sans les inventer. Choisissez un modèle de départ ou enrichissez le catalogue.");
   }
 
   return { sector, sectorDetected: forced === undefined && !!sector, stats, selected, semanticPlans, candidates, missingForSector, messages, reliability, semanticProducts };
@@ -460,6 +479,8 @@ function emptyAnalysis(context: ExpressContext, analysis: Analysis): ExpressAnal
     messages: analysis.messages,
     candidates: analysis.candidates,
     missingForSector: analysis.missingForSector,
+    // Diagnostic additif en lecture seule (lot 10B) : n'alimente ni la sélection des axes ni les questions.
+    columns: profileColumns(context.products, { axisKeys: context.existingAxes.map((axis) => axis.key) }),
   };
 }
 
@@ -532,7 +553,7 @@ export interface ValidatedExpressDraft {
     ctaText: string;
     industry: string;
     axes: QuizAxis[];
-    questions: { text: string; helpText: string | null; answers: { text: string; emoji: string | null; impacts: Record<string, number> }[] }[];
+    questions: { text: string; helpText: string | null; answers: { text: string; emoji: string | null; impacts: Record<string, number>; effects: AnswerEffects | null }[] }[];
   };
   validation: ExpressValidation;
 }
@@ -541,7 +562,7 @@ export interface ValidatedExpressDraft {
  * Revalide entièrement un brouillon envoyé par le client, quel que soit son origine. Refuse tout brouillon structurellement
  * invalide (erreur 400) ; les limites dues aux données du catalogue deviennent une fiabilité et des avertissements.
  */
-export function validateExpressDraft(raw: unknown, context: ExpressContext): ValidatedExpressDraft {
+export function validateExpressDraft(raw: unknown, context: ExpressContext, validation: { allowStrict?: boolean; allowEffects?: boolean } = {}): ValidatedExpressDraft {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new QuizError(400, "Brouillon invalide");
   const body = raw as Record<string, unknown>;
   const warnings: string[] = [];
@@ -556,7 +577,12 @@ export function validateExpressDraft(raw: unknown, context: ExpressContext): Val
     if (err instanceof AxisValidationError) throw new QuizError(400, err.message);
     throw err;
   }
-  if (axes.length < 1 || axes.length > MAX_EXPRESS_AXES) throw new QuizError(400, `Entre 1 et ${MAX_EXPRESS_AXES} critères de recommandation sont attendus`);
+  if (axes.length > MAX_EXPRESS_AXES) throw new QuizError(400, `Entre 1 et ${MAX_EXPRESS_AXES} critères de recommandation sont attendus`);
+  // Sans critère chiffré, le brouillon doit s'appuyer sur des questions à effets (catégories, budget).
+  const rawHasEffects = Array.isArray(body.questions) && body.questions.some((q: unknown) =>
+    !!q && typeof q === "object" && Array.isArray((q as { answers?: unknown }).answers) &&
+    ((q as { answers: unknown[] }).answers).some((a) => !!a && typeof a === "object" && (a as { effects?: unknown }).effects != null));
+  if (axes.length < 1 && !rawHasEffects) throw new QuizError(400, `Entre 1 et ${MAX_EXPRESS_AXES} critères de recommandation sont attendus`);
   const axisKeys = new Set(axes.map((axis) => axis.key));
   const labels = new Set<string>();
   for (const axis of axes) {
@@ -598,19 +624,38 @@ export function validateExpressDraft(raw: unknown, context: ExpressContext): Val
         }
         if (value !== 0) impacts[key] = value;
       }
-      return { text: answerText, emoji: optionalText(answer.emoji, `${where} (emoji)`, DRAFT_TEXT_LIMITS.emoji), impacts };
+      // Effets avancés : refusés tant que le générateur avancé n'est pas activé, lus strictement, jamais de plafond strict sans décision du commerçant.
+      let effects: AnswerEffects | null = null;
+      if (answer.effects !== undefined && answer.effects !== null) {
+        // Création Express uniquement : les comptes non éligibles ne peuvent pas créer de réponses à effets (le quiz déjà créé, lui, n'est jamais concerné).
+        if (!(validation.allowEffects ?? universalQuestionsEnabled())) throw new QuizError(400, `${where} : les questions avancées ne sont pas disponibles`);
+        const parsedEffects = parseAnswerEffects(answer.effects);
+        if (!parsedEffects.ok) throw new QuizError(400, `${where} : effets invalides (${parsedEffects.errors.join(" ; ")})`);
+        effects = parsedEffects.value.effects.length ? parsedEffects.value : null;
+        if (effects?.effects.some((effect) => (effect.type === "category" || effect.type === "range") && effect.mode === "strict") && !validation.allowStrict) {
+          throw new QuizError(400, `${where} : un plafond strict doit être confirmé explicitement`);
+        }
+        if (effects) {
+          const issues = validateEffectsWithImpacts(effects, impacts);
+          if (issues.length) throw new QuizError(400, `${where} : ${issues[0]}`);
+        }
+      }
+      return { text: answerText, emoji: optionalText(answer.emoji, `${where} (emoji)`, DRAFT_TEXT_LIMITS.emoji), impacts, effects };
     });
-    if (new Set(parsed.map((answer) => signature(answer.impacts))).size < 2) {
+    if (new Set(parsed.map((answer) => answerSignature(answer.impacts, answer.effects))).size < 2) {
       throw new QuizError(400, `${label} : les réponses n'ont aucun effet distinct sur les critères, la question ne change pas la recommandation`);
     }
-    const empty = parsed.filter((answer) => !Object.keys(answer.impacts).length).length;
-    if (empty) warnings.push(`${label} : ${empty} réponse(s) sans effet sur les critères.`);
-    const sig = parsed.map((answer) => signature(answer.impacts)).sort().join("|");
+    const neutralByDesign = parsed.some((answer) => answer.effects?.effects.some((effect) => effect.type === "none"));
+    const empty = parsed.filter((answer) => !Object.keys(answer.impacts).length && !answer.effects?.effects.some((effect) => effect.type !== "none")).length;
+    if (empty && !neutralByDesign) warnings.push(`${label} : ${empty} réponse(s) sans effet sur les critères.`);
+    const sig = parsed.map((answer) => answerSignature(answer.impacts, answer.effects)).sort().join("|");
     if (seenSignatures.has(sig)) warnings.push(`${label} produit les mêmes effets que la question ${seenSignatures.get(sig)! + 1} : elle est probablement redondante.`);
     else seenSignatures.set(sig, qi);
     return { text, helpText: optionalText(question.helpText, `${label} (aide)`, DRAFT_TEXT_LIMITS.helpText), answers: parsed };
   });
 
+  const hasEffects = questions.some((question) => question.answers.some((answer) => answer.effects?.effects.some((effect) => effect.type === "category" || effect.type === "range")));
+  if (axes.length < 1 && !hasEffects) throw new QuizError(400, `Entre 1 et ${MAX_EXPRESS_AXES} critères de recommandation sont attendus`);
   for (const axis of axes) {
     const total = amplitude(questions, axis.key);
     if (total === 0) throw new QuizError(400, `Le critère « ${axis.label} » n'est influencé par aucune réponse : supprimez-le ou ajoutez une question.`);
@@ -631,7 +676,28 @@ export function validateExpressDraft(raw: unknown, context: ExpressContext): Val
       : null;
     if (bad) throw new QuizError(400, `Le produit « ${product.name} » a une valeur hors de l'échelle 0–1 pour « ${bad} » : corrigez le catalogue avant d'utiliser ce critère.`);
   }
-  const { reliability, discriminantKeys } = assessReliability(axisKeys, stats, context.products);
+  const base = assessReliability(axisKeys, stats, context.products);
+  const { discriminantKeys } = base;
+  let reliability = base.reliability;
+  if (hasEffects) {
+    // Critères de choix (catégories, prix) : cohérence avec les données réelles, puis fiabilité = nombre de critères qui séparent réellement les produits.
+    const profiles = profileColumns(context.products, { axisKeys: [...axisKeys] });
+    const usable = new Set<string>();
+    for (const question of questions) for (const answer of question.answers) {
+      if (!answer.effects) continue;
+      const found = inspectEffectsAgainstCatalog(answer.effects, profiles);
+      if (found.errors.length) throw new QuizError(400, `Question « ${question.text} » : ${found.errors[0]}`);
+      for (const message of found.warnings) if (!warnings.includes(message)) warnings.push(message);
+      for (const effect of answer.effects.effects) {
+        if (effect.type !== "category" && effect.type !== "range") continue;
+        const profile = profiles.find((p) => p.key === effect.criterion);
+        if (profile?.usable && profile.discriminance >= 0.1) usable.add(effect.criterion);
+      }
+    }
+    const separating = discriminantKeys.size + usable.size;
+    const semantic = context.products.filter((product) => product.embeddingReady).length;
+    reliability = separating >= 2 ? "reliable" : separating === 1 || semantic >= 2 ? "limited" : "insufficient";
+  }
   for (const axis of axes) {
     if (!discriminantKeys.has(axis.key)) warnings.push(`« ${axis.label} » ne distingue pas vos produits (valeurs absentes ou trop proches) : il n'agit que via les descriptions.`);
   }
@@ -664,17 +730,27 @@ export function validateExpressDraft(raw: unknown, context: ExpressContext): Val
 export async function loadExpressContext(tenantId: string, catalogId: unknown): Promise<ExpressContext> {
   if (typeof catalogId !== "string" || !catalogId) throw new QuizError(400, "catalogId est requis");
   const catalog = await resolveCatalog(tenantId, catalogId);
-  const [tenant, products, existingAxes] = await Promise.all([
+  const [tenant, products, existingAxes, batches] = await Promise.all([
     prisma.tenant.findUnique({ where: { id: tenantId }, select: { industry: true } }),
     prisma.product.findMany({
       where: { tenantId, catalogId: catalog.id, active: true },
-      select: { id: true, name: true, brand: true, description: true, tags: true, attributes: true, embeddingStatus: true },
+      select: { id: true, name: true, brand: true, price: true, description: true, tags: true, attributes: true, embeddingStatus: true },
       orderBy: [{ featured: "desc" }, { name: "asc" }],
       take: 2000,
     }),
     catalogAxes(tenantId, catalog.id),
+    // Libellés d'origine des colonnes importées : lecture seule, jamais bloquante.
+    prisma.importBatch.findMany({ where: { tenantId, catalogId: catalog.id, status: "completed" }, orderBy: { createdAt: "asc" }, select: { result: true }, take: 50 }).catch(() => []),
   ]);
+  const attributeLabels: Record<string, string> = {};
+  for (const batch of batches ?? []) {
+    const labels = (batch.result as { labels?: unknown } | null)?.labels;
+    if (labels && typeof labels === "object" && !Array.isArray(labels)) {
+      for (const [key, value] of Object.entries(labels as Record<string, unknown>)) if (typeof value === "string" && value.trim()) attributeLabels[key] = value.trim().slice(0, 80);
+    }
+  }
   return {
+    attributeLabels,
     catalogId: catalog.id,
     catalogName: catalog.name,
     catalogDescription: catalog.description,
@@ -684,7 +760,7 @@ export async function loadExpressContext(tenantId: string, catalogId: unknown): 
   };
 }
 
-export function parseExpressOptions(raw: unknown): ExpressOptions {
+export function parseExpressOptions(raw: unknown, tenantId?: string): ExpressOptions {
   const body = raw && typeof raw === "object" ? raw as Record<string, unknown> : {};
   const options: ExpressOptions = {};
   if (body.questionCount !== undefined) {
@@ -701,13 +777,22 @@ export function parseExpressOptions(raw: unknown): ExpressOptions {
     }
     options.exclude = body.exclude as string[];
   }
+  if (body.generator !== undefined) {
+    if (body.generator !== "universal" && body.generator !== "legacy") throw new QuizError(400, "generator doit valoir universal ou legacy");
+    if (body.generator === "universal" && !(tenantId === undefined ? universalQuestionsEnabled() : universalAllowedFor(tenantId))) throw new QuizError(400, "Les questions avancées ne sont pas disponibles");
+    options.generator = body.generator;
+  }
+  if (body.strictBudget !== undefined) {
+    if (typeof body.strictBudget !== "boolean") throw new QuizError(400, "strictBudget doit être un booléen");
+    options.strictBudget = body.strictBudget;
+  }
   return options;
 }
 
 /** Enregistre le brouillon comme nouvelle expérience INACTIVE (jamais publiée). */
 export async function saveExpressDraft(tenantId: string, body: Record<string, unknown>) {
   const context = await loadExpressContext(tenantId, body.catalogId);
-  const { draft, validation } = validateExpressDraft(body.draft, context);
+  const { draft, validation } = validateExpressDraft(body.draft, context, { allowStrict: body.strictConfirmed === true, allowEffects: universalAllowedFor(tenantId) });
   if (validation.reliability !== "reliable" && body.acknowledgeLimits !== true) {
     throw new QuizError(409, "Les données du catalogue ne permettent pas des recommandations pleinement fiables : confirmez que vous enregistrez ce brouillon en connaissance de cause.");
   }
@@ -719,7 +804,7 @@ export async function saveExpressDraft(tenantId: string, body: Record<string, un
     }, tx);
     const counts = await createQuestionsWithAnswers(tx, { tenantId, quizId: quiz.id, startOrder: 0 }, draft.questions.map((question) => ({
       text: question.text, helpText: question.helpText, type: "single" as const,
-      answers: question.answers.map((answer) => ({ text: answer.text, emoji: answer.emoji, impacts: answer.impacts })),
+      answers: question.answers.map((answer) => ({ text: answer.text, emoji: answer.emoji, impacts: answer.impacts, effects: answer.effects })),
     })));
     return { quiz, counts };
   });
@@ -733,13 +818,33 @@ export async function saveExpressDraft(tenantId: string, body: Record<string, un
 /** Recommandation réelle (moteur existant, sans écriture) pour des réponses choisies dans le brouillon. */
 export async function previewExpressDraft(tenantId: string, body: Record<string, unknown>): Promise<ExpressPreviewResponse> {
   const context = await loadExpressContext(tenantId, body.catalogId);
-  const { draft, validation } = validateExpressDraft(body.draft, context);
+  const { draft, validation } = validateExpressDraft(body.draft, context, { allowStrict: body.strictConfirmed === true, allowEffects: universalAllowedFor(tenantId) });
   const choices = body.answers;
   if (!Array.isArray(choices) || choices.length !== draft.questions.length ||
       choices.some((choice, index) => !Number.isInteger(choice) || choice < 0 || choice >= draft.questions[index].answers.length)) {
     throw new QuizError(400, "Choisissez une réponse pour chaque question");
   }
   if (!context.products.length) throw new QuizError(422, "Ce catalogue ne contient aucun produit actif");
+  if (draft.questions.some((question) => question.answers.some((answer) => answer.effects))) {
+    // Même traitement des effets que la soumission publique (filtres stricts, préférences souples) ; états no_match / constraints_unreliable explicites.
+    const rec = await recommendQuizWithEffects({
+      tenantId, catalogId: context.catalogId, industry: draft.industry, axes: draft.axes,
+      answers: choices.map((choice: number, index) => ({ questionId: `q${index}`, impacts: draft.questions[index].answers[choice].impacts, effects: draft.questions[index].answers[choice].effects })),
+    }, undefined, { forceEffectsPath: true, resultCount: 3 });
+    const ranking = rec.ranking?.length ? rec.ranking : [{ id: rec.product.id, score: 0 }];
+    const known = new Map(context.products.map((product) => [product.id, product]));
+    if (ranking.some((item) => !known.has(item.id))) throw new QuizError(502, "La recommandation renvoyée ne fait pas partie de ce catalogue");
+    const rows = await prisma.product.findMany({ where: { tenantId, catalogId: context.catalogId, id: { in: ranking.map((item) => item.id) } }, select: { id: true, imageUrl: true, price: true } });
+    const extras = new Map(rows.map((row) => [row.id, row]));
+    return {
+      reliability: validation.reliability,
+      profileSummary: rec.profileSummary as unknown as ExpressPreviewResponse["profileSummary"],
+      recommendations: ranking.map((item) => {
+        const product = known.get(item.id)!;
+        return { product: { id: product.id, name: product.name, brand: product.brand, imageUrl: extras.get(item.id)?.imageUrl ?? null, price: extras.get(item.id)?.price ?? null }, score: item.score };
+      }),
+    };
+  }
   const profile = computeProfile(draft.axes, choices.map((choice: number, index) => draft.questions[index].answers[choice].impacts));
   let result: { productId: string; profileSummary: ExpressPreviewResponse["profileSummary"]; topN?: { id: string; score: number }[] };
   try {

@@ -82,7 +82,7 @@ export const SECTORS: SectorTemplate[] = [
   {
     id: "perfume",
     label: "Parfum",
-    keywords: /\b(parfums?|eau de (toilette|parfum)|fragrances?|cologne|musc|sillage)\b/g,
+    keywords: /\b(parfum(s|eries?)?|eau de (toilette|parfum)|fragrances?|cologne|musc|sillage)\b/g,
     quizTitle: "Trouvez le parfum qui vous ressemble",
     axes: [
       axis("freshness", ["fraicheur", "frais"], "Fraîcheur", "Sensation fraîche, aérienne ou chaude du parfum.", "Chaleureux", "Frais"),

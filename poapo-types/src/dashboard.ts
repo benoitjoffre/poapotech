@@ -6,6 +6,8 @@ export interface DashboardExperience {
   hasDraft: boolean;
   draftUpdatedAt: string | null;
   correction: string | null;
+  /** Questions de la version en ligne : 0 pour le quiz par défaut vide créé à l'inscription. */
+  questionCount?: number;
   started: number;
   completed: number;
   productClicks: number;

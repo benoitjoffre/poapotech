@@ -77,9 +77,6 @@ test("PostgreSQL : accueil isolé, données réelles et lecture seule", {
     for (const quizId of [quiz.id, manual.id]) await prisma.question.create({
       data: { tenantId: id, quizId, text: "Question ?", answers: { create: { text: "Réponse", impacts: {} } } },
     });
-    for (const name of ["Occasion A", "Occasion B"]) await prisma.campaign.create({
-      data: { tenantId: id, quizId: quiz.id, name, occasion: "PERMANENT", objectives: [], status: "PAUSED" },
-    });
     await prisma.quizEditorDraft.create({ data: { tenantId: id, quizId: standalone.id, content: { schemaVersion: 1 }, revision: 3 } });
     await prisma.quizEditorDraft.create({ data: { tenantId: id, quizId: quiz.id, content: Prisma.DbNull } });
     await prisma.metric.createMany({ data: [
@@ -113,6 +110,20 @@ test("PostgreSQL : accueil isolé, données réelles et lecture seule", {
       assert.equal(await prisma.metric.count({ where: { tenantId: id } }), 4);
       assert.equal(await prisma.quizSession.count({ where: { tenantId: id } }), 0);
       assert.equal(await prisma.quizEditorDraft.count({ where: { tenantId: id } }), 2);
+    });
+    await t.test("questionCount : nombre réel de questions, 0 pour un quiz par défaut vide", async () => {
+      const data = await summary();
+      for (const item of data.experiences) {
+        const real = await prisma.question.count({ where: { tenantId: id, quizId: item.id } });
+        assert.equal(item.questionCount, real, `questionCount de ${item.name}`);
+      }
+      const catalog = await prisma.catalog.findFirstOrThrow({ where: { tenantId: id } });
+      const empty = await prisma.quiz.create({ data: { id: `default_${id}`, tenantId: id, catalogId: catalog.id, name: "Quiz par défaut", isDefault: true, quizTitle: "Titre", ctaText: "Voir", axes: [] } });
+      const after = await summary();
+      const item = after.experiences.find((entry) => entry.id === empty.id);
+      assert.equal(item?.questionCount, 0);
+      assert.equal(item?.correction, "Aucune question active.");
+      assert.equal((await summary(other)).experiences.length, 0, "isolation tenant");
     });
   } finally {
     if (server) await new Promise<void>((resolve, reject) => server!.close((err) => err ? reject(err) : resolve()));

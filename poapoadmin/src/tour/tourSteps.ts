@@ -13,7 +13,7 @@ export const MAIN_TOUR_STEPS: TourStep[] = [
     body: "Découvrez votre espace et les principales fonctionnalités de POAPO." },
   { id: "products", title: "Mes produits", target: "nav-products",
     body: "Ajoutez les produits que vous souhaitez recommander à vos visiteurs." },
-  { id: "experiences", title: "Mes expériences", target: "nav-experiences",
+  { id: "experiences", title: "Mes quiz", target: "nav-experiences",
     body: "Créez un quiz qui aide vos visiteurs à trouver les produits qui leur correspondent." },
   { id: "editor", title: "Éditeur de questions",
     body: "Ajoutez des questions, configurez les réponses et indiquez leur influence sur les recommandations avec le curseur.",

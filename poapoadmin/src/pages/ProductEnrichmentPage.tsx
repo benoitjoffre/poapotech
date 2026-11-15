@@ -24,6 +24,7 @@ import {
   summarizeUpdates,
 } from "../lib/productEnrichment";
 import AxisSlider from "../components/AxisSlider";
+import LocalEstimateRow from "../components/LocalEstimateRow";
 import { useLeaveGuard } from "../hooks/useLeaveGuard";
 
 const LEAVE_MESSAGE = "Des estimations n'ont pas été enregistrées. Quitter la page et les perdre ?";
@@ -52,6 +53,8 @@ export default function ProductEnrichmentPage() {
   const [warnings, setWarnings] = useState<string[]>([]);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [results, setResults] = useState<ProductEnrichmentResult[]>([]);
+  /** Origine des propositions affichées : règles locales (sans IA) ou IA. */
+  const [mode, setMode] = useState<"ai" | "local">("ai");
   const [decisions, setDecisions] = useState<Record<string, ProductDecisions>>({});
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -175,9 +178,35 @@ export default function ProductEnrichmentPage() {
   };
 
   const startEstimation = () => {
+    setMode("ai");
     setWarnings([]);
     setFailed([]);
     void runBatches(chunk([...selected], batchSize));
+  };
+
+  const startLocalEstimation = async () => {
+    if (!context?.quiz || !selected.size) return;
+    setWarnings([]);
+    setFailed([]);
+    setSaved("");
+    setSaveError("");
+    setRunning(true);
+    try {
+      const input: ProductEnrichmentEstimateInput = { quizId: context.quiz.id, axisKeys, productIds: [...selected] };
+      const response = await apiFetch<ProductEnrichmentEstimateResponse>(`/api/catalogs/${context.catalog.id}/enrichment/estimate-local`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      });
+      setMode("local");
+      mergeResults(response.results);
+      if (!response.results.some((result) => result.estimates.some((estimate) => estimate.status === "estimated"))) {
+        setWarnings(["Aucune information exploitable dans ces fiches : complétez les descriptions ou les tags, ou utilisez l'estimation IA."]);
+      }
+    } catch (err) {
+      setSaveError((err as Error).message);
+    } finally {
+      setRunning(false);
+    }
   };
 
   const retryFailed = () => {
@@ -232,6 +261,7 @@ export default function ProductEnrichmentPage() {
         body: JSON.stringify(input),
       });
       setResults([]);
+      setMode("ai");
       setDecisions({});
       setFailed([]);
       setWarnings([]);
@@ -245,6 +275,7 @@ export default function ProductEnrichmentPage() {
   };
 
   const noAxisQuiz = context && !quiz;
+  const aiLocked = notIncluded || context?.aiAvailable === false;
 
   return (
     <div className="page enrichment-page">
@@ -252,7 +283,7 @@ export default function ProductEnrichmentPage() {
         <div>
           <h1 className="page-title">Enrichissement IA des produits</h1>
           <p className="page-subtitle">
-            L'IA propose des valeurs pour les axes d'un quiz à partir des fiches produits. Rien n'est enregistré sans votre validation.
+            Des valeurs sont proposées pour les axes d'un quiz à partir des fiches produits, par l'IA ou, sans IA, d'après les mots de vos descriptions et tags. Rien n'est enregistré sans votre validation.
           </p>
         </div>
       </div>
@@ -301,10 +332,10 @@ export default function ProductEnrichmentPage() {
       </section>
 
       {(catalogsLoading || loading) && <div className="loading-block">Chargement...</div>}
-      {notIncluded && (
+      {aiLocked && (
         <div className="analytics-warning" role="status" data-testid="enrichment-locked">
-          L'enrichissement IA du catalogue est réservé aux formules Pro et Business. Vous pouvez toujours renseigner les caractéristiques de vos produits{" "}
-          <Link to="/catalog">à la main</Link> et créer vos expériences en mode express. <Link to="/settings/subscription">Voir mon abonnement</Link>
+          L'estimation par IA est réservée aux formules Pro et Business. Le bouton « Proposer sans IA » (d'après les mots de vos descriptions et tags) reste disponible dans votre formule,
+          et vous pouvez renseigner les caractéristiques <Link to="/catalog">à la main</Link>. <Link to="/settings/subscription">Voir mon abonnement</Link>
         </div>
       )}
       {(catalogsError || error) && <div className="form-error" role="alert">{catalogsError || error}</div>}
@@ -380,9 +411,14 @@ export default function ProductEnrichmentPage() {
               {running ? (
                 <button type="button" className="btn-ghost" onClick={() => { cancelRef.current = true; }}>Arrêter après ce lot</button>
               ) : (
-                <button type="button" className="btn-primary" disabled={!selected.size || !axisKeys.length || results.length > 0} onClick={startEstimation}>
-                  Estimer les valeurs
-                </button>
+                <>
+                  <button type="button" className="btn-ghost" data-testid="enrichment-local" disabled={!selected.size || !axisKeys.length || results.length > 0} onClick={() => void startLocalEstimation()}>
+                    Proposer sans IA (depuis les descriptions et tags)
+                  </button>
+                  <button type="button" className="btn-primary" disabled={aiLocked || !selected.size || !axisKeys.length || results.length > 0} onClick={startEstimation}>
+                    Estimer les valeurs
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -436,7 +472,18 @@ export default function ProductEnrichmentPage() {
             return (
               <article key={result.productId} className="gen-question enrichment-card">
                 <h3 className="section-title">{product?.name ?? result.productId}</h3>
-                {result.estimates.map((estimate) => (
+                {result.estimates.map((estimate) => mode === "local" ? (
+                  <LocalEstimateRow
+                    key={estimate.axis}
+                    axis={axisByKey.get(estimate.axis) ?? { key: estimate.axis, label: estimate.axis }}
+                    estimate={estimate}
+                    current={result.currentValues[estimate.axis]}
+                    invalid={!!product?.invalidAxes.includes(estimate.axis)}
+                    decision={decisions[result.productId]?.[estimate.axis]}
+                    disabled={saving}
+                    onChange={(patch) => setDecision(result.productId, estimate.axis, patch)}
+                  />
+                ) : (
                   <EstimateRow
                     key={estimate.axis}
                     productId={result.productId}

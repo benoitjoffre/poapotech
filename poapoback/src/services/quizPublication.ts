@@ -3,6 +3,8 @@ import { Prisma } from "@prisma/client";
 import type { QuizEditorDraftResponse, QuizPublicationDiagnostic } from "@poapo/types";
 import { prisma } from "../lib/prisma";
 import { parseDraftRevision, publishedContent } from "./quizEditorDrafts";
+import { assertResourceQuota, lockTenant } from "./entitlements";
+import { differsFromPublished } from "./quizDraftChanges";
 import { diagnoseQuiz } from "./quizPublicationDiagnostic";
 import { quizInclude, QuizError } from "./quizzes";
 
@@ -28,9 +30,10 @@ async function savedDiagnostic(db: Prisma.TransactionClient, tenantId: string, q
   const quiz = await lockQuiz(db, tenantId, quizId);
   const row = await db.quizEditorDraft.findFirst({ where: { tenantId, quizId } });
   if ((row?.revision ?? 0) !== revision) conflict();
-  const { diagnostic, draft } = await diagnoseQuiz(quiz, row?.content ?? await publishedContent(quiz, db), db);
+  const published = await publishedContent(quiz, db);
+  const { diagnostic, draft } = await diagnoseQuiz(quiz, row?.content ?? published, db);
   diagnostic.revision = revision;
-  diagnostic.hasChanges = row?.content != null;
+  diagnostic.hasChanges = row?.content != null && differsFromPublished(row.content, published);
   return { diagnostic, draft, quiz, row };
 }
 
@@ -40,23 +43,20 @@ export async function checkQuizPublication(tenantId: string, quizId: unknown, ra
   return prisma.$transaction(async (db) => (await savedDiagnostic(db, tenantId, quizId, revision)).diagnostic);
 }
 
-export async function publishQuizDraft(tenantId: string, quizId: unknown, rawRevision: unknown, confirmation: unknown) {
+export async function publishQuizDraft(tenantId: string, quizId: unknown, rawRevision: unknown) {
   if (typeof quizId !== "string" || !quizId.trim()) throw new QuizError(400, "quizId invalide");
   const revision = parseDraftRevision(rawRevision);
   try {
     // Read associations after acquiring the lock, including commits we waited for.
     // The quiz lock serializes publication/association changes; the draft CAS covers save/discard.
     return await prisma.$transaction(async (db): Promise<QuizEditorDraftResponse> => {
+      // Même ordre de verrous que PUT /api/quizzes/:id (boutique puis quiz) : le quota se vérifie sous verrou boutique.
+      await lockTenant(db, tenantId);
       const { diagnostic, draft, quiz, row } = await savedDiagnostic(db, tenantId, quizId, revision);
       if (!diagnostic.valid || !draft) throw new PublicationValidationError(diagnostic);
       if (!row?.content) throw new QuizError(409, "Aucune modification préparatoire à publier");
-      if (diagnostic.campaigns.length > 1) {
-        const expected = diagnostic.campaigns.map((c) => c.id).sort();
-        if (!Array.isArray(confirmation) || confirmation.length !== expected.length ||
-            [...confirmation].sort().some((id, index) => id !== expected[index])) {
-          throw new QuizError(409, "Confirmez explicitement toutes les campagnes partageant ce quiz après une nouvelle vérification");
-        }
-      }
+      // Une publication qui fait passer le quiz d'inactif à actif consomme une place de quota, comme PUT { active: true }.
+      if (draft.config.active && !quiz.active) await assertResourceQuota(db, tenantId, "publishedExperiences");
       // Acquiring the draft row by CAS also serializes with save/discard, which use this same revision.
       const changed = await db.quizEditorDraft.updateMany({
         where: { tenantId, quizId, revision },
@@ -87,7 +87,9 @@ export async function publishQuizDraft(tenantId: string, quizId: unknown, rawRev
         for (const a of q.answers) {
           const answerId = aMap.get(a.id)!;
           const answerData = { text: a.text, emoji: a.emoji, imageUrl: a.imageUrl, order: a.order,
-            active: a.active, impacts: a.impacts };
+            active: a.active, impacts: a.impacts,
+            // Sans effets : NULL en base (valeur déjà présente pour toutes les réponses existantes).
+            effects: a.effects ? (a.effects as unknown as Prisma.InputJsonObject) : Prisma.DbNull };
           if (answerIds.has(answerId)) await db.answer.update({ where: { id: answerId }, data: answerData });
           else await db.answer.create({ data: { id: answerId, questionId: id, ...answerData } });
         }

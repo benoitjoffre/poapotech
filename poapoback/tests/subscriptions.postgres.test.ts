@@ -10,7 +10,6 @@ import authRouter from "../src/routes/auth";
 import catalogsRouter from "../src/routes/catalogs";
 import quizzesRouter from "../src/routes/quizzes";
 import quizRouter from "../src/routes/quiz";
-import campaignsRouter from "../src/routes/campaigns";
 import adminTenantsRouter from "../src/routes/adminTenants";
 import subscriptionRouter from "../src/routes/subscription";
 import dashboardRouter from "../src/routes/dashboard";
@@ -88,7 +87,7 @@ before(async () => {
   tenants.push(`super-${run}`);
   const app = express(); app.use(express.json());
   app.use("/api/auth", authRouter); app.use("/api/catalogs", catalogsRouter); app.use("/api/quizzes", quizzesRouter);
-  app.use("/api/quiz", quizRouter); app.use("/api/campaigns", campaignsRouter);
+  app.use("/api/quiz", quizRouter);
   app.use("/api/admin/tenants", adminTenantsRouter); app.use("/api/subscription", subscriptionRouter);
   app.use("/api/dashboard", dashboardRouter); app.use("/api/results", resultsRouter); app.use("/api/express-quiz", expressQuizRouter);
   app.use(quizErrorHandler);
@@ -201,13 +200,11 @@ test("quota expériences publiées : activation, concurrence, réactivation, ré
 
 test("fonctionnalités non incluses : refus structuré, lecture conservée ; PRO accepté", async () => {
   const s = await shop("STARTER"); const p = await shop("PRO");
-  const denied = await call("/api/campaigns", s.token, "POST", { name: "x" });
+  const denied = await call(`/api/quiz/metrics/ai-insights?quizId=${s.quizId}`, s.token);
   const b = await denied.json();
-  assert.deepEqual([denied.status, b.code, b.details.feature], [403, "feature_not_included", "campaigns"]);
-  assert.equal((await call("/api/campaigns", s.token)).status, 200);
-  assert.equal((await call(`/api/quiz/metrics/ai-insights?quizId=${s.quizId}`, s.token)).status, 403);
+  assert.deepEqual([denied.status, b.code, b.details.feature], [403, "feature_not_included", "advancedAnalytics"]);
   assert.equal((await call(`/api/catalogs/${s.catalogId}/enrichment/estimate`, s.token, "POST", {})).status, 403);
-  const ok = await call("/api/campaigns", p.token, "POST", { name: "x" });
+  const ok = await call(`/api/quiz/metrics/ai-insights?quizId=${p.quizId}`, p.token);
   assert.notEqual((await ok.json().catch(() => ({}))).code, "feature_not_included");
 });
 

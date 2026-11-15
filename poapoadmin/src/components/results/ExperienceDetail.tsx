@@ -41,7 +41,7 @@ export default function ExperienceDetail({ quizId, query }: { quizId: string; qu
       <p className="rs-muted">{detail.experience.catalogName}</p>
       <div className="rs-links">
         <Link className="btn-primary btn-sm" to={experienceEditorPath(quizId)}>Ouvrir l'éditeur</Link>
-        <Link className="btn-ghost btn-sm" to="/quizzes">Mes expériences</Link>
+        <Link className="btn-ghost btn-sm" to="/quizzes">Mes quiz</Link>
       </div>
       <dl className="rs-mini-kpis">
         {METRICS.map((m) => (

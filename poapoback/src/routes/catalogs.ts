@@ -6,12 +6,13 @@ import { verifyToken, AuthRequest } from "../middleware/auth";
 import { ensureDefaultCatalog, parseCatalogInput, resolveAccountTenantId, serializeCatalog } from "../services/catalogs";
 import { asyncRoute, QuizError } from "../services/quizzes";
 import productEnrichmentRouter from "./productEnrichment";
-import { assertResourceQuota, requireFeature, withTenantLock } from "../services/entitlements";
+import { assertResourceQuota, withTenantLock } from "../services/entitlements";
 
 // Gestion des catalogues d'un tenant : chaque produit et chaque quiz appartient à un seul catalogue.
 const router = Router();
 router.use(verifyToken);
-router.use("/:catalogId/enrichment", requireFeature("aiEnrichment", ["GET", "POST", "PUT", "PATCH", "DELETE"]), productEnrichmentRouter);
+// La garde « aiEnrichment » s'applique route par route (POST /estimate seulement) : l'estimation locale et l'enregistrement ne sont pas de l'IA.
+router.use("/:catalogId/enrichment", productEnrichmentRouter);
 
 async function tenantOf(req: AuthRequest): Promise<string> {
   const tenantId = await resolveAccountTenantId(req);
@@ -44,23 +45,20 @@ async function summarize(tenantId: string, catalogIds: string[]) {
     }),
     prisma.quiz.findMany({
       where: { tenantId, catalogId: { in: catalogIds } },
-      select: { catalogId: true, _count: { select: { campaigns: true } } },
+      select: { catalogId: true },
     }),
   ]);
   const productCount = new Map(products.map((row) => [row.catalogId, row._count._all]));
   const activeCount = new Map(activeProducts.map((row) => [row.catalogId, row._count._all]));
   const quizCount = new Map<string, number>();
-  const campaignCount = new Map<string, number>();
   for (const quiz of quizzes) {
     quizCount.set(quiz.catalogId, (quizCount.get(quiz.catalogId) ?? 0) + 1);
-    campaignCount.set(quiz.catalogId, (campaignCount.get(quiz.catalogId) ?? 0) + quiz._count.campaigns);
   }
   return (catalog: Prisma.CatalogGetPayload<object>): CatalogSummary => ({
     ...serializeCatalog(catalog),
     productCount: productCount.get(catalog.id) ?? 0,
     activeProductCount: activeCount.get(catalog.id) ?? 0,
     quizCount: quizCount.get(catalog.id) ?? 0,
-    campaignCount: campaignCount.get(catalog.id) ?? 0,
   });
 }
 

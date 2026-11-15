@@ -101,7 +101,7 @@ export default function CatalogsPage() {
         <div className="step-table-wrap">
           <table className="table catalogs-table">
             <thead>
-              <tr><th>Catalogue</th><th>Produits</th><th>Quiz</th><th>Campagnes</th><th>Actions</th></tr>
+              <tr><th>Catalogue</th><th>Produits</th><th>Quiz</th><th>Actions</th></tr>
             </thead>
             <tbody>
               {catalogs.map((catalog) => {
@@ -129,7 +129,6 @@ export default function CatalogsPage() {
                       </Link>
                     </td>
                     <td><Link to={withCatalog("/quizzes", catalog.id)}>{catalog.quizCount}</Link></td>
-                    <td><Link to={withCatalog("/campaigns", catalog.id)}>{catalog.campaignCount}</Link></td>
                     <td><div className="catalog-actions">
                       {editing ? (
                         <>
@@ -140,7 +139,7 @@ export default function CatalogsPage() {
                         <>
                           <Link className="btn-ghost btn-sm" to={withCatalog("/catalog/import", catalog.id)}>Importer</Link>
                           <Link className="btn-ghost btn-sm" to={withCatalog("/catalog/new", catalog.id)}>Produit</Link>
-                          <Link className="btn-ghost btn-sm" to={withCatalog("/quizzes/new", catalog.id)}>Nouveau quiz</Link>
+                          <Link className="btn-ghost btn-sm" to="/experiences/new">Nouvelle expérience</Link>
                           <Link className="btn-ghost btn-sm" to={withCatalog("/enrichment", catalog.id)}>Enrichir par IA</Link>
                           <button type="button" className="btn-ghost btn-sm" onClick={() => startEdit(catalog)}>Renommer</button>
                           <button

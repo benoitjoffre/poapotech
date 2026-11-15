@@ -1,4 +1,4 @@
-import type { AxisEstimate, AxisEstimateConfidence, EnrichmentProduct, ProductEnrichmentResult, ProductEnrichmentUpdate } from "@poapo/types";
+import type { QuizAxis, AxisEstimate, AxisEstimateConfidence, EnrichmentProduct, ProductEnrichmentResult, ProductEnrichmentUpdate } from "@poapo/types";
 
 export const CONFIDENCE_LABELS: Record<AxisEstimateConfidence, string> = {
   low: "Confiance faible",
@@ -61,4 +61,12 @@ export function summarizeUpdates(updates: ProductEnrichmentUpdate[]) {
 
 export function formatPercent(value: number | null): string {
   return value === null ? "—" : `${Math.round(value * 100)}%`;
+}
+
+/** Niveau compréhensible d'une valeur 0–1, avec les libellés de l'axe quand ils existent (les nombres ne sont pas montrés par défaut). */
+export function levelLabel(axis: Pick<QuizAxis, "label" | "lowLabel" | "highLabel">, value: number | null): string {
+  if (value === null) return "Pas de proposition";
+  if (value >= 0.65) return axis.highLabel || `${axis.label} élevé(e)`;
+  if (value <= 0.35) return axis.lowLabel || `${axis.label} faible`;
+  return `${axis.label} intermédiaire`;
 }

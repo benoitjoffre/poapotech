@@ -2,8 +2,25 @@ import type { Prisma } from "@prisma/client";
 import type { QuizEditorDraft, QuizPublicationDiagnostic, QuizPublicationIssue } from "@poapo/types";
 import { resolveQuizTheme, visibleQuizQuestions } from "@poapo/types";
 import { prisma } from "../lib/prisma";
+import { inspectEffectsAgainstCatalog, parseAnswerEffects, validateEffectsWithImpacts } from "./answerEffects";
+import { profileColumns } from "./catalogProfile";
 import { publishedContent, validateContent } from "./quizEditorDrafts";
 import { QuizError, type ScopedQuiz } from "./quizzes";
+
+export const UNUSABLE_AXES_MESSAGE = "Les informations de vos produits ne permettent pas encore de proposer des recommandations fiables.";
+
+/**
+ * Bloquant uniquement si le quiz a des axes et qu'aucun produit éligible n'a de valeur valide (nombre 0–1) sur aucun d'eux.
+ * Une couverture partielle (au moins un produit valorisé sur au moins un axe) reste un simple avertissement ;
+ * un quiz sans axe reste signalé par NO_AXES. Sans produit, NO_PRODUCTS s'applique déjà.
+ */
+export function hasUnusableAxes(axisKeys: readonly string[], productAttributes: readonly unknown[]): boolean {
+  if (!axisKeys.length || !productAttributes.length) return false;
+  return !productAttributes.some((raw) => {
+    const attrs = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
+    return axisKeys.some((key) => typeof attrs[key] === "number" && attrs[key] >= 0 && attrs[key] <= 1);
+  });
+}
 
 export function inspectQuizStructure(draft: QuizEditorDraft): {
   errors: QuizPublicationIssue[]; warnings: QuizPublicationIssue[];
@@ -24,9 +41,28 @@ export function inspectQuizStructure(draft: QuizEditorDraft): {
       if (Object.entries(a.impacts).some(([key, value]) => !axisKeys.has(key) || !Number.isFinite(value) || Math.abs(value) > 1)) {
         errors.push(issue("INVALID_IMPACT", "Impact invalide ou associé à un axe inexistant.", q.id, a.id));
       }
-      if (q.active && a.active && !Object.values(a.impacts).some((value) => value !== 0)) {
+      let hasEffects = false;
+      if (a.effects) {
+        const parsed = parseAnswerEffects(a.effects);
+        if (!parsed.ok) errors.push(issue("INVALID_EFFECTS", `Effets de la réponse invalides : ${parsed.errors.join(" ; ")}`, q.id, a.id));
+        else {
+          hasEffects = parsed.value.effects.length > 0;
+          for (const message of validateEffectsWithImpacts(parsed.value, a.impacts)) errors.push(issue("INVALID_EFFECTS", message, q.id, a.id));
+          for (const effect of parsed.value.effects) {
+            if (effect.type === "axis" && !axisKeys.has(effect.axis)) errors.push(issue("INVALID_EFFECTS", `L'effet référence l'axe inexistant « ${effect.axis} ».`, q.id, a.id));
+          }
+        }
+      }
+      // Une réponse qui n'a que des effets valides n'est pas « sans effet » : l'avertissement ne concerne que les réponses réellement inertes.
+      if (q.active && a.active && !hasEffects && !Object.values(a.impacts).some((value) => value !== 0)) {
         warnings.push(issue("NO_IMPACT", "Cette réponse ne modifie aucun axe.", q.id, a.id));
       }
+    }
+    // Question à effets (générée) sans réponse neutre : avertissement seulement, jamais de modification ni de blocage.
+    const effectful = q.answers.some((a) => a.active && (a.effects?.effects ?? []).some((e) => e.type === "category" || e.type === "range"));
+    const neutral = q.answers.some((a) => a.active && !Object.values(a.impacts).some((v) => v !== 0) && (a.effects?.effects ?? []).length > 0 && a.effects!.effects.every((e) => e.type === "none"));
+    if (q.active && effectful && !neutral) {
+      warnings.push(issue("NO_NEUTRAL_ANSWER", "Aucune réponse « Sans préférence » : un visiteur sans avis devra choisir une option qui oriente sa recommandation.", q.id));
     }
     if (q.conditionAnswerId) {
       const parent = owners.get(q.conditionAnswerId);
@@ -81,11 +117,8 @@ function contrast(first: string, second: string) {
 export async function diagnoseQuiz(
   quiz: ScopedQuiz, raw: unknown, db: Prisma.TransactionClient = prisma,
 ): Promise<{ diagnostic: QuizPublicationDiagnostic; draft: QuizEditorDraft | null }> {
-  const campaigns = await db.campaign.findMany({
-    where: { tenantId: quiz.tenantId, quizId: quiz.id }, select: { id: true, name: true }, orderBy: { id: "asc" },
-  });
   const diagnostic: QuizPublicationDiagnostic = {
-    quizId: quiz.id, revision: 0, hasChanges: false, valid: false, errors: [], warnings: [], campaigns,
+    quizId: quiz.id, revision: 0, hasChanges: false, valid: false, errors: [], warnings: [],
     summary: { name: quiz.name, catalogId: quiz.catalogId, catalogName: quiz.catalog.name, questions: 0, products: 0, active: quiz.active },
   };
   let draft: QuizEditorDraft;
@@ -105,7 +138,7 @@ export async function diagnoseQuiz(
   const products = await db.product.findMany({
     where: { tenantId: quiz.tenantId, catalogId: draft.config.catalogId, active: true,
       ...(!draft.config.useAllProducts && { id: { in: draft.config.productIds } }) },
-    select: { id: true, attributes: true, embedding: true, embeddingStatus: true },
+    select: { id: true, price: true, brand: true, tags: true, attributes: true, embedding: true, embeddingStatus: true },
   });
   const catalog = await db.catalog.findFirst({ where: { tenantId: quiz.tenantId, id: draft.config.catalogId } });
   diagnostic.summary = {
@@ -126,6 +159,20 @@ export async function diagnoseQuiz(
       warning("WEAK_AXIS", `L'axe « ${axis.label} » est peu discriminant.`);
     }
   }
+  if (hasUnusableAxes(draft.config.axes.map((axis) => axis.key), products.map((p) => p.attributes))) {
+    diagnostic.errors.push({ code: "NO_USABLE_ATTRIBUTES", message: UNUSABLE_AXES_MESSAGE, section: "configuration" });
+  }
+  // Effets de réponses : cohérence avec les données réelles du catalogue (contrainte stricte = données fiables uniquement).
+  if (draft.questions.some((q) => q.answers.some((a) => a.effects))) {
+    const profiles = profileColumns(products, { axisKeys: draft.config.axes.map((axis) => axis.key) });
+    for (const q of draft.questions) for (const a of q.answers) {
+      const parsed = a.effects ? parseAnswerEffects(a.effects) : null;
+      if (!parsed?.ok) continue;
+      const found = inspectEffectsAgainstCatalog(parsed.value, profiles);
+      for (const message of found.errors) diagnostic.errors.push({ code: "UNRELIABLE_CONSTRAINT", message, section: "questions", questionId: q.id, answerId: a.id });
+      for (const message of found.warnings) diagnostic.warnings.push({ code: "EFFECT_WITHOUT_DATA", message, section: "questions", questionId: q.id, answerId: a.id });
+    }
+  }
   if (!draft.config.axes.length) warning("NO_AXES", "Aucun axe : la discrimination du profil est limitée.");
   if (products.some((p) => !Array.isArray(p.embedding) || !p.embedding.length)) warning("MISSING_EMBEDDINGS", "Certains produits n'ont pas d'embedding ; leur score sémantique sera nul.");
   if (products.some((p) => p.embeddingStatus === "FAILED")) warning("FAILED_EMBEDDINGS", "La préparation des recommandations a échoué pour certains produits : relancez-la depuis le catalogue.");
@@ -135,7 +182,6 @@ export async function diagnoseQuiz(
   if (contrast(theme.textColor, theme.backgroundColor) < 4.5 || contrast("#ffffff", theme.primaryColor) < 4.5) {
     warning("LOW_CONTRAST", "Contraste inférieur à 4,5:1 pour le texte ou le bouton principal. Vérifiez aussi les images et dégradés.", "appearance");
   }
-  if (campaigns.length > 1) warning("SHARED_QUIZ", `Ce quiz est partagé par ${campaigns.length} campagnes.`, "publication");
   diagnostic.valid = !diagnostic.errors.length;
   return { diagnostic, draft };
 }

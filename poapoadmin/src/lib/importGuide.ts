@@ -1,4 +1,6 @@
-import type { QuizAxis } from "@poapo/types";
+import type { ImportColumnInsight, ImportColumnKind, QuizAxis } from "@poapo/types";
+
+export type { ImportColumnInsight, ImportColumnKind };
 
 export interface FieldMapping {
   sourceColumn: string;
@@ -89,4 +91,22 @@ export function exampleCsv(axes: readonly QuizAxis[]): string {
     ...axes.map((_, i) => sampleValues[(i + n) % sampleValues.length]),
   ]);
   return [headers, ...rows].map((row) => row.map(csvCell).join(",")).join("\n") + "\n";
+}
+
+/** Libellés commerçant des types détectés (aucun terme technique). */
+export const KIND_LABELS: Record<ImportColumnKind, string> = {
+  number: "Nombre",
+  yesno: "Oui / non",
+  category: "Catégorie",
+  text: "Texte",
+  identifier: "Référence ou code",
+  mixed: "Valeurs mélangées",
+  empty: "Vide",
+};
+
+/** Colonnes dont une information supplémentaire est proposée et pas encore confirmée (destination encore « ignorée »). */
+export function pendingSuggestions(columns: readonly ImportColumnInsight[], mapping: readonly FieldMapping[]): ImportColumnInsight[] {
+  return columns.filter((column) =>
+    column.status === "suggested" && column.suggestion &&
+    !mapping.some((m) => m.sourceColumn === column.sourceColumn && m.targetField));
 }

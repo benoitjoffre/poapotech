@@ -42,7 +42,6 @@ model Tenant {
   questions     Question[]
   sessions      QuizSession[]
   metrics       Metric[]
-  campaigns     Campaign[]
   catalogs      Catalog[]
   importBatches ImportBatch[]
 }
@@ -110,6 +109,11 @@ model Quiz {
   active         Boolean  @default(true)
   isDefault      Boolean  @default(false)
   useAllProducts Boolean  @default(true)
+  // Occasion et période facultatives, à titre informatif : sans effet sur l'accès public.
+  occasion       QuizOccasion?
+  occasionLabel  String?
+  startsAt       DateTime?
+  endsAt         DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -120,7 +124,6 @@ model Quiz {
   sessions    QuizSession[]
   metrics     Metric[]
   products    QuizProduct[]
-  campaigns   Campaign[]
   editorDraft QuizEditorDraft?
 
   @@unique([tenantId, id])
@@ -141,35 +144,6 @@ model QuizEditorDraft {
 
   @@unique([tenantId, quizId])
   @@index([tenantId])
-}
-
-// ─────────────────────────────────────────────
-// Campaign — occasion marketing associée à un quiz existant
-// ─────────────────────────────────────────────
-model Campaign {
-  id            String           @id @default(cuid())
-  tenantId      String
-  quizId        String
-  name          String
-  occasion      CampaignOccasion
-  // Libellé libre, requis pour l'occasion CUSTOM
-  occasionLabel String?
-  description   String?
-  objectives    String[]
-  imageUrl      String?
-  // Statut choisi par le tenant ; le statut affiché est calculé avec les dates
-  status        CampaignStatus   @default(DRAFT)
-  startsAt      DateTime?
-  endsAt        DateTime?
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  // Clé composite : une campagne ne peut référencer qu'un quiz de son propre tenant
-  quiz   Quiz   @relation(fields: [tenantId, quizId], references: [tenantId, id], onDelete: Cascade)
-
-  @@index([tenantId, status])
-  @@index([tenantId, quizId])
 }
 
 // Sélection manuelle de produits : le quiz et le produit doivent partager le même catalogue (FK composites).
@@ -286,6 +260,9 @@ model Answer {
   active     Boolean  @default(true)
   // Impacts sur les axes du quiz : { <clé d'axe>: delta }
   impacts    Json     @default("{}")
+  // Effets additifs d'une réponse (contraintes strictes, préférences catégorielles ou de plage) : { v, effects: [...] }.
+  // NULL = comportement historique (seuls les impacts comptent). Validé par services/answerEffects.ts.
+  effects    Json?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
@@ -349,15 +326,7 @@ enum QuestionType {
   scale
 }
 
-enum CampaignStatus {
-  DRAFT
-  SCHEDULED
-  ACTIVE
-  PAUSED
-  COMPLETED
-}
-
-enum CampaignOccasion {
+enum QuizOccasion {
   CHRISTMAS
   VALENTINES_DAY
   SPRING
@@ -367,6 +336,8 @@ enum CampaignOccasion {
   PROMOTION
   PERMANENT
   CUSTOM
+
+  @@map("CampaignOccasion")
 }
 
 enum EmbeddingStatus {

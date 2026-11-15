@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import { prisma } from "../src/lib/prisma";
 import catalogsRouter from "../src/routes/catalogs";
 import { quizErrorHandler } from "../src/services/quizzes";
-import { generationLimiter } from "../src/services/quizGeneration";
+import { generationLimiter } from "../src/services/generationLimits";
 import { buildEnrichmentBatch, enrichmentLimiter, normalizeEnrichment } from "../src/services/productEnrichment";
 
 type Row = Record<string, any>;
@@ -17,17 +17,26 @@ const AXES = [
   { key: "comfort", label: "Confort", lowLabel: null, highLabel: null },
 ];
 
+const PERFUME_AXES = [
+  { key: "freshness", label: "Fraîcheur", lowLabel: "Chaleureux", highLabel: "Frais" },
+  { key: "intensity", label: "Intensité", lowLabel: "Discret", highLabel: "Puissant" },
+  { key: "sweetness", label: "Douceur", lowLabel: "Sec", highLabel: "Gourmand" },
+  { key: "woody", label: "Caractère boisé", lowLabel: "Peu boisé", highLabel: "Très boisé" },
+];
+
 const quizzes: Row[] = [
   { id: "trips", tenantId: "tenant-a", catalogId: "cat-trips", name: "Voyages", active: true, industry: "", axes: AXES },
   { id: "trips-2", tenantId: "tenant-a", catalogId: "cat-trips", name: "Week-ends", active: false, industry: "", axes: [AXES[0], { key: "budget", label: "Budget" }] },
   { id: "flat", tenantId: "tenant-a", catalogId: "cat-trips", name: "Sans axes", active: false, industry: "", axes: [] },
   { id: "hotels", tenantId: "tenant-a", catalogId: "cat-hotels", name: "Hôtels", active: true, industry: "hôtellerie", axes: AXES },
   { id: "foreign-quiz", tenantId: "tenant-b", catalogId: "cat-b", name: "Quiz B", active: true, industry: "", axes: AXES },
+  { id: "perfume", tenantId: "tenant-a", catalogId: "cat-perfume", name: "Parfums", active: true, industry: "parfumerie", axes: PERFUME_AXES },
 ];
 const catalogs: Row[] = [
   { id: "cat-trips", tenantId: "tenant-a", name: "Expériences" },
   { id: "cat-hotels", tenantId: "tenant-a", name: "Hébergements" },
   { id: "cat-b", tenantId: "tenant-b", name: "Catalogue B" },
+  { id: "cat-perfume", tenantId: "tenant-a", name: "Parfums" },
 ];
 
 function productRow(overrides: Row): Row {
@@ -37,6 +46,7 @@ function productRow(overrides: Row): Row {
   };
 }
 
+let plan = "BUSINESS";
 let products: Row[] = [];
 let aiCalls: { path: string; body: Row }[] = [];
 let aiHandler: (path: string, body: Row, call: number) => Response | Promise<Response> = () => json(500, {});
@@ -66,6 +76,7 @@ function matches(row: Row, where: Row | undefined): boolean {
 }
 
 beforeEach(() => {
+  plan = "BUSINESS";
   enrichmentLimiter.reset();
   aiCalls = [];
   aiHandler = (path) => (path === "/embed/product" ? json(200, { embedding: [0.42] }) : json(500, {}));
@@ -75,6 +86,10 @@ beforeEach(() => {
     productRow({ id: "bare", name: "Séjour mystère", description: "  ", tags: [], attributes: { adventure: 0.5 } }),
     productRow({ id: "broken", name: "Valeur cassée", description: "Croisière en Méditerranée.", attributes: { adventure: "élevé" } }),
     productRow({ id: "hotel-1", catalogId: "cat-hotels", name: "Hôtel du port", description: "Chambres vue mer." }),
+    productRow({ id: "aube", catalogId: "cat-perfume", name: "Aube Citronnée", tags: ["frais", "léger"], description: "Citron de Sicile et bergamote.", attributes: {} }),
+    productRow({ id: "nuit", catalogId: "cat-perfume", name: "Nuit de Velours", tags: ["intense", "boisé"], description: "Oud et patchouli.", attributes: { intensity: 0.4, other: "x" } }),
+    productRow({ id: "blank", catalogId: "cat-perfume", name: "Mystère", tags: [], description: "Un grand classique.", attributes: {} }),
+    productRow({ id: "foreign-perfume", tenantId: "tenant-b", catalogId: "cat-b", name: "Frais B", tags: ["frais"], attributes: {} }),
     productRow({ id: "foreign", tenantId: "tenant-b", catalogId: "cat-b", name: "Produit B", description: "Autre tenant." }),
   ];
 });
@@ -124,7 +139,7 @@ before(async () => {
   }) as unknown as typeof prisma.product.update);
   stub(prisma, "$transaction", (async (fn: (tx: typeof prisma) => unknown) => fn(prisma)) as unknown as typeof prisma.$transaction);
 
-  stub(prisma.subscription, "findUnique", (async () => ({ plan: "BUSINESS", status: "ACTIVE", source: "LEGACY", startsAt: new Date(0), endsAt: null })) as unknown as typeof prisma.subscription.findUnique);
+  stub(prisma.subscription, "findUnique", (async () => ({ plan, status: "ACTIVE", source: "LEGACY", startsAt: new Date(0), endsAt: null })) as unknown as typeof prisma.subscription.findUnique);
   const app = express();
   app.use(express.json());
   app.use("/api/catalogs", catalogsRouter);
@@ -436,4 +451,213 @@ test("non-régression : le quota de génération de quiz reste indépendant", ()
   assert.equal(generationLimiter.limit, 10);
   enrichmentLimiter.acquire("tenant-a", 5)();
   assert.equal(generationLimiter.remaining("tenant-a"), 10);
+});
+
+// ─── Estimation locale (règles déterministes, sans IA) ───────────────────────
+
+const localPath = "/cat-perfume/enrichment/estimate-local";
+const localBody = (productIds: string[], axisKeys = PERFUME_AXES.map((a) => a.key)) => ({ quizId: "perfume", axisKeys, productIds });
+
+test("estimate-local : format existant, aucune IA, aucun quota consommé, aucune écriture", async () => {
+  const before = JSON.stringify(products);
+  const quotaBefore = enrichmentLimiter.remaining("tenant-a");
+  const res = await request(localPath, "POST", localBody(["aube", "nuit", "blank"]));
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.generation.model, "local-rules");
+  assert.equal(body.generation.aiProducts, 0);
+  assert.equal(body.remaining, quotaBefore);
+  const aube = body.results.find((r: Row) => r.productId === "aube");
+  const byAxis = Object.fromEntries(aube.estimates.map((e: Row) => [e.axis, e]));
+  assert.equal(byAxis.freshness.status, "estimated");
+  assert.ok(byAxis.freshness.value > 0.7 && byAxis.freshness.evidence.length > 0);
+  assert.equal(byAxis.intensity.status, "estimated");
+  assert.ok(byAxis.intensity.value < 0.3);
+  assert.equal(byAxis.sweetness.value, null, "absence de mention ≠ valeur");
+  assert.deepEqual(aube.currentValues, { freshness: null, intensity: null, sweetness: null, woody: null });
+  assert.equal(aiCalls.length, 0, "aucun appel au service IA (donc aucun appel OpenAI)");
+  assert.equal(JSON.stringify(products), before, "estimate-local n'écrit rien");
+  for (const result of body.results.filter((r: Row) => r.productId === "blank")) {
+    assert.ok(result.estimates.every((e: Row) => e.status === "insufficient_data" && e.value === null));
+  }
+});
+
+test("estimate-local : une valeur existante n'est jamais reproposée", async () => {
+  const body = await (await request(localPath, "POST", localBody(["nuit"]))).json();
+  const nuit = body.results[0];
+  const byAxis = Object.fromEntries(nuit.estimates.map((e: Row) => [e.axis, e]));
+  assert.equal(nuit.currentValues.intensity, 0.4);
+  assert.equal(byAxis.intensity.status, "insufficient_data");
+  assert.match(byAxis.intensity.rationale, /déjà renseignée/);
+  assert.equal(byAxis.woody.status, "estimated");
+});
+
+test("estimate-local : authentification, catalogue, quiz, axes et produits d'un autre périmètre", async () => {
+  assert.equal((await request(localPath, "POST", localBody(["aube"]), null)).status, 401);
+  assert.equal((await request("/cat-b/enrichment/estimate-local", "POST", localBody(["foreign-perfume"]))).status, 404);
+  assert.equal((await request("/cat-perfume/enrichment/estimate-local", "POST", { ...localBody(["aube"]), quizId: "hotels" })).status, 404);
+  assert.equal((await request(localPath, "POST", localBody(["foreign-perfume"]))).status, 400);
+  assert.equal((await request(localPath, "POST", localBody(["aube", "trek"]))).status, 400, "produit d'un autre catalogue");
+  assert.equal((await request(localPath, "POST", localBody(["aube"], ["adventure"]))).status, 400, "axe absent du quiz");
+  assert.equal((await request(localPath, "POST", { quizId: "perfume", axisKeys: ["woody"], productIds: [] })).status, 400);
+  assert.equal((await request(localPath, "POST", localBody(["aube"]), "tenant-b")).status, 404);
+  assert.equal(aiCalls.length, 0);
+});
+
+test("estimate-local puis apply : valeurs ajoutées, existantes protégées, conflits 409", async () => {
+  const estimated = await (await request(localPath, "POST", localBody(["aube", "nuit"]))).json();
+  const aube = estimated.results.find((r: Row) => r.productId === "aube");
+  const proposed = Object.fromEntries(aube.estimates.filter((e: Row) => e.status === "estimated").map((e: Row) => [e.axis, e.value]));
+  const expected = Object.fromEntries(Object.keys(proposed).map((key) => [key, null]));
+  // Valeurs ajoutées par le mécanisme d'écriture existant ; les autres clés sont conservées.
+  const ok = await request("/cat-perfume/enrichment/apply", "POST", { quizId: "perfume", updates: [update("aube", proposed, expected)] });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(products.find((p) => p.id === "aube")!.attributes, proposed);
+
+  // Pas d'écrasement : la valeur existante de « nuit » exige une confirmation, sinon rien n'est écrit.
+  const refused = await request("/cat-perfume/enrichment/apply", "POST", { quizId: "perfume", updates: [update("nuit", { intensity: 0.9 }, { intensity: 0.4 })] });
+  assert.equal(refused.status, 409);
+  assert.equal(products.find((p) => p.id === "nuit")!.attributes.intensity, 0.4);
+
+  // Concurrence : valeur modifiée entre l'estimation et l'enregistrement → 409, rien d'écrit.
+  products.find((p) => p.id === "blank")!.attributes = { woody: 0.6 };
+  const stale = await request("/cat-perfume/enrichment/apply", "POST", { quizId: "perfume", updates: [update("blank", { woody: 0.8 }, { woody: null })] });
+  assert.equal(stale.status, 409);
+  assert.match((await stale.json()).error, /modifiée depuis l'estimation/);
+  assert.equal(products.find((p) => p.id === "blank")!.attributes.woody, 0.6);
+
+  // Verrou optimiste : produit modifié entre la lecture et l'écriture → 409.
+  const originalFindMany = prisma.product.findMany;
+  stub(prisma.product, "findMany", (async (args: Row) => {
+    const rows = await (originalFindMany as any)(args);
+    products.find((p) => p.id === "nuit")!.updatedAt = new Date("2026-03-01T00:00:00Z");
+    return rows;
+  }) as unknown as typeof prisma.product.findMany);
+  try {
+    const locked = await request("/cat-perfume/enrichment/apply", "POST", { quizId: "perfume", updates: [update("nuit", { woody: 0.8 }, { woody: null })] });
+    assert.equal(locked.status, 409);
+    assert.match((await locked.json()).error, /modifié entre-temps/);
+  } finally {
+    restores.pop()!();
+  }
+  assert.equal(aiCalls.filter((c) => c.path !== "/embed/product").length, 0);
+});
+
+test("estimate-local : aucun appel réseau, même si le service IA est configuré", async () => {
+  const calls: string[] = [];
+  const spy = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input);
+    if (!url.startsWith(base)) calls.push(url);
+    return spy(input, init);
+  }) as typeof fetch;
+  try {
+    const res = await request(localPath, "POST", localBody(["aube", "nuit", "blank"]));
+    assert.equal(res.status, 200);
+  } finally {
+    globalThis.fetch = spy;
+  }
+  assert.deepEqual(calls, [], "aucune requête sortante (ni service IA, ni OpenAI)");
+  assert.equal(aiCalls.length, 0);
+});
+
+// ─── Formules : estimation locale pour tous, IA réservée ─────────────────────
+
+test("Starter : estimate-local, apply et contexte accessibles ; l'estimation IA reste refusée sans aucun appel au service IA", async () => {
+  plan = "STARTER";
+  const context = await request("/cat-perfume/enrichment/context?quizId=perfume");
+  assert.equal(context.status, 200);
+  assert.equal((await context.json()).aiAvailable, false);
+  const local = await request(localPath, "POST", localBody(["aube"]));
+  assert.equal(local.status, 200);
+  const quota = enrichmentLimiter.remaining("tenant-a");
+  const refused = await request("/cat-perfume/enrichment/estimate", "POST", localBody(["aube"]));
+  assert.equal(refused.status, 403);
+  assert.equal((await refused.json()).code, "feature_not_included");
+  assert.equal(enrichmentLimiter.remaining("tenant-a"), quota, "le quota IA n'est pas consommé");
+  const applied = await request("/cat-perfume/enrichment/apply", "POST", { quizId: "perfume", updates: [update("aube", { freshness: 0.8 }, { freshness: null })] });
+  assert.equal(applied.status, 200);
+  assert.equal(aiCalls.length, 0, "aucun appel au service IA (OpenAI) pour une formule Starter");
+});
+
+test("Business : l'estimation IA garde son accès et son quota (aiAvailable = true)", async () => {
+  aiHandler = (path) => path === "/enrich/axes" ? aiProducts([{ ref: "p1", estimates: PERFUME_AXES.map((a) => ({ axis: a.key, status: "insufficient_data", value: null, confidence: null, rationale: "n/a", evidence: [] })) }]) : json(500, {});
+  assert.equal((await (await request("/cat-perfume/enrichment/context?quizId=perfume")).json()).aiAvailable, true);
+  const ai = await request("/cat-perfume/enrichment/estimate", "POST", localBody(["aube"]));
+  assert.equal(ai.status, 200);
+  assert.equal(aiCalls.filter((c) => c.path === "/enrich/axes").length, 1);
+  assert.equal(enrichmentLimiter.remaining("tenant-a"), enrichmentLimiter.limit - 1);
+});
+
+// ─── Parcours express : axes d'un brouillon non enregistré ───────────────────
+
+const draftAxes = PERFUME_AXES.map(({ key, label, lowLabel, highLabel }) => ({ key, label, lowLabel, highLabel }));
+const draftBody = (extra: Row = {}) => ({ axes: draftAxes, axisKeys: draftAxes.map((a) => a.key), ...extra });
+
+test("estimate-local avec les axes d'un brouillon : tous les produits actifs du catalogue, rien d'écrit, noms fournis", async () => {
+  plan = "STARTER";
+  products.push(productRow({ id: "off", catalogId: "cat-perfume", name: "Inactif", active: false, tags: ["frais"] }));
+  const before = JSON.stringify(products);
+  const res = await request(localPath, "POST", draftBody());
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(body.results.map((r: Row) => r.productName).sort(), ["Aube Citronnée", "Mystère", "Nuit de Velours"]);
+  assert.deepEqual(body.supportedAxes.sort(), ["freshness", "intensity", "sweetness", "woody"]);
+  assert.equal(JSON.stringify(products), before, "aucune écriture avant validation explicite");
+  assert.equal(aiCalls.length, 0);
+});
+
+test("brouillon : validation des axes et isolation tenant", async () => {
+  assert.equal((await request(localPath, "POST", { axes: [{ key: "bad key", label: "x" }], axisKeys: ["bad key"] })).status, 400);
+  assert.equal((await request(localPath, "POST", { axes: [], axisKeys: ["freshness"] })).status, 422);
+  assert.equal((await request(localPath, "POST", draftBody({ axisKeys: ["inconnu"] }))).status, 400, "axe absent du brouillon");
+  assert.equal((await request(localPath, "POST", draftBody({ productIds: ["trek"] }))).status, 400, "produit d'un autre catalogue");
+  assert.equal((await request(localPath, "POST", draftBody({ productIds: ["foreign-perfume"] }))).status, 400, "produit d'un autre tenant");
+  assert.equal((await request(localPath, "POST", draftBody(), "tenant-b")).status, 404, "catalogue d'un autre tenant");
+  assert.equal((await request(localPath, "POST", draftBody(), null)).status, 401);
+  const writeOutside = await request("/cat-perfume/enrichment/apply", "POST", { axes: draftAxes, updates: [update("foreign-perfume", { freshness: 0.5 }, { freshness: null })] });
+  assert.equal(writeOutside.status, 400);
+  assert.deepEqual(products.find((p) => p.id === "foreign-perfume")!.attributes, {});
+  const strangeAxis = await request("/cat-perfume/enrichment/apply", "POST", { axes: draftAxes, updates: [update("aube", { adventure: 0.5 }, { adventure: null })] });
+  assert.equal(strangeAxis.status, 400, "clé hors des axes du brouillon");
+});
+
+test("brouillon : apply protège les valeurs existantes et signale les conflits (409)", async () => {
+  plan = "STARTER";
+  const apply = (updates: Row[]) => request("/cat-perfume/enrichment/apply", "POST", { axes: draftAxes, updates });
+  const estimated = await (await request(localPath, "POST", draftBody({ productIds: ["aube", "nuit"] }))).json();
+  const aube = estimated.results.find((r: Row) => r.productId === "aube");
+  const fresh = aube.estimates.find((e: Row) => e.axis === "freshness");
+  assert.equal(fresh.status, "estimated");
+  // La valeur de « nuit » (intensité 0,4) n'est pas reproposée ; la remplacer sans confirmation est refusé.
+  const nuit = estimated.results.find((r: Row) => r.productId === "nuit");
+  assert.equal(nuit.estimates.find((e: Row) => e.axis === "intensity").status, "insufficient_data");
+  assert.equal((await apply([update("nuit", { intensity: 0.9 }, { intensity: 0.4 })])).status, 409);
+  assert.equal(products.find((p) => p.id === "nuit")!.attributes.intensity, 0.4);
+  // Valeur modifiée entre l'estimation et l'enregistrement : conflit, rien d'écrit.
+  products.find((p) => p.id === "aube")!.attributes = { freshness: 0.3 };
+  const stale = await apply([update("aube", { freshness: fresh.value }, { freshness: null })]);
+  assert.equal(stale.status, 409);
+  assert.deepEqual(products.find((p) => p.id === "aube")!.attributes, { freshness: 0.3 });
+  // Cas nominal.
+  products.find((p) => p.id === "aube")!.attributes = {};
+  const ok = await apply([update("aube", { freshness: fresh.value }, { freshness: null })]);
+  assert.deepEqual(await ok.json(), { updatedProducts: 1, added: 1, replaced: 0 });
+  assert.equal(products.find((p) => p.id === "aube")!.embeddingStatus, "PENDING", "embedding recalculé en arrière-plan : les recommandations ne sont plus « prêtes »");
+  assert.equal(aiCalls.length, 0);
+});
+
+test("secteur sans règles locales : information claire, aucune caractéristique fabriquée", async () => {
+  plan = "STARTER";
+  const travelAxes = AXES.map(({ key, label, lowLabel, highLabel }) => ({ key, label, lowLabel, highLabel }));
+  const res = await request("/cat-trips/enrichment/estimate-local", "POST", { axes: travelAxes, axisKeys: ["adventure", "culture"], productIds: ["trek", "museum"] });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(body.supportedAxes, []);
+  assert.match(body.warnings[0], /Aucune règle automatique/);
+  for (const result of body.results) for (const e of result.estimates) {
+    assert.equal(e.status, "insufficient_data");
+    assert.equal(e.value, null);
+  }
+  assert.deepEqual(products.find((p) => p.id === "museum")!.attributes, {});
 });

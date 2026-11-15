@@ -84,15 +84,20 @@ export async function assertResourceQuota(db: Db, tenantId: string, quota: "cata
   if (limit === null) return;
   const used = (await countUsage(tenantId, db))[quota];
   if (limitReached(limit, used)) {
-    const what = quota === "catalogs" ? "de catalogues" : "d'expériences publiées";
+    const what = quota === "catalogs" ? "de catalogues" : "de quiz en ligne";
     throw new EntitlementError(`Limite ${what} atteinte pour votre formule (${limit})`, "quota_exceeded", { quota, limit, used, plan: ent.plan });
   }
 }
 
-/** Sérialise les créations de ressources d'une même boutique (verrou de ligne Tenant, tenu jusqu'à la fin de la transaction). */
+/** Verrou de ligne Tenant, tenu jusqu'à la fin de la transaction. À prendre AVANT tout verrou de quiz (ordre constant). */
+export async function lockTenant(db: Prisma.TransactionClient, tenantId: string): Promise<void> {
+  await db.$queryRaw`SELECT id FROM "Tenant" WHERE id = ${tenantId} FOR UPDATE`;
+}
+
+/** Sérialise les créations de ressources d'une même boutique. */
 export async function withTenantLock<T>(tenantId: string, fn: (db: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   return prisma.$transaction(async (db) => {
-    await db.$queryRaw`SELECT id FROM "Tenant" WHERE id = ${tenantId} FOR UPDATE`;
+    await lockTenant(db, tenantId);
     return fn(db);
   });
 }

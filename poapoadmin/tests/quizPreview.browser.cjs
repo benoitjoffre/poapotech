@@ -9,12 +9,16 @@ const { chromium } = require(process.env.POAPO_PLAYWRIGHT_MODULE || "playwright"
 
 const prisma = new PrismaClient();
 const tenantId = `preview-browser-${randomUUID()}`;
-const adminUrl = process.env.POAPO_ADMIN_URL || "http://localhost:5174";
+const { startIsolatedStack } = require("./support/isolatedStack.cjs");
+let adminUrl;
+let stack;
 let browser;
 let page;
 const errors = [];
 
 async function main() {
+  stack = await startIsolatedStack(); // Auth0 neutralisé pour cette pile uniquement : le projet garde sa configuration
+  adminUrl = stack.admin;
   const tenant = await prisma.tenant.create({ data: {
     id: tenantId, email: `${tenantId}@example.test`, primaryColor: "#246753",
   } });
@@ -53,9 +57,6 @@ async function main() {
   await prisma.question.create({ data: {
     tenantId, quizId: quiz.id, text: "Question désactivée", order: 4, active: false,
   } });
-  const campaign = await prisma.campaign.create({ data: {
-    tenantId, quizId: quiz.id, name: "Campagne de recette", occasion: "PERMANENT", objectives: [],
-  } });
   const snapshot = async () => ({
     sessions: await prisma.quizSession.findMany({ where: { tenantId } }),
     metrics: await prisma.metric.findMany({ where: { tenantId } }),
@@ -79,9 +80,10 @@ async function main() {
     if (/\/api\/quiz\/(track|submit|feedback|conversion)(?:[/?]|$)/.test(request.url())) tracking.push(request.url());
   });
   page.on("pageerror", (error) => errors.push(error.message));
-  await page.goto(`${adminUrl}/campaigns/${campaign.id}/quiz-editor`);
+  await page.goto(`${adminUrl}/experiences/${quiz.id}/edit`);
   await page.getByRole("tab", { name: "Apparence" }).click();
   await page.getByLabel("Couleur principale (hexadécimal)", { exact: true }).fill("#123456");
+  await page.getByText("Plus d'options").click();
   await page.getByLabel("Couleur de fond (hexadécimal)", { exact: true }).fill("#FAF0DD");
   await page.getByLabel("Police des titres", { exact: true }).selectOption("georgia");
   await page.getByLabel("Forme des boutons", { exact: true }).selectOption("square");
@@ -105,7 +107,7 @@ async function main() {
   await frame.getByLabel("Culture", { exact: true }).check();
   await frame.getByRole("button", { name: "Suivant", exact: true }).click();
   await frame.getByRole("button", { name: "Choisir cette valeur" }).click();
-  await frame.getByRole("button", { name: "Envoyer mes reponses" }).click();
+  await frame.getByRole("button", { name: "Envoyer mes réponses" }).click();
   await frame.getByRole("heading", { name: product.name }).waitFor({ timeout: 20000 });
   assert.ok(await frame.locator(".result-explanation").innerText());
   assert.equal(await frame.locator("a[href*='/buy']").count(), 0);
@@ -132,10 +134,10 @@ async function main() {
   const errorRoute = `**/api/quizzes/${quiz.id}/preview/recommendations`;
   await page.route(errorRoute, (route) => route.fulfill({ status: 503, contentType: "application/json",
     body: JSON.stringify({ error: "Moteur de recette indisponible" }) }));
-  await frame.getByRole("button", { name: "Envoyer mes reponses" }).click();
+  await frame.getByRole("button", { name: "Envoyer mes réponses" }).click();
   await frame.getByText("Moteur de recette indisponible").waitFor();
   await page.unroute(errorRoute);
-  await frame.getByRole("button", { name: "Envoyer mes reponses" }).click();
+  await frame.getByRole("button", { name: "Envoyer mes réponses" }).click();
   await frame.getByRole("heading", { name: product.name }).waitFor({ timeout: 20000 });
   assert.equal(await frame.getByRole("button", { name: "Découvrir", exact: true }).isDisabled(), true);
   await page.getByRole("tab", { name: "Apparence", exact: true }).click();
@@ -159,7 +161,14 @@ async function main() {
   assert.deepEqual(await page.evaluate(() => window.__previewBeacons), []);
   assert.deepEqual(await page.evaluate(() => Object.keys(sessionStorage)), []);
   assert.deepEqual(errors, []);
-  assert.deepEqual(await snapshot(), before);
+  // L'éditeur enregistre désormais le brouillon automatiquement (QuizBuilderPage, après 1,2 s) : seul le brouillon peut changer.
+  // L'aperçu, lui, ne doit toucher ni la version publique, ni les sessions, ni les statistiques (vérifié ci-dessus : aucun appel de suivi).
+  // Le serveur de développement (React StrictMode) rejoue l'effet d'enregistrement des périodes au montage (QuizPeriodFields) :
+  // ce PUT sans changement ne modifie que `quiz.updatedAt`, dont la comparaison est donc exclue.
+  const after = await snapshot();
+  const stable = (value) => ({ ...value, drafts: null, quiz: { ...value.quiz, updatedAt: null } });
+  assert.deepEqual(stable(after), stable(before));
+  assert.ok(after.drafts.length <= 1 && after.drafts.every((d) => d.quizId === quiz.id), "au plus le brouillon de ce quiz");
   console.log("PASS: local unsaved questions/theme, pending forms, conditions, A/B, single/multi/scale, inactive quiz, real Python result, error/retry, restart, no tracking/writes, 320/375/768/1440px.");
 }
 
@@ -181,6 +190,7 @@ main().catch(async (error) => {
   process.exitCode = 1;
 }).finally(async () => {
   if (browser) await browser.close();
+  if (stack) stack.stop();
   await prisma.tenant.deleteMany({ where: { id: tenantId } });
   await prisma.$disconnect();
 });

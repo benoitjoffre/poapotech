@@ -142,7 +142,7 @@ export function sumCounts(counts: Iterable<ResultsCounts>): ResultsCounts {
   return total;
 }
 
-/** Synthèse tenant-scopée. Chaque quiz n'est compté qu'une fois, quel que soit le nombre de campagnes qui le partagent. */
+/** Synthèse tenant-scopée. Chaque quiz n'est compté qu'une fois. */
 export async function resultsSummary(tenantId: string, filters: ResultsFilters): Promise<ResultsSummary> {
   const [catalogs, allQuizzes] = await Promise.all([
     prisma.catalog.findMany({ where: { tenantId }, orderBy: [{ name: "asc" }, { id: "asc" }], select: { id: true, name: true }, take: 100 }),

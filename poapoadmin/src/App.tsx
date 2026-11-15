@@ -1,4 +1,4 @@
-import { Navigate, NavLink, Outlet, Route, Routes, useLocation, useMatch } from "react-router-dom";
+import { Navigate, NavLink, Outlet, Route, Routes, useLocation, useMatch, useParams } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import LoginPage from "./pages/LoginPage";
 import CatalogPage from "./pages/CatalogPage";
@@ -8,27 +8,22 @@ import SettingsPage from "./pages/SettingsPage";
 import SidebarPlan from "./components/SidebarPlan";
 import SubscriptionPage from "./pages/SubscriptionPage";
 import ImportPage from "./pages/ImportPage";
-import QuizBuilderPage from "./pages/QuizBuilderPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import TenantsAdminPage from "./pages/TenantsAdminPage";
 import QuizzesPage from "./pages/QuizzesPage";
-import QuizFormPage from "./pages/QuizFormPage";
-import ExperienceCreatePage from "./pages/ExperienceCreatePage";
 import ExpressCreationPage from "./pages/ExpressCreationPage";
-import CampaignsPage from "./pages/CampaignsPage";
-import CampaignFormPage from "./pages/CampaignFormPage";
-import CampaignDetailPage from "./pages/CampaignDetailPage";
-import CampaignQuizGeneratorPage from "./pages/CampaignQuizGeneratorPage";
-import ExperienceEditorPage, { ExperienceSetupPage } from "./pages/ExperienceEditorPage";
-import CampaignQuizEditorPage from "./pages/CampaignQuizEditorPage";
+import ExperienceEditorPage from "./pages/ExperienceEditorPage";
 import ProductEnrichmentPage from "./pages/ProductEnrichmentPage";
 import HelpCenterPage from "./pages/HelpCenterPage";
 import HelpArticlePage from "./pages/HelpArticlePage";
 import HomePage from "./pages/HomePage";
 import OnboardingPage from "./pages/OnboardingPage";
 import LandingPage from "./landing/LandingPage";
+import { experienceEditorPath } from "./lib/experienceLinks";
 import Icon from "./components/Icon";
 import { QuizProvider } from "./contexts/QuizContext";
+import { JourneyProvider } from "./contexts/JourneyContext";
+import JourneyBar from "./components/JourneyBar";
 import { TourProvider } from "./tour/TourContext";
 
 function ProtectedRoute() {
@@ -41,6 +36,11 @@ function ProtectedRoute() {
   return token ? <QuizProvider><Outlet /></QuizProvider> : <Navigate to="/login" replace />;
 }
 
+function LegacyQuizRedirect() {
+  const { quizId = "" } = useParams();
+  return <Navigate to={experienceEditorPath(quizId)} replace />;
+}
+
 function SuperAdminRoute() {
   const { user, loading } = useAuth();
   if (loading) return <div className="loading-screen">Chargement...</div>;
@@ -50,13 +50,13 @@ function SuperAdminRoute() {
 
 function AppLayout() {
   const { user, logout } = useAuth();
-  const campaignEditor = useMatch("/campaigns/:campaignId/quiz-editor");
   const experienceEditor = useMatch("/experiences/*");
   const tourUserId = user && !user.isSuperAdmin ? user.tenantId : null;
   const link = ({ isActive }: { isActive: boolean }) => `admin-side-link${isActive ? " active" : ""}`;
   return (
-    <TourProvider userId={tourUserId} suppressOffer={!!campaignEditor || !!experienceEditor}>
-    <div className={`admin-layout${user?.isSuperAdmin ? "" : " merchant-layout"}${campaignEditor ? " campaign-editor-layout" : ""}`}>
+    <JourneyProvider enabled={!user?.isSuperAdmin}>
+    <TourProvider userId={tourUserId} suppressOffer={!!experienceEditor}>
+    <div className={`admin-layout${user?.isSuperAdmin ? "" : " merchant-layout"}`}>
       <aside className="admin-sidebar">
         <div className="admin-sidebar-brand">
           <span className="admin-nav-logo">POAPO</span>
@@ -68,8 +68,7 @@ function AppLayout() {
           ) : <>
             <NavLink className={link} data-tour="nav-home" to="/" end><Icon name="home" />Accueil</NavLink>
             <NavLink className={link} data-tour="nav-products" to="/catalog"><Icon name="box" />Mes produits</NavLink>
-            <NavLink className={({ isActive }) => link({ isActive: isActive || !!experienceEditor })} data-tour="nav-experiences" to="/quizzes"><Icon name="quiz" />Mes expériences</NavLink>
-            <NavLink className={link} to="/campaigns"><Icon name="megaphone" />Campagnes</NavLink>
+            <NavLink className={({ isActive }) => link({ isActive: isActive || !!experienceEditor })} data-tour="nav-experiences" to="/quizzes"><Icon name="quiz" />Mes quiz</NavLink>
             <NavLink className={link} data-tour="nav-results" to="/analytics"><Icon name="chart" />Résultats</NavLink>
             <NavLink className={link} to="/settings"><Icon name="gear" />Paramètres</NavLink>
             <NavLink className={link} to="/help"><Icon name="help" />Centre d'aide</NavLink>
@@ -85,10 +84,12 @@ function AppLayout() {
         </div>
       </aside>
       <main className="admin-main">
+        {!user?.isSuperAdmin && <JourneyBar />}
         <Outlet />
       </main>
     </div>
     </TourProvider>
+    </JourneyProvider>
   );
 }
 
@@ -113,20 +114,12 @@ function App() {
             <Route path="/catalog/import" element={<ImportPage />} />
             <Route path="/catalog/:id/edit" element={<ProductFormPage />} />
             <Route path="/enrichment" element={<ProductEnrichmentPage />} />
-            <Route path="/quiz-builder" element={<QuizBuilderPage />} />
             <Route path="/quizzes" element={<QuizzesPage />} />
-            <Route path="/quizzes/new" element={<QuizFormPage />} />
-            <Route path="/quizzes/:quizId" element={<QuizFormPage />} />
-            <Route path="/experiences/new" element={<ExperienceCreatePage />} />
-            <Route path="/experiences/new/express" element={<ExpressCreationPage />} />
-            <Route path="/experiences/:quizId/setup" element={<ExperienceSetupPage />} />
+            <Route path="/quizzes/:quizId" element={<LegacyQuizRedirect />} />
+            <Route path="/experiences/new" element={<ExpressCreationPage />} />
+            <Route path="/experiences/new/express" element={<Navigate to="/experiences/new" replace />} />
+            <Route path="/experiences/:quizId/setup" element={<LegacyQuizRedirect />} />
             <Route path="/experiences/:quizId/edit" element={<ExperienceEditorPage />} />
-            <Route path="/campaigns" element={<CampaignsPage />} />
-            <Route path="/campaigns/new" element={<CampaignFormPage />} />
-            <Route path="/campaigns/:campaignId" element={<CampaignDetailPage />} />
-            <Route path="/campaigns/:campaignId/edit" element={<CampaignFormPage />} />
-            <Route path="/campaigns/:campaignId/generate-quiz" element={<CampaignQuizGeneratorPage />} />
-            <Route path="/campaigns/:campaignId/quiz-editor" element={<CampaignQuizEditorPage />} />
             <Route path="/analytics" element={<AnalyticsPage />} />
             <Route element={<SuperAdminRoute />}>
               <Route path="/admin/tenants" element={<TenantsAdminPage />} />

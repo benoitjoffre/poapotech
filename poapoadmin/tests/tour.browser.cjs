@@ -22,7 +22,7 @@ async function main() {
   await prisma.subscription.create({ data: { tenantId, plan: "BUSINESS", source: "LEGACY" } });
   await prisma.catalog.create({ data: { tenantId, name: "Catalogue visite", isDefault: true } });
   const token = jwt.sign({ tenantId, email: `${tenantId}@example.test` }, process.env.JWT_SECRET);
-  const counts = async () => [await prisma.quiz.count({ where: { tenantId } }), await prisma.campaign.count({ where: { tenantId } })];
+  const counts = async () => [await prisma.quiz.count({ where: { tenantId } })];
   browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript((value) => { if (!sessionStorage.getItem("seeded")) localStorage.setItem("poapo_admin_token", value); }, token);
@@ -68,7 +68,7 @@ async function main() {
   await card.waitFor();
   check(await card.getByText("Étape 1 sur 6").count() === 1, "progress step 1/6");
   check(await page.getByRole("button", { name: "Précédent" }).count() === 0, "no previous on step 1");
-  const expected = [["Accueil", "anchored"], ["Mes produits", "anchored"], ["Mes expériences", "anchored"], ["Éditeur de questions", "informative"], ["Publication", "informative"], ["Résultats", "anchored"]];
+  const expected = [["Accueil", "anchored"], ["Mes produits", "anchored"], ["Mes quiz", "anchored"], ["Éditeur de questions", "informative"], ["Publication", "informative"], ["Résultats", "anchored"]];
   for (const [i, [title, mode]] of expected.entries()) {
     await card.getByRole("heading", { name: title }).waitFor();
     check(await card.getAttribute("data-tour-mode") === mode, `step ${i + 1} mode ${mode}`);
@@ -159,7 +159,7 @@ async function main() {
 
   // No side effects, no regressions
   await page.setViewportSize({ width: 1440, height: 900 });
-  for (const route of ["/", "/catalog", "/quizzes", "/campaigns", "/analytics", "/settings", "/help"]) {
+  for (const route of ["/", "/catalog", "/quizzes", "/analytics", "/settings", "/help"]) {
     await page.goto(admin + route);
     await page.waitForLoadState("networkidle");
     check(new URL(page.url()).pathname === route, `route ${route} not redirected`);

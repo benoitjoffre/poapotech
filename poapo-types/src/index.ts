@@ -78,7 +78,6 @@ export interface CatalogSummary extends Catalog {
   productCount: number;
   activeProductCount: number;
   quizCount: number;
-  campaignCount: number;
 }
 
 export interface CatalogInput {
@@ -103,6 +102,11 @@ export interface Quiz {
   /** Tous les produits actifs du catalogue du quiz ; sinon la sélection `products`. */
   useAllProducts: boolean;
   products: { productId: string }[];
+  /** Occasion et période facultatives, informatives : sans effet sur l'accès public. */
+  occasion?: QuizOccasion | null;
+  occasionLabel?: string | null;
+  startsAt?: string | Date | null;
+  endsAt?: string | Date | null;
   createdAt: string | Date;
   updatedAt: string | Date;
 }
@@ -122,203 +126,11 @@ export interface QuizInput {
 }
 
 // ─────────────────────────────────────────────
-// Campaign Studio
+// Occasion d'une expérience (informative)
 // ─────────────────────────────────────────────
-export type CampaignStatus = "DRAFT" | "SCHEDULED" | "ACTIVE" | "PAUSED" | "COMPLETED";
-
-export type CampaignOccasion =
+export type QuizOccasion =
   | "CHRISTMAS" | "VALENTINES_DAY" | "SPRING" | "MOTHERS_DAY" | "BACK_TO_SCHOOL"
   | "BLACK_FRIDAY" | "PROMOTION" | "PERMANENT" | "CUSTOM";
-
-export interface CampaignQuizSummary {
-  id: string;
-  name: string;
-  active: boolean;
-  /** Nombre de questions actives du quiz. */
-  questionCount: number;
-  /** Produits proposés par le quiz (catalogue actif si useAllProducts). */
-  productCount: number;
-  catalog: CatalogRef;
-}
-
-export interface Campaign {
-  id: string;
-  tenantId: string;
-  quizId: string;
-  name: string;
-  occasion: CampaignOccasion;
-  occasionLabel: string | null;
-  description: string | null;
-  objectives: string[];
-  imageUrl: string | null;
-  /** Statut enregistré, choisi par le tenant. */
-  status: CampaignStatus;
-  /** Statut calculé à partir du statut enregistré et des dates (SCHEDULED/ACTIVE/COMPLETED). */
-  effectiveStatus: CampaignStatus;
-  startsAt: string | null;
-  endsAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-  quiz: CampaignQuizSummary;
-}
-
-export interface CampaignInput {
-  quizId?: string;
-  name?: string;
-  occasion?: CampaignOccasion;
-  occasionLabel?: string | null;
-  description?: string | null;
-  objectives?: string[];
-  imageUrl?: string | null;
-  status?: CampaignStatus;
-  startsAt?: string | null;
-  endsAt?: string | null;
-}
-
-export interface CampaignListResponse {
-  data: Campaign[];
-  /** Nombre de campagnes du tenant par statut calculé, indépendamment des filtres. */
-  counts: Record<CampaignStatus, number> & { total: number };
-}
-
-// ─────────────────────────────────────────────
-// Campaign Studio — génération de quiz par IA
-// ─────────────────────────────────────────────
-export type QuizGenerationObjective =
-  | "GIFT_FINDER" | "PRODUCT_DISCOVERY" | "CROSS_SELL" | "HIGHLIGHT_NEW" | "CLEAR_STOCK";
-
-/**
- * AXES : au moins un axe sépare les produits sélectionnés (écart ≥ 0,2).
- * SEMANTIC : aucun axe discriminant, la recommandation repose sur la similarité sémantique
- * (embeddings) du moteur existant, alimentée par le texte du profil construit à partir des axes.
- */
-export type QuizGenerationMode = "AXES" | "SEMANTIC";
-
-export interface QuizGenerationProduct {
-  id: string;
-  name: string;
-  brand: string | null;
-  imageUrl: string | null;
-  price: number | null;
-  /** Le produit dispose d'un embedding : il peut être départagé sémantiquement. */
-  hasEmbedding: boolean;
-  /** Valeurs 0–1 du produit sur les axes du quiz de la campagne. */
-  axisValues: Record<string, number>;
-}
-
-export interface QuizGenerationLimits {
-  minProducts: number;
-  maxProducts: number;
-  minQuestions: number;
-  maxQuestions: number;
-  maxDraftQuestions: number;
-  minAnswers: number;
-  maxAnswers: number;
-  instructions: number;
-  /** Borne des impacts proposés par l'IA. */
-  generationImpact: number;
-  /** Borne des impacts modifiés manuellement, identique au Quiz Builder. */
-  manualImpact: number;
-}
-
-export interface QuizGenerationContext {
-  campaign: {
-    id: string;
-    name: string;
-    status: CampaignStatus;
-    effectiveStatus: CampaignStatus;
-    occasion: CampaignOccasion;
-    occasionLabel: string | null;
-    quizId: string;
-    quizName: string;
-  };
-  /** Catalogue du quiz de la campagne : seuls ses produits sont proposés. */
-  catalog: CatalogRef;
-  industry: string;
-  /** Axes du quiz de la campagne : les seuls utilisables par la génération. */
-  axes: QuizAxis[];
-  products: QuizGenerationProduct[];
-  /** Le quiz généré peut être rattaché automatiquement (campagne en brouillon). */
-  canAttach: boolean;
-  limits: QuizGenerationLimits;
-}
-
-export interface QuizGenerationRequest {
-  occasion?: CampaignOccasion;
-  occasionLabel?: string | null;
-  objective: QuizGenerationObjective;
-  productIds: string[];
-  /** Sous-ensemble des axes du quiz de la campagne ; tous par défaut. */
-  axisKeys?: string[];
-  instructions?: string | null;
-  questionCount?: number;
-}
-
-export interface QuizDraftAnswer {
-  text: string;
-  emoji: string | null;
-  impacts: AnswerImpact;
-  /** Produits visés par l'IA, indicatif : jamais enregistré. */
-  targetProductIds?: string[];
-}
-
-export interface QuizDraftQuestion {
-  text: string;
-  helpText: string | null;
-  answers: QuizDraftAnswer[];
-}
-
-/** Quiz généré ou modifié, non enregistré. Toutes les questions sont à choix unique. */
-export interface QuizDraft {
-  name: string;
-  quizTitle: string;
-  ctaText: string;
-  axisKeys: string[];
-  productIds: string[];
-  questions: QuizDraftQuestion[];
-}
-
-export interface GeneratedQuizDraft {
-  draft: QuizDraft;
-  mode: QuizGenerationMode;
-  axes: QuizAxis[];
-  industry: string;
-  warnings: string[];
-  generation: { model: string; durationMs: number; attempts: number };
-}
-
-export interface QuizDraftPreviewRequest {
-  draft: QuizDraft;
-  /** Index de la réponse choisie pour chaque question, dans l'ordre. */
-  answers: number[];
-}
-
-export interface QuizDraftRecommendation {
-  product: Pick<Product, "id" | "name" | "brand" | "imageUrl" | "price">;
-  score: number;
-}
-
-export interface QuizDraftPreviewResponse {
-  profile: Record<string, number>;
-  profileSummary: ProfileSummary;
-  explanation: string[];
-  recommendations: QuizDraftRecommendation[];
-}
-
-export interface QuizDraftSaveRequest {
-  draft: QuizDraft;
-  attachToCampaign: boolean;
-}
-
-export interface QuizDraftSaveResponse {
-  quizId: string;
-  quizName: string;
-  questionCount: number;
-  answerCount: number;
-  attachedToCampaign: boolean;
-  /** Raison du non-rattachement lorsqu'il était demandé. */
-  attachMessage: string | null;
-}
 
 // ─────────────────────────────────────────────
 // Auth
@@ -435,6 +247,8 @@ export interface ProductEnrichmentLimits {
 }
 
 export interface ProductEnrichmentContext {
+  /** false : la formule n'inclut pas l'estimation IA (l'estimation locale, sans IA, reste disponible). */
+  aiAvailable?: boolean;
   catalog: CatalogRef;
   quizzes: EnrichmentQuizOption[];
   /** Quiz dont les axes sont estimés ; null si le catalogue n'a aucun quiz avec axes. */
@@ -446,9 +260,12 @@ export interface ProductEnrichmentContext {
 }
 
 export interface ProductEnrichmentEstimateInput {
-  quizId: string;
+  /** Quiz enregistré dont on estime les axes ; ou, à défaut, `axes` (brouillon non encore enregistré, parcours express). */
+  quizId?: string;
+  axes?: QuizAxis[];
   axisKeys: string[];
-  productIds: string[];
+  /** Estimation locale uniquement : absent = tous les produits actifs du catalogue (500 maximum). */
+  productIds?: string[];
 }
 
 export interface AxisEstimate {
@@ -464,6 +281,8 @@ export interface AxisEstimate {
 
 export interface ProductEnrichmentResult {
   productId: string;
+  /** Renseigné par l'estimation locale (affichage sans second appel). */
+  productName?: string;
   /** Valeurs en base au moment de l'estimation, pour les axes demandés. */
   currentValues: Record<string, number | null>;
   estimates: AxisEstimate[];
@@ -474,6 +293,8 @@ export interface ProductEnrichmentEstimateResponse {
   warnings: string[];
   generation: { model: string; durationMs: number; attempts: number; aiProducts: number };
   remaining: number;
+  /** Estimation locale : clés d'axes pour lesquels une règle automatique existe (les autres restent à renseigner à la main). */
+  supportedAxes?: string[];
 }
 
 export interface ProductEnrichmentUpdate {
@@ -487,7 +308,9 @@ export interface ProductEnrichmentUpdate {
 }
 
 export interface ProductEnrichmentApplyInput {
-  quizId: string;
+  quizId?: string;
+  /** Axes d'un brouillon non enregistré (parcours express), à défaut de `quizId`. */
+  axes?: QuizAxis[];
   updates: ProductEnrichmentUpdate[];
 }
 
@@ -504,6 +327,15 @@ export type QuestionType = "single" | "multi" | "scale";
 
 export type AnswerImpact = Record<string, number>;
 
+/** Effets additifs d'une réponse (lot 10D-2B). Validés côté serveur par `parseAnswerEffects` ; absents = comportement historique. */
+export type EffectMissingPolicy = "exclude" | "include";
+export type AnswerEffect =
+  | { type: "category"; criterion: string; mode: "soft" | "strict"; values: string[]; onMissing?: EffectMissingPolicy }
+  | { type: "range"; criterion: string; mode: "soft" | "strict"; min?: number; max?: number; onMissing?: EffectMissingPolicy }
+  | { type: "axis"; axis: string }
+  | { type: "none"; criterion: string };
+export interface AnswerEffects { v: 1; effects: AnswerEffect[] }
+
 export interface Answer {
   id: string;
   questionId: string;
@@ -513,6 +345,8 @@ export interface Answer {
   order: number;
   active: boolean;
   impacts: AnswerImpact;
+  /** Absent ou null : aucun effet (comportement historique). */
+  effects?: AnswerEffects | null;
 }
 
 export interface Question {
@@ -616,7 +450,6 @@ export interface QuizPublicationDiagnostic {
   valid: boolean;
   errors: QuizPublicationIssue[];
   warnings: QuizPublicationIssue[];
-  campaigns: { id: string; name: string }[];
   summary: { name: string; catalogId: string; catalogName: string; questions: number; products: number; active: boolean };
 }
 
@@ -660,6 +493,10 @@ export interface QuizResult {
   >;
   explanation: string[];
   profileSummary: ProfileSummary;
+  /** Caractéristiques présentables (libellé visiteur + valeur lisible), choisies parmi celles que le quiz utilise. */
+  characteristics?: { key: string; label: string; value: string }[];
+  /** Présent seulement quand des critères stricts ou des préférences avancées ont été appliqués (quiz avancés). */
+  selection?: { state: "matched" | "unconstrained"; matched: number; limited: boolean };
 }
 
 // ─────────────────────────────────────────────
@@ -861,9 +698,38 @@ export interface ExpressAxis extends QuizAxis {
   spread: number;
 }
 
+/** Nature d'une question générée, en langage commerçant (jamais d'identifiant technique). */
+export type ExpressQuestionKind = "axis" | "choice" | "budget" | "yesno" | "measure";
+
+export interface ExpressQuestionInfo {
+  /** Libellé de la caractéristique du catalogue que la question exploite (ex. « Famille »). */
+  criterion: string;
+  kind: ExpressQuestionKind;
+  /** true : le plafond est une exigence (aucun produit au-dessus n'est proposé). */
+  strict: boolean;
+  /** Le rôle de ce critère pour un visiteur ne peut pas être déduit avec assez de confiance : à valider par le commerçant. */
+  needsValidation: boolean;
+  validationReason: string | null;
+  /** Limite de couverture à connaître (ex. « renseigné sur 62 % des produits »). */
+  coverageNote: string | null;
+}
+
+export interface ExpressCriterionSummary {
+  label: string;
+  kind: ExpressQuestionKind;
+  status: "used" | "to_validate" | "left_out";
+  coverage: number;
+  /** Phrase compréhensible : pourquoi ce critère est utilisé, à valider ou écarté. */
+  reason: string;
+}
+
 export interface ExpressAnswer {
   text: string;
   emoji?: string | null;
+  /** Effet attendu en une phrase (ex. « Favorise les produits Floral »). Jamais de structure technique. */
+  effectSummary?: string | null;
+  /** Effets avancés (préférence catégorielle, plage de prix, plafond strict). Opaque pour l'interface : à renvoyer tel quel. */
+  effects?: AnswerEffects | null;
   /** Deltas appliqués au profil (départ à 0,5, borné 0–1), uniquement sur des axes du brouillon. */
   impacts: Record<string, number>;
 }
@@ -871,6 +737,8 @@ export interface ExpressAnswer {
 export interface ExpressQuestion {
   text: string;
   helpText?: string | null;
+  /** Présent pour les questions générées par le générateur avancé. */
+  info?: ExpressQuestionInfo;
   answers: ExpressAnswer[];
 }
 
@@ -881,6 +749,89 @@ export interface ExpressDraft {
   industry: string;
   axes: ExpressAxis[];
   questions: ExpressQuestion[];
+}
+
+// ─────────────────────────────────────────────
+// Import CSV : lecture des colonnes (lot 10C) — informations pour le commerçant, additives
+// ─────────────────────────────────────────────
+/** standard : reconnue automatiquement ; suggested : information supplémentaire proposée (à confirmer) ; unrecognized : aucune proposition ; empty : aucune valeur. */
+export type ImportColumnStatus = "standard" | "suggested" | "unrecognized" | "empty";
+export type ImportColumnKind = "number" | "yesno" | "category" | "text" | "identifier" | "mixed" | "empty";
+
+export interface ImportColumnInsight {
+  sourceColumn: string;
+  status: ImportColumnStatus;
+  detected: ImportColumnKind;
+  example: string | null;
+  filled: number;
+  total: number;
+  distinct: number;
+  /** Destination proposée pour une information supplémentaire ; jamais appliquée sans confirmation. */
+  suggestion: { targetField: string; key: string; recommended: boolean; renamed: boolean } | null;
+  /** Messages en français destinés au commerçant. */
+  notes: string[];
+}
+
+// ─────────────────────────────────────────────
+// Diagnostic de colonnes d'un catalogue (lot 10B) — descriptif, sans effet sur la génération
+// ─────────────────────────────────────────────
+/** Famille descriptive d'un critère. UNKNOWN : valeurs non exploitables (structure inconnue, aucune valeur). */
+export type ColumnType = "NUMERIC" | "CATEGORICAL" | "RANGE" | "UNKNOWN";
+export type ColumnSource = "price" | "brand" | "tags" | "attribute";
+export type ColumnValueKind = "number" | "boolean" | "text" | "list" | "mixed" | "other" | "none";
+export type ColumnRejectionCode =
+  | "TOO_FEW_PRODUCTS"
+  | "INSUFFICIENT_COVERAGE"
+  | "UNSUPPORTED_STRUCTURE"
+  | "INVALID_VALUES"
+  | "IDENTIFIER_LIKE"
+  | "CONSTANT_VALUE"
+  | "HIGH_CARDINALITY"
+  | "INSUFFICIENT_VARIATION";
+export type ColumnWarningCode = "PARTIAL_COVERAGE" | "IMBALANCED_DISTRIBUTION" | "MERGED_VARIANTS" | "OUT_OF_AXIS_SCALE";
+
+export interface ColumnCategoryValue {
+  /** Libellé affiché : forme d'origine la plus fréquente (jamais réécrite). */
+  value: string;
+  count: number;
+  /** Part des valeurs renseignées (pour une liste : part des occurrences). */
+  share: number;
+}
+
+export type ColumnDistribution =
+  | { kind: "numeric"; min: number; p10: number; p25: number; median: number; p75: number; p90: number; max: number }
+  | { kind: "categorical"; values: ColumnCategoryValue[]; otherCount: number }
+  | { kind: "none" };
+
+export interface ColumnProfile {
+  /** Clé stable : "price", "brand", "tags" ou "attribute.<clé>". */
+  key: string;
+  source: ColumnSource;
+  /** Nom de l'attribut ou du champ produit. */
+  name: string;
+  inferredType: ColumnType;
+  valueKind: ColumnValueKind;
+  totalProducts: number;
+  /** Produits ayant une valeur non vide. */
+  productCount: number;
+  coverage: number;
+  /** Part des valeurs renseignées conformes au type dominant. */
+  parseRate: number;
+  distinctCount: number;
+  distribution: ColumnDistribution;
+  /** Entropie / ln(nombre de valeurs) ; null hors catégories ou avec moins de 2 valeurs. */
+  normalizedEntropy: number | null;
+  /** Part de la valeur dominante (catégories) ; null sinon. */
+  dominantShare: number | null;
+  /** Part des paires de produits séparées par ce critère (3 tranches pour un nombre) : 0 = rien ne départage, plafonnée par la couverture. */
+  discriminance: number;
+  usable: boolean;
+  rejection: { code: ColumnRejectionCode; message: string } | null;
+  warnings: { code: ColumnWarningCode; message: string }[];
+  /** Marqueur descriptif seul : ce critère pourrait un jour servir de contrainte. Aucune contrainte n'est créée. */
+  constraintCandidate: boolean;
+  /** Clé d'un axe de recommandation déjà défini pour ce catalogue. */
+  knownAxis: boolean;
 }
 
 export interface ExpressAxisCandidate {
@@ -908,6 +859,12 @@ export interface ExpressAnalysis {
   candidates: ExpressAxisCandidate[];
   /** Critères typiques du secteur absents des produits : à renseigner (enrichissement) pour fiabiliser. */
   missingForSector: { key: string; label: string }[];
+  /** Diagnostic additif (lot 10B) de toutes les colonnes du catalogue : lecture seule, n'influence pas le brouillon. */
+  columns?: ColumnProfile[];
+  /** Générateur utilisé pour le brouillon : « legacy » (modèles sectoriels) ou « universal » (critères tirés des données). */
+  generator?: "legacy" | "universal";
+  /** Critères examinés par le générateur avancé, en langage commerçant. */
+  criteria?: ExpressCriterionSummary[];
 }
 
 export interface ExpressProposal {
@@ -954,7 +911,7 @@ export interface PaginatedResponse<T> {
 // ── Abonnement (GET /api/subscription) ──
 export type SubscriptionPlanId = "STARTER" | "PRO" | "BUSINESS";
 export type SubscriptionQuotaKey = "catalogs" | "publishedExperiences" | "recommendationsPerMonth";
-export type SubscriptionFeatureKey = "aiEnrichment" | "advancedAnalytics" | "campaigns";
+export type SubscriptionFeatureKey = "aiEnrichment" | "advancedAnalytics";
 
 export interface SubscriptionOverview {
   plan: SubscriptionPlanId;

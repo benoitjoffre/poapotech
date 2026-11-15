@@ -65,9 +65,9 @@ beforeEach(() => {
     { id: "foreign", tenantId: "tenant-b", catalogId: "catalog_tenant-b", name: "Secret B", active: true, attributes: {} },
   ];
   quizzes = [
-    { id: "quiz-exp", tenantId: "tenant-a", catalogId: "catalog_tenant-a", axes: [], campaigns: 2, isDefault: true, createdAt: now },
-    { id: "quiz-hotel", tenantId: "tenant-a", catalogId: "catalog-heberg", axes: AXES, campaigns: 1, isDefault: false, createdAt: now },
-    { id: "quiz-b", tenantId: "tenant-b", catalogId: "catalog_tenant-b", axes: AXES, campaigns: 3, isDefault: true, createdAt: now },
+    { id: "quiz-exp", tenantId: "tenant-a", catalogId: "catalog_tenant-a", axes: [], isDefault: true, createdAt: now },
+    { id: "quiz-hotel", tenantId: "tenant-a", catalogId: "catalog-heberg", axes: AXES, isDefault: false, createdAt: now },
+    { id: "quiz-b", tenantId: "tenant-b", catalogId: "catalog_tenant-b", axes: AXES, isDefault: true, createdAt: now },
   ];
   selections = [{ quizId: "quiz-exp", productId: "exp-1" }];
 });
@@ -156,7 +156,7 @@ before(async () => {
 
   stub(prisma.quiz, "findMany", (async ({ where, select }: { where: Row; select: Row }) => (
     quizzes.filter((quiz) => matches(quiz, where)).map((quiz) => (
-      select._count ? { catalogId: quiz.catalogId, _count: { campaigns: quiz.campaigns } } : { axes: quiz.axes }
+      select.axes ? { axes: quiz.axes } : { catalogId: quiz.catalogId }
     ))
   )) as unknown as typeof prisma.quiz.findMany);
   stub(prisma.quiz, "count", (async ({ where }: { where: Row }) => quizzes.filter((q) => matches(q, where)).length) as unknown as typeof prisma.quiz.count);
@@ -201,11 +201,11 @@ test("liste : authentification requise, catalogues du tenant uniquement, défaut
   const main = body[0];
   assert.equal(main.isDefault, true);
   assert.deepEqual(
-    [main.productCount, main.activeProductCount, main.quizCount, main.campaignCount],
-    [2, 1, 1, 2],
+    [main.productCount, main.activeProductCount, main.quizCount],
+    [2, 1, 1],
   );
-  assert.deepEqual([body[1].productCount, body[1].quizCount, body[1].campaignCount], [1, 1, 1]);
-  assert.deepEqual([body[2].productCount, body[2].quizCount, body[2].campaignCount], [0, 0, 0]);
+  assert.deepEqual([body[1].productCount, body[1].quizCount], [1, 1]);
+  assert.deepEqual([body[2].productCount, body[2].quizCount], [0, 0]);
 });
 
 test("liste : un tenant sans catalogue reçoit son catalogue par défaut", async () => {

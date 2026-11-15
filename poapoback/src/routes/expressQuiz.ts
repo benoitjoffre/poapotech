@@ -10,6 +10,9 @@ import {
   saveExpressDraft,
   validateExpressDraft,
 } from "../services/expressQuiz";
+import { universalAllowedFor } from "../services/expressFlags";
+import { universalGenerator } from "../services/universalQuiz";
+import { deterministicGenerator } from "../services/expressQuiz";
 import { asyncRoute, QuizError } from "../services/quizzes";
 
 const router = Router();
@@ -20,11 +23,19 @@ function body(req: AuthRequest): Record<string, unknown> {
   return req.body as Record<string, unknown>;
 }
 
+// GET /capabilities — le générateur avancé (catégories, budget) est-il disponible ? Désactivé tant que EXPRESS_UNIVERSAL_QUESTIONS n'est pas « 1 ».
+router.get("/capabilities", (req: AuthRequest, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ universal: universalAllowedFor(req.tenant!.tenantId) });
+});
+
 // POST /analyze — analyse le catalogue et propose un brouillon ; aucune écriture
 router.post("/analyze", asyncRoute(async (req: AuthRequest, res) => {
   const input = body(req);
   const context = await loadExpressContext(req.tenant!.tenantId, input.catalogId);
-  const proposal: ExpressProposal = proposeExpressQuiz(context, parseExpressOptions(input));
+  const options = parseExpressOptions(input, req.tenant!.tenantId);
+  // Générateur historique par défaut ; le générateur avancé n'est utilisé que sur demande explicite (et s'il est activé), avec repli sur l'historique.
+  const proposal: ExpressProposal = proposeExpressQuiz(context, options, options.generator === "universal" ? universalGenerator : deterministicGenerator);
   res.setHeader("Cache-Control", "no-store");
   res.json(proposal);
 }));
@@ -33,7 +44,7 @@ router.post("/analyze", asyncRoute(async (req: AuthRequest, res) => {
 router.post("/validate", asyncRoute(async (req: AuthRequest, res) => {
   const input = body(req);
   const context = await loadExpressContext(req.tenant!.tenantId, input.catalogId);
-  res.json(validateExpressDraft(input.draft, context).validation);
+  res.json(validateExpressDraft(input.draft, context, { allowStrict: input.strictConfirmed === true, allowEffects: universalAllowedFor(req.tenant!.tenantId) }).validation);
 }));
 
 // POST /preview — recommandations réelles pour des réponses choisies ; aucune écriture

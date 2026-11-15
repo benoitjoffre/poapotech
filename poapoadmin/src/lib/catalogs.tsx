@@ -104,6 +104,8 @@ export function CatalogSelect({
   label?: string;
   disabled?: boolean;
 }) {
+  // Un seul catalogue : rien à choisir.
+  if (catalogs.length <= 1) return null;
   return (
     <div className="field-group catalog-select">
       <label className="field-label" htmlFor={id}>{label}</label>

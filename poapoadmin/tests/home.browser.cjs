@@ -40,8 +40,6 @@ async function main() {
     tenantId, quizId, text: "Quelle intensité préférez-vous ?",
     answers: { create: [{ text: "Douce", order: 0, impacts: { intensity: -0.2 } }, { text: "Intense", order: 1, impacts: { intensity: 0.2 } }] },
   } });
-  const campaign = await prisma.campaign.create({ data: { tenantId, quizId: live.id, name: "Occasion une", occasion: "PERMANENT", objectives: [] } });
-  await prisma.campaign.create({ data: { tenantId, quizId: live.id, name: "Occasion deux", occasion: "SPRING", objectives: [], status: "PAUSED" } });
   await prisma.metric.createMany({ data: [
     { tenantId, quizId: live.id, type: "quiz_start" },
     { tenantId, quizId: live.id, type: "quiz_complete" },
@@ -65,63 +63,41 @@ async function main() {
   const calls = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("request", (req) => { if (req.url().includes("/api/")) calls.push(req.url()); });
+  const guide = page.locator(".home-guide");
+  const ready = () => page.locator(".home-guide, .home-allset").first().waitFor();
   await page.goto(admin + "/");
-  await page.getByRole("heading", { name: "Votre prochaine action" }).waitFor();
+  await ready();
   const navigation = page.getByRole("navigation", { name: "Navigation principale" });
   check((await navigation.getByRole("link").allTextContents()).join("|") ===
-    "Accueil|Mes produits|Mes expériences|Campagnes|Résultats|Paramètres|Centre d'aide", "seven merchant destinations in the validated order");
-  check(await navigation.getByRole("link", { name: "Campagnes", exact: true }).getAttribute("href") === "/campaigns",
-    "campaign navigation retains the existing studio route");
-  check(await page.getByText("Boutique de démonstration", { exact: true }).count() === 1, "real shop identity");
-  check(await page.locator(".experience-card").count() === 3, "standalone and shared quizzes included once");
-  check(await page.locator(".dashboard-stat dd").allTextContents().then((values) => values.join(",") === "1,1,1,2"), "real totals without campaign duplication");
-  check(await page.locator(".home-next").getByText(draft.name, { exact: true }).count() === 1, "saved draft has priority");
-  const continueLink = page.locator(".home-next").getByRole("link", { name: "Continuer", exact: true });
-  check((await continueLink.getAttribute("href")).includes(encodeURIComponent(draft.id)), "explicit quiz identity");
-  check((await continueLink.getAttribute("href")).includes(encodeURIComponent(catalog.id)), "explicit catalogue identity");
+    "Accueil|Mes produits|Mes quiz|Résultats|Paramètres|Centre d'aide", "six merchant destinations in the validated order");
+  check(await page.getByRole("heading", { name: "Bonjour Boutique de démonstration" }).count() === 1, "real shop identity");
+  // Maquette : le panneau « Votre progression » reste affiché ; l'installation n'est jamais cochée (POAPO ne peut pas la vérifier).
+  check(await page.getByTestId("home-banner").innerText().then((t) => /a déjà reçu des réponses/.test(t)) && await guide.locator("li.done").count() === 3 && await guide.locator("li").count() === 4, "live and used: banner, installation never ticked");
+  check(await page.getByTestId("home-install-note").count() === 1, "installation cannot be verified: said plainly");
+  check(await page.locator(".dashboard-stat dd").allTextContents().then((values) => values.join(",") === "1,1,1"), "real totals");
+  check(await page.locator(".home-quiz-row").count() === 3, "every quiz listed once");
+  for (const quiz of [live, draft, standalone]) {
+    const row = page.locator(".home-quiz-row").filter({ hasText: quiz.name });
+    check((await row.getByRole("link", { name: "Modifier" }).getAttribute("href")) === `/experiences/${quiz.id}/edit`, "row edits the right quiz");
+    // « Résultats » seulement pour un quiz en ligne ou déjà utilisé.
+    if (quiz === draft) check(await row.getByRole("link", { name: "Résultats" }).count() === 0, "no results link for an unpublished draft");
+    else check((await row.getByRole("link", { name: "Résultats" }).getAttribute("href")).includes(quiz.id), "row opens the right results");
+  }
+  check(await page.locator(".home-quiz-row").filter({ hasText: draft.name }).getByText("Brouillon").count() === 1, "unpublished draft labelled in plain words");
   check(!(await page.locator("body").innerText()).includes("Produit secret"), "foreign products not visible");
   check(calls.filter((url) => url.includes("/metrics")).length === 0, "no per-quiz analytics requests");
   check(calls.filter((url) => /\/quizzes\/[^/]+\/draft/.test(url)).length === 0, "no per-quiz draft requests on home");
-  check(await page.locator(".home-create-card").getAttribute("href") === "/experiences/new", "creation tile opens the existing creation flow");
-  check(await page.locator(".dashboard-resource").count() === 4, "reusable resource cards rendered");
-  for (const [quiz, label] of [[live, "Voir les résultats"], [draft, "Continuer l'édition"], [standalone, "Voir les résultats"]]) {
-    const card = page.locator(".experience-card").filter({ has: page.getByRole("link", { name: `${label} : ${quiz.name}`, exact: true }) });
-    check(await card.locator(".btn-primary").count() === 1, "one primary action per experience");
-    check((await card.locator(".btn-primary").getAttribute("href")).includes(quiz.id), "reusable card keeps the quiz context");
-  }
-  check(await page.getByRole("progressbar").count() === 0, "no fictional progress indicator");
-  check(await page.getByRole("link", { name: /vidéo/i }).count() === 0, "no fictional video link");
+  check(await page.getByRole("link", { name: "+ Créer un autre quiz" }).getAttribute("href") === "/experiences/new", "creation link");
 
   for (const width of [320, 375, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.evaluate(() => window.scrollTo(0, 0));
     check(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), `no horizontal overflow at ${width}px`);
-    for (const label of ["Accueil", "Mes produits", "Mes expériences", "Campagnes", "Résultats", "Paramètres"]) {
-      const link = page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: label, exact: true });
+    for (const label of ["Accueil", "Mes produits", "Mes quiz", "Résultats", "Paramètres"]) {
+      const link = navigation.getByRole("link", { name: label, exact: true });
       const box = await link.boundingBox();
       check(await link.isVisible() && box && box.x >= 0 && box.y >= 0 &&
         box.x + box.width <= width && box.y + box.height <= 1000, `navigation ${label} immediately visible at ${width}px`);
-    }
-    if (width <= 768) {
-      const next = await page.locator(".home-next").boundingBox();
-      const activity = await page.locator("#home-activity-title").boundingBox();
-      check(next.y < activity.y, `next action precedes activity on mobile at ${width}px`);
-    }
-    check(await continueLink.isVisible(), `continue available at ${width}px`);
-    const title = await page.locator("#home-title").boundingBox();
-    check(title.width <= 440 && title.height > 50, `hero title retains the mockup multiline hierarchy at ${width}px`);
-    if (width === 1440) {
-      const hero = await page.locator(".home-hero").boundingBox();
-      const next = await page.locator(".home-next").boundingBox();
-      const activity = await page.locator(".home-activity").boundingBox();
-      const resources = await page.locator(".home-resources").boundingBox();
-      const cards = await page.locator(".experience-card, .home-create-card").evaluateAll((items) =>
-        items.map((item) => ({ y: item.getBoundingClientRect().y, width: item.getBoundingClientRect().width })));
-      check(Math.abs(hero.y - next.y) < 1 && next.x > hero.x + hero.width, "mockup desktop hero and next action share the top row");
-      check(resources.x > activity.x + activity.width, "mockup resources stay in the right column");
-      check(cards.every((card) => Math.abs(card.y - cards[0].y) < 1 && card.width >= 150), "mockup three experience cards and creation tile share one row");
-      check(activity.y > hero.y + hero.height && activity.y < 500, "compact hero keeps activity above the desktop fold");
-      check(await page.locator(".home-hero-visual").isVisible(), "decorative quiz illustration present on desktop");
     }
     if (output) {
       fs.mkdirSync(output, { recursive: true });
@@ -130,46 +106,87 @@ async function main() {
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto(admin + "/");
-  await page.getByRole("heading", { name: "Votre prochaine action" }).waitFor();
-  for (const label of ["Accueil", "Mes produits", "Mes expériences", "Campagnes", "Résultats", "Paramètres"]) {
+  await ready();
+  for (const label of ["Accueil", "Mes produits", "Mes quiz", "Résultats", "Paramètres"]) {
     await page.keyboard.press("Tab");
     check(await page.evaluate(() => document.activeElement?.textContent?.trim()) === label, `keyboard reaches ${label}`);
   }
-  await continueLink.click();
-  await page.getByRole("heading", { name: "Configurer le brouillon du quiz" }).waitFor();
-  check(await page.getByLabel("Titre public", { exact: true }).inputValue() === "Ma prochaine expérience", "continue reopens the persisted draft");
-  check(await page.getByLabel("Nom interne", { exact: true }).inputValue() === draft.name, "continue keeps the intended quiz");
-  await page.getByRole("navigation", { name: "Navigation principale" }).getByRole("link", { name: "Accueil", exact: true }).click();
-  await page.getByRole("heading", { name: "Votre prochaine action" }).waitFor();
-  await page.getByRole("link", { name: "Créer une expérience", exact: true }).click();
-  await page.getByRole("heading", { name: "Créer une expérience", exact: true }).waitFor();
-  check(page.url().includes("/experiences/new"), "creation uses available route");
-  for (const route of [`/quizzes/${draft.id}`, `/quiz-builder?quizId=${live.id}`, `/campaigns/${campaign.id}`, "/catalogs"]) {
-    await page.goto(admin + route);
-    await page.waitForLoadState("networkidle");
-    check(new URL(page.url()).pathname === route.split("?")[0], `legacy deep link ${route}`);
-    check(!await page.getByText("Route introuvable", { exact: true }).count(), "existing page retained");
-  }
+  await page.locator(".home-quiz-row").filter({ hasText: draft.name }).getByRole("link", { name: "Modifier" }).click();
+  await page.getByRole("tab", { name: "Réglages", exact: true }).waitFor();
+  await page.waitForFunction(() => [...document.querySelectorAll("input")].some((i) => i.value === "Ma prochaine expérience"));
+  check(await page.getByLabel("Nom de l'expérience (visible par vous seul)", { exact: true }).inputValue() === draft.name, "edit keeps the intended quiz and its saved draft");
+  await navigation.getByRole("link", { name: "Accueil", exact: true }).click();
+  await ready();
   const realSummary = await request("/api/dashboard");
+  const mock = (patch) => page.route("**/api/dashboard", (route) => route.fulfill({ status: 200, json: { ...realSummary, ...patch } }));
+  const noActivity = { totals: { started: 0, completed: 0, productClicks: 0, accessible: 0 } };
+
+  // Guide : une seule étape active à la fois, avec un seul bouton principal.
+  await mock({ experiences: [], products: 0, catalogs: 0, ...noActivity, nextAction: { kind: "create", quizId: null } });
+  await page.goto(admin + "/");
+  await guide.waitFor();
+  // Refonte : l'accueil présente trois étapes ; l'installation (4ᵉ étape du suivi) s'ajoute une fois le quiz publié.
+  check(await guide.locator("li").count() === 3, "three steps before publication");
+  check(await guide.locator("li.current").count() === 1 && await guide.locator(".btn-primary").count() === 1, "one active step, one primary button");
+  check((await guide.locator("li").first().getAttribute("aria-current")) === "step", "current step announced");
+  check((await guide.getByRole("link", { name: "Ajouter mes produits" }).getAttribute("href")) === "/catalog", "step 1 leads to products");
+  check(await page.locator(".dashboard-stat").count() === 0 && await page.locator(".home-quiz-row").count() === 0, "no empty statistics before the first quiz is live");
+  await page.unroute("**/api/dashboard");
+
+  await mock({ experiences: [], products: 3, ...noActivity, nextAction: { kind: "create", quizId: null } });
+  await page.goto(admin + "/");
+  await guide.waitFor();
+  check(await guide.locator("li.done").count() === 1, "step 1 ticked");
+  check((await guide.getByRole("link", { name: "Créer mon quiz" }).getAttribute("href")) === "/experiences/new", "step 2 leads to creation");
+  await page.unroute("**/api/dashboard");
+
+  const unpublished = { ...realSummary.experiences[0], accessible: false, hasDraft: true };
+  await mock({ experiences: [unpublished], products: 3, ...noActivity });
+  await page.goto(admin + "/");
+  await guide.waitFor();
+  check(await guide.locator("li.done").count() === 2, "steps 1 and 2 ticked");
+  check((await guide.getByRole("link", { name: "Publier mon quiz" }).getAttribute("href")).includes("section=publication"), "step 3 opens the publication tab");
+  await page.unroute("**/api/dashboard");
+
+  const published = { ...realSummary.experiences[0], accessible: true };
+  await mock({ experiences: [published], products: 3, totals: { started: 0, completed: 0, productClicks: 0, accessible: 1 } });
+  await page.goto(admin + "/");
+  await guide.waitFor();
+  check(await guide.locator("li.done").count() === 3 && await guide.locator("li").count() === 4, "steps 1 to 3 ticked, installation step added after publication");
+  check((await guide.getByRole("link", { name: "Voir le code d'installation" }).getAttribute("href")).includes("section=publication"), "step 4 gives access to link and code");
+  await page.unroute("**/api/dashboard");
+
+  // Barre de parcours : présente sur les autres pages tant que le quiz n'est pas utilisé.
+  const bar = page.getByRole("navigation", { name: "Votre parcours" });
+  await page.goto(admin + "/catalog");
+  await page.locator(".admin-main").waitFor();
+  check(await bar.count() === 0, "no journey bar once the quiz is live and used");
+  await mock({ experiences: [], products: 0, catalogs: 0, ...noActivity, nextAction: { kind: "create", quizId: null } });
+  await page.goto(admin + "/quizzes");
+  await bar.waitFor();
+  check(await bar.locator("li").count() === 4 && await bar.getByText("Étape 1 sur 4").count() === 1, "journey bar shows the step count");
+  check((await bar.getByRole("link", { name: "Ajouter mes produits" }).getAttribute("href")) === "/catalog", "journey bar leads to the next step");
+  await page.goto(admin + "/catalog");
+  await bar.waitFor();
+  check(await bar.getByRole("link", { name: "Ajouter mes produits" }).count() === 0, "no redundant button on the step's own page");
+  await page.goto(admin + "/");
+  await guide.waitFor();
+  check(await bar.count() === 0, "home shows the full guide instead of the bar");
+  await page.unroute("**/api/dashboard");
+  await mock({ experiences: [], products: 3, ...noActivity, nextAction: { kind: "create", quizId: null } });
+  await page.goto(admin + "/settings");
+  await bar.waitFor();
+  check(await bar.locator("li.done").count() === 1 && (await bar.locator("li.done a").getAttribute("href")) === "/catalog", "done steps stay reachable");
+  await page.unroute("**/api/dashboard");
+
   let releaseSummary;
   const pendingSummary = new Promise((resolve) => { releaseSummary = resolve; });
-  await page.route("**/api/dashboard", async (route) => {
-    await pendingSummary;
-    await route.fulfill({ status: 200, json: realSummary });
-  });
+  await page.route("**/api/dashboard", async (route) => { await pendingSummary; await route.fulfill({ status: 200, json: realSummary }); });
   await page.goto(admin + "/");
-  await page.getByRole("status").filter({ hasText: "Chargement de votre activité" }).waitFor();
+  await page.getByRole("status").filter({ hasText: "Chargement" }).waitFor();
   check(await page.locator(".dashboard-stat").count() === 0, "loading does not fabricate statistics");
   releaseSummary();
-  await page.getByRole("heading", { name: "Votre prochaine action" }).waitFor();
-  await page.unroute("**/api/dashboard");
-  await page.route("**/api/dashboard", (route) => route.fulfill({ status: 200, json: {
-    ...realSummary, experiences: [], products: 0, catalogs: 0,
-    totals: { started: 0, completed: 0, productClicks: 0, accessible: 0 }, nextAction: { kind: "create", quizId: null },
-  } }));
-  await page.goto(admin + "/");
-  await page.getByRole("link", { name: "Créer ma première expérience", exact: true }).waitFor();
-  check(await page.getByText(/Aucune activité enregistrée/).count() === 1, "empty activity explanation");
+  await ready();
   await page.unroute("**/api/dashboard");
   await page.route("**/api/dashboard", (route) => route.fulfill({ status: 500, json: { error: "Accueil temporairement indisponible" } }));
   await page.reload();
@@ -177,7 +194,7 @@ async function main() {
   check(await page.getByRole("button", { name: "Réessayer" }).isVisible(), "explicit recoverable error");
   await page.unroute("**/api/dashboard");
   await page.getByRole("button", { name: "Réessayer" }).click();
-  await page.getByRole("heading", { name: "Votre prochaine action" }).waitFor();
+  await ready();
   check(await prisma.quizEditorDraft.count({ where: { tenantId } }) === 1, "home did not modify drafts");
   const unchangedDraft = await request(`/api/quizzes/${draft.id}/draft`);
   assert.deepEqual(unchangedDraft.draft, savedDraft.draft, "draft content preserved");

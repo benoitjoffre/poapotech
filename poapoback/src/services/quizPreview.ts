@@ -3,7 +3,8 @@ import { visibleQuizQuestions } from "@poapo/types";
 import { prisma } from "../lib/prisma";
 import { resolveQuiz, QuizError } from "./quizzes";
 import { validateContent } from "./quizEditorDrafts";
-import { recommendQuiz } from "./quizRecommendations";
+import { recommendQuizWithEffects } from "./effectsRecommendation";
+import { catalogLabels, criteriaFromEffects, presentProduct } from "./productPresentation";
 
 export async function prepareQuizPreview(tenantId: string, quizId: unknown, raw: unknown): Promise<QuizPreviewSnapshot> {
   const quiz = await resolveQuiz(tenantId, quizId);
@@ -59,10 +60,19 @@ export async function recommendQuizPreview(tenantId: string, quizId: unknown, ra
   const ordered = [...existing.flatMap((a) => byId.has(a.id) ? [byId.get(a.id)!] : []),
     ...draftAnswers.filter((a) => !existingIds.has(a.id))];
   const config = snapshot.draft.config;
-  const result = await recommendQuiz({
+  const questionOf = new Map(answers.map((a) => [a.answerId, a.questionId]));
+  // Même moteur que la soumission publique (effets compris) ; l'aperçu y ajoute les diagnostics techniques.
+  const result = await recommendQuizWithEffects({
     tenantId, catalogId: config.catalogId, industry: config.industry, axes: config.axes,
     productIds: config.useAllProducts ? undefined : config.productIds,
-    impacts: ordered.map((a) => a.impacts),
+    answers: ordered.map((a) => ({ questionId: questionOf.get(a.id) ?? "", impacts: a.impacts, effects: a.effects ?? null })),
   });
-  return { ...result, quizId: snapshot.quizId, industry: config.industry };
+  // Même fiche publique que la soumission : critères tirés du brouillon (réponses actives des questions actives).
+  const context = {
+    axes: config.axes,
+    criteria: criteriaFromEffects(snapshot.draft.questions.filter((q) => q.active).flatMap((q) => q.answers.filter((a) => a.active).map((a) => a.effects ?? null))),
+    labels: await catalogLabels(tenantId, config.catalogId),
+  };
+  const { characteristics, ...presented } = presentProduct(result.product, result.explanation, context);
+  return { ...result, ...presented, ...(characteristics.length && { characteristics }), quizId: snapshot.quizId, industry: config.industry };
 }

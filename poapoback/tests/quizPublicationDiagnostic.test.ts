@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { QuizEditorDraft } from "@poapo/types";
-import { inspectQuizStructure } from "../src/services/quizPublicationDiagnostic";
+import { hasUnusableAxes, inspectQuizStructure, UNUSABLE_AXES_MESSAGE } from "../src/services/quizPublicationDiagnostic";
 
 function draft(): QuizEditorDraft {
   return {
@@ -65,4 +65,19 @@ test("diagnostic : réponses sans impact et absence d'axes ne sont pas bloquante
   const result = inspectQuizStructure(d);
   assert.equal(result.errors.length, 0);
   assert.equal(result.warnings.filter((e) => e.code === "NO_IMPACT").length, 2);
+});
+
+test("axes inexploitables : bloquant seulement si aucun produit n'a de valeur 0–1 sur aucun axe", () => {
+  assert.match(UNUSABLE_AXES_MESSAGE, /ne permettent pas encore de proposer des recommandations fiables/);
+  // Sans axe ou sans produit : géré par NO_AXES / NO_PRODUCTS, pas par ce contrôle.
+  assert.equal(hasUnusableAxes([], [{}]), false);
+  assert.equal(hasUnusableAxes(["a"], []), false);
+  // Aucune valeur valide : absente, hors échelle, texte, null, booléen, structure invalide.
+  assert.equal(hasUnusableAxes(["a", "b"], [{}, { a: 2 }, { b: "0.5" }, { a: null }, { b: true }, null, []]), true);
+  assert.equal(hasUnusableAxes(["a"], [{ other: 0.5 }]), true);
+  // Axes valides, y compris bornes 0 et 1.
+  assert.equal(hasUnusableAxes(["a"], [{ a: 0 }]), false);
+  assert.equal(hasUnusableAxes(["a"], [{ a: 1 }]), false);
+  // Partiel : un seul produit sur un seul axe suffit (comportement actuel conservé, simple avertissement).
+  assert.equal(hasUnusableAxes(["a", "b"], [{}, {}, { b: 0.3 }]), false);
 });

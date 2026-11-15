@@ -15,7 +15,7 @@ export const GUIDE_PUBLISH: HelpArticle = {
       "Publier remplace la version vue par le public par votre dernier brouillon enregistré.",
       "L'accès public (actif / inactif) décide si le quiz peut être ouvert par vos clients via son lien ou le widget.",
       "Publier ne rend pas à lui seul le quiz accessible s'il est inactif ; et le désactiver ne supprime pas la version publiée.",
-      "Une campagne programmée ne change pas l'accessibilité du quiz.",
+      "L'occasion et la période indiquées dans les réglages ne changent pas l'accessibilité du quiz.",
     ],
   }],
   steps: [
@@ -27,7 +27,6 @@ export const GUIDE_PUBLISH: HelpArticle = {
   ],
   tips: [
     "Aucun produit n'est modifié par la publication d'un quiz.",
-    "Si plusieurs campagnes utilisent la même expérience, une confirmation supplémentaire vous est demandée.",
   ],
 };
 
@@ -73,7 +72,7 @@ export const GUIDE_RESULTS: HelpArticle = {
     title: "À retenir",
     paragraphs: [
       "Un clic vers un produit n'est pas une vente : POAPO ne mesure pas les achats.",
-      "Les statistiques ne sont pas attribuées individuellement aux campagnes : elles sont suivies par expérience.",
+      "Les statistiques sont suivies par expérience.",
     ],
   }],
   steps: [

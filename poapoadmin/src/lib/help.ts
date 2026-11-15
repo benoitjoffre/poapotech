@@ -10,9 +10,8 @@ export const HELP_CATEGORIES = ["Catalogue", "Expérience", "Publication", "Int�
 
 export const HELP_FAQ: readonly HelpFaq[] = [
   { question: "Puis-je créer plusieurs expériences ?", answer: "Oui. Vous pouvez créer autant d'expériences que nécessaire, par exemple une par gamme de produits.", slug: "creer-une-experience" },
-  { question: "Puis-je utiliser une expérience dans plusieurs campagnes ?", answer: "Oui. Plusieurs campagnes peuvent partager la même expérience ; une publication vous demande alors de confirmer que toutes recevront la nouvelle version.", slug: "tester-et-publier" },
   { question: "Mes produits sont-ils modifiés lorsque je publie un quiz ?", answer: "Non. La publication remplace la version publique du quiz (questions, préférences, apparence) mais ne modifie pas vos produits.", slug: "tester-et-publier" },
-  { question: "Une campagne programmée rend-elle automatiquement mon quiz accessible ?", answer: "Non. L'accessibilité dépend de l'état actif de l'expérience et de la boutique ; une campagne ne la modifie pas.", slug: "tester-et-publier" },
+  { question: "Puis-je indiquer une occasion ou une période (Noël, soldes…) ?", answer: "Oui, dans l'onglet Réglages de l'expérience. C'est un simple repère pour vous : cela n'ouvre ni ne ferme l'expérience.", slug: "creer-une-experience" },
   { question: "Comment partager mon expérience ?", answer: "Une fois le quiz publié et accessible, partagez son lien public ou ajoutez le code d'intégration sur votre site.", slug: "integrer-sur-votre-site" },
   { question: "Les clics produits représentent-ils des ventes ?", answer: "Non. Un clic indique qu'un visiteur s'est intéressé à un produit ; POAPO ne mesure pas les achats.", slug: "comprendre-vos-resultats" },
 ];

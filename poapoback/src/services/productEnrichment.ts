@@ -9,9 +9,9 @@ import type {
   QuizAxis,
 } from "@poapo/types";
 import { prisma } from "../lib/prisma";
-import { isAxisValue, parseAxes } from "./axes";
+import { AxisValidationError, isAxisValue, parseAxes, validateAxes } from "./axes";
 import { catalogAxes } from "./catalogs";
-import { GenerationLimiter } from "./quizGeneration";
+import { GenerationLimiter } from "./generationLimits";
 import { QuizError } from "./quizzes";
 
 export const ENRICHMENT_LIMITS = {
@@ -84,6 +84,30 @@ export async function loadEnrichmentScope(tenantId: string, catalogId: unknown, 
     industry: quiz.industry.trim() || quiz.tenant.industry.trim(),
     catalogAxisKeys: new Set([...allAxes, ...axes].map((axis) => axis.key)),
   };
+}
+
+/**
+ * Périmètre d'un brouillon non enregistré (parcours express) : mêmes axes validés que ceux d'un quiz,
+ * sans quiz en base. `applyEnrichment` et ses protections sont réutilisés tels quels.
+ */
+export async function loadAxesScope(tenantId: string, catalogId: unknown, rawAxes: unknown): Promise<EnrichmentScope> {
+  const catalog = await loadEnrichmentCatalog(tenantId, catalogId);
+  let axes: QuizAxis[];
+  try { axes = validateAxes(rawAxes); } catch (err) {
+    if (err instanceof AxisValidationError) throw new QuizError(400, err.message);
+    throw err;
+  }
+  if (!axes.length) throw new QuizError(422, "Aucun axe de recommandation à estimer");
+  const allAxes = await catalogAxes(tenantId, catalog.id);
+  return { catalog, quiz: { id: "", name: "Brouillon", axes }, industry: "", catalogAxisKeys: new Set([...allAxes, ...axes].map((axis) => axis.key)) };
+}
+
+/** Quiz enregistré (`quizId`) ou, à défaut, axes d'un brouillon (`axes`). */
+export function loadScopeFromBody(tenantId: string, catalogId: unknown, body: unknown): Promise<EnrichmentScope> {
+  const input = attributesOf(body);
+  return input.quizId === undefined && input.axes !== undefined
+    ? loadAxesScope(tenantId, catalogId, input.axes)
+    : loadEnrichmentScope(tenantId, catalogId, input.quizId);
 }
 
 // ─── Données produit transmises à l'IA ────────────────────────────────────────
@@ -161,13 +185,13 @@ function parseIds(value: unknown, field: string, max: number): string[] {
   return ids;
 }
 
-export function parseEstimateInput(raw: unknown, scope: EnrichmentScope) {
+export function parseEstimateInput(raw: unknown, scope: EnrichmentScope, maxProducts: number = ENRICHMENT_LIMITS.batchSize) {
   const body = attributesOf(raw);
   const axisKeys = parseIds(body.axisKeys, "axisKeys", 12);
   const known = new Set(scope.quiz.axes.map((axis) => axis.key));
   const unknown = axisKeys.filter((key) => !known.has(key));
   if (unknown.length) throw new QuizError(400, `Axes absents du quiz : ${unknown.join(", ")}`);
-  const productIds = parseIds(body.productIds, "productIds", ENRICHMENT_LIMITS.batchSize);
+  const productIds = parseIds(body.productIds, "productIds", maxProducts);
   return { axisKeys, productIds };
 }
 
